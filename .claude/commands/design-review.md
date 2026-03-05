@@ -78,9 +78,29 @@ These are critical UX patterns established through extensive iteration:
 - Full-viewport gradient background: `linear-gradient(160deg, #0a1a10 0%, #1a3a2a 40%, #244734 100%)`
 - Centered white card with generous padding (48px top, 40px sides)
 - Apple-style brand lockup: large icon + wordmark + tagline, all centered
-- Spring easing animation on card entrance: `cubic-bezier(0.16, 1, 0.3, 1)`
 - Error messages use `var(--status-failed-bg)` background with red text
 - Footer link (login/register switch) uses `var(--sidebar-bg)` green
+
+### Auth Page Entrance Animation (AuthPages.css)
+
+The login/signup card uses a multi-stage cinematic entrance:
+
+1. **Bloom** (`authCardBloom`, 0.4s `ease-out`): Card starts as invisible point (`scale(0)`, `border-radius: 200px`), expands to full size (`scale(1)`, `border-radius: 16px`). Uses all `px` border-radius values so CSS can interpolate smoothly (never mix `%` and `px`). Glow grows proportionally with scale at each keyframe step (25%, 50%, 75%, 100%).
+
+2. **Boom burst** (`auraBoom`, 0.5s, starts at 0.35s): Fires when bloom completes — a massive light shockwave flaring to 1100px with high opacity (0.9) across aurora colors (lime → teal → cyan → purple), then settling to the resting glow.
+
+3. **Aurora glow** (`auroraGlow`, 6s infinite, starts at 0.9s): Continuous polar-light color cycling on the resting card — 3-stop loop shifting between lime (`#CDF545`), teal (`rgb(100, 220, 180)`), and blue/purple (`rgb(120, 100, 220)`). Uses 7 layered `box-shadow` values spreading up to 650px.
+
+4. **Halo layers**: `::before` (600px) and `::after` (900px) radial gradient pseudo-elements behind the card. Fade in via `haloAppear`, then pulse via `haloBreath` (4s infinite).
+
+5. **Content reveal** (`authContentReveal`, 0.3s, delayed 0.25s): Card children start `opacity: 0` and slide up 8px. Card blooms first as a solid glowing shape, then content fades in — like a flower opening to reveal its center.
+
+### Animation implementation rules
+- **Always use `px` for border-radius** in keyframes — CSS cannot smoothly interpolate between `%` and `px` units
+- **Glow must grow with scale** — match box-shadow spread to transform scale at each keyframe step
+- **Boom fires after bloom** — use `animation-delay` equal to bloom duration minus small overlap
+- **Aurora is infinite** — starts after boom settles, loops forever
+- **Content children hidden initially** — `.auth-card > *` has `opacity: 0` with delayed animation
 
 ## CSS Architecture
 

@@ -225,9 +225,14 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 - **Border radii**: Rounded scale (`--radius-sm: 6px` through `--radius-full: 9999px`)
 - **Status badges**: Tinted pill style — colored text on light tinted background (e.g., green text on `#e8f5e9`)
 - **Priority badges**: Tinted pill style matching status badge pattern
-- **Animations**: `fadeIn`, `slideUp`, `shimmer`, `scaleIn` keyframes; hover lift effects on cards; `scale(0.97)` button press; Apple-style spring easing `cubic-bezier(0.16, 1, 0.3, 1)` on auth card
+- **Animations**: `fadeIn`, `slideUp`, `shimmer`, `scaleIn` keyframes; hover lift effects on cards; `scale(0.97)` button press
 - **Modal**: Backdrop blur (`backdrop-filter: blur(4px)`) with `scaleIn` entrance animation
-- **Auth pages**: Dark forest green gradient background, centered brand lockup (96px icon + wordmark + tagline), lime accent button color (`#CDF545`)
+- **Auth pages**: Dark forest green gradient background, centered brand lockup (96px icon + wordmark + tagline), lime accent button color (`#CDF545`). Features a multi-stage entrance animation:
+  - **Bloom effect** (`authCardBloom`, 0.4s): Card expands from `scale(0)` circle (`border-radius: 200px`) to full rectangle (`16px`), with glow growing proportionally via `px`-based border-radius for smooth CSS interpolation
+  - **Boom burst** (`auraBoom`, 0.5s, delayed 0.35s): Fires at full expansion — massive 1100px light shockwave (lime → teal → cyan → purple) that settles to 650px resting glow
+  - **Aurora glow** (`auroraGlow`, 6s infinite loop, delayed 0.9s): Continuous polar-light color cycling on the resting card — shifts between lime green, teal/cyan, and blue/purple across 7 box-shadow layers (up to 650px spread)
+  - **Halo layers**: `::before` (600px) and `::after` (900px) pseudo-elements with radial gradients fade in via `haloAppear`, then breathe via `haloBreath` (4s infinite)
+  - **Content reveal** (`authContentReveal`, 0.3s, delayed 0.25s): Card children fade up (`translateY(8px)` → `0`) after bloom completes, so the card opens first then reveals its contents
 
 ### Status & Priority Values
 - **Test statuses**: `Passed`, `Failed`, `Blocked`, `Retest`, `Untested`

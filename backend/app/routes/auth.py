@@ -38,7 +38,7 @@ def register():
     db.session.commit()
 
     token = create_access_token(identity=str(user.id))
-    return jsonify({"id": user.id, "username": user.username, "token": token}), 201
+    return jsonify({"id": user.id, "username": user.username, "avatar": None, "token": token}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -52,7 +52,8 @@ def login():
         return jsonify({"error": "Invalid username or password"}), 401
 
     token = create_access_token(identity=str(user.id))
-    return jsonify({"id": user.id, "username": user.username, "token": token}), 200
+    avatar_url = f"/api/auth/avatars/{user.avatar}" if user.avatar else None
+    return jsonify({"id": user.id, "username": user.username, "avatar": avatar_url, "token": token}), 200
 
 
 @auth_bp.route("/me", methods=["GET"])

@@ -25,16 +25,18 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const data = await authService.login(username, password);
     localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify({ id: data.id, username: data.username }));
-    setUser({ id: data.id, username: data.username });
+    const userObj = { id: data.id, username: data.username, avatar: data.avatar };
+    localStorage.setItem('user', JSON.stringify(userObj));
+    setUser(userObj);
     return data;
   };
 
   const register = async (username, email, password) => {
     const data = await authService.register(username, email, password);
     localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify({ id: data.id, username: data.username }));
-    setUser({ id: data.id, username: data.username });
+    const userObj = { id: data.id, username: data.username, avatar: data.avatar };
+    localStorage.setItem('user', JSON.stringify(userObj));
+    setUser(userObj);
     return data;
   };
 
