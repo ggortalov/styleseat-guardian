@@ -1,8 +1,17 @@
-from flask import Blueprint, request, jsonify
+import os
+
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from werkzeug.utils import secure_filename
 
 from app import db
 from app.models import User
+
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
+
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -54,3 +63,47 @@ def me():
     if not user:
         return jsonify({"error": "User not found"}), 404
     return jsonify(user.to_dict()), 200
+
+
+@auth_bp.route("/avatar", methods=["POST"])
+@jwt_required()
+def upload_avatar():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Only JPEG and PNG files are allowed"}), 400
+
+    filename = secure_filename(file.filename)
+    ext = filename.rsplit(".", 1)[1].lower()
+    saved_name = f"{user_id}_{filename}"
+
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    os.makedirs(upload_folder, exist_ok=True)
+
+    # Remove old avatar file if it exists
+    if user.avatar:
+        old_path = os.path.join(upload_folder, user.avatar)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    file.save(os.path.join(upload_folder, saved_name))
+    user.avatar = saved_name
+    db.session.commit()
+
+    return jsonify(user.to_dict()), 200
+
+
+@auth_bp.route("/avatars/<filename>", methods=["GET"])
+def serve_avatar(filename):
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    return send_from_directory(upload_folder, filename)

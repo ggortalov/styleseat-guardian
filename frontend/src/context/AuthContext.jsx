@@ -44,8 +44,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateAvatar = (avatarUrl) => {
+    setUser((prev) => prev ? { ...prev, avatar: avatarUrl } : prev);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateAvatar, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,3 +9,5 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = "dev-secret-change-in-production"
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    UPLOAD_FOLDER = os.path.join(basedir, "uploads", "avatars")
+    MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2MB

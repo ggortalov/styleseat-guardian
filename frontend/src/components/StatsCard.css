@@ -2,21 +2,24 @@
   background: var(--bg-white);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 20px;
+  padding: 24px;
   text-align: center;
   box-shadow: var(--shadow-sm);
 }
 
 .stats-card-value {
-  font-size: 28px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 36px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  line-height: 1.1;
 }
 
 .stats-card-label {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 500;
 }

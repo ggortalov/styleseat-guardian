@@ -13,6 +13,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    avatar = db.Column(db.String(256), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
@@ -26,6 +27,7 @@ class User(db.Model):
             "id": self.id,
             "username": self.username,
             "email": self.email,
+            "avatar": f"/api/auth/avatars/{self.avatar}" if self.avatar else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

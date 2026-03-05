@@ -24,10 +24,54 @@ body {
   flex: 1;
   margin-left: var(--sidebar-width);
   min-height: 100vh;
+  transition: margin-left 0.25s ease;
+}
+
+.app-main--collapsed {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.app-main--mobile {
+  margin-left: 0;
+}
+
+/* Mobile hamburger button */
+.mobile-hamburger {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 99;
+  background: var(--sidebar-bg);
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-hamburger svg {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+
+/* Mobile overlay backdrop */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
 }
 
 .page-content {
   padding: 24px;
+}
+
+.app-main--mobile .page-content {
+  padding-top: 56px;
 }
 
 .page-toolbar {
@@ -158,6 +202,21 @@ body {
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary-dark);
+}
+
+.btn-brand {
+  background: var(--sidebar-bg);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 16px;
+  letter-spacing: -0.3px;
+  border: none;
+  border-radius: 8px;
+}
+
+.btn-brand:hover:not(:disabled) {
+  background: #133125;
 }
 
 .btn-secondary {

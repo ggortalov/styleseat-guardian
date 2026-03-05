@@ -16,6 +16,7 @@ def list_suites(project_id):
     for s in suites:
         d = s.to_dict()
         section_ids = [sec.id for sec in Section.query.filter_by(suite_id=s.id).all()]
+        d["section_count"] = len(section_ids)
         d["case_count"] = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
         result.append(d)
     return jsonify(result), 200

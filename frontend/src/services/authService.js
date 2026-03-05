@@ -15,6 +15,15 @@ const authService = {
     const res = await api.get('/auth/me');
     return res.data;
   },
+
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/auth/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
 };
 
 export default authService;

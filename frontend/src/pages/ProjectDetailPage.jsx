@@ -157,47 +157,78 @@ export default function ProjectDetailPage() {
           </button>
         </div>
 
-        {tab === 'suites' && (
-          <div className="card">
-            <div className="card-toolbar">
-              <button className="btn btn-primary" onClick={() => {
-                setEditSuite(null);
-                setSuiteName('');
-                setSuiteDesc('');
-                setShowSuiteModal(true);
-              }}>+ New Suite</button>
+        {tab === 'suites' && (() => {
+          const activeRunsBySuite = {};
+          runs.filter(r => !r.is_completed).forEach(r => {
+            activeRunsBySuite[r.suite_id] = (activeRunsBySuite[r.suite_id] || 0) + 1;
+          });
+          return (
+            <div>
+              <div className="card-toolbar">
+                <button className="btn btn-primary" onClick={() => {
+                  setEditSuite(null);
+                  setSuiteName('');
+                  setSuiteDesc('');
+                  setShowSuiteModal(true);
+                }}>+ New Suite</button>
+              </div>
+              {suites.length > 0 ? (
+                <div className="suite-list">
+                  {suites.map((s) => {
+                    const activeCount = activeRunsBySuite[s.id] || 0;
+                    return (
+                      <div key={s.id} className="suite-card">
+                        <div className="suite-card-icon">
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </div>
+                        <div className="suite-card-body">
+                          <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-name">{s.name}</Link>
+                          <div className="suite-card-links">
+                            <a href="#" onClick={(e) => {
+                              e.preventDefault();
+                              setRunName('');
+                              setRunDesc('');
+                              setRunSuiteId(String(s.id));
+                              setShowRunModal(true);
+                            }}>Run Test</a>
+                            <span className="suite-card-separator">|</span>
+                            <a href="#" onClick={(e) => {
+                              e.preventDefault();
+                              setTab('runs');
+                            }}>Test Runs</a>
+                            <span className="suite-card-separator">|</span>
+                            <a href="#" onClick={(e) => {
+                              e.preventDefault();
+                              setEditSuite(s);
+                              setSuiteName(s.name);
+                              setSuiteDesc(s.description || '');
+                              setShowSuiteModal(true);
+                            }}>Edit</a>
+                          </div>
+                          <div className="suite-card-summary">
+                            Has {s.section_count || 0} section{(s.section_count || 0) !== 1 ? 's' : ''} with {s.case_count || 0} test case{(s.case_count || 0) !== 1 ? 's' : ''}.{' '}
+                            {activeCount > 0
+                              ? <strong>{activeCount} active test run{activeCount !== 1 ? 's' : ''}.</strong>
+                              : 'No active test runs.'}
+                          </div>
+                        </div>
+                        <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-chevron" title="Open suite">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="empty-message">No test suites yet. Create one to organize your test cases.</p>
+              )}
             </div>
-            {suites.length > 0 ? (
-              <table className="data-table">
-                <thead>
-                  <tr><th>Name</th><th>Test Cases</th><th>Created</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {suites.map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        <Link to={`/projects/${projectId}/suites/${s.id}`} className="table-link">{s.name}</Link>
-                      </td>
-                      <td>{s.case_count || 0}</td>
-                      <td className="text-muted">{new Date(s.created_at).toLocaleDateString()}</td>
-                      <td className="actions-cell">
-                        <button className="btn-icon" title="Edit" onClick={() => {
-                          setEditSuite(s);
-                          setSuiteName(s.name);
-                          setSuiteDesc(s.description || '');
-                          setShowSuiteModal(true);
-                        }}>&#9998;</button>
-                        <button className="btn-icon danger" title="Delete" onClick={() => setDeleteSuite(s)}>&times;</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="empty-message">No test suites yet. Create one to organize your test cases.</p>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {tab === 'runs' && (
           <div className="card">

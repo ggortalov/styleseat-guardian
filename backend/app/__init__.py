@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
@@ -43,5 +45,8 @@ def create_app():
     app.register_blueprint(cases_bp, url_prefix="/api")
     app.register_blueprint(runs_bp, url_prefix="/api")
     app.register_blueprint(dashboard_bp, url_prefix="/api")
+
+    # Ensure avatar upload directory exists
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
     return app

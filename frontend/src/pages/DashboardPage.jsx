@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import StatsCard from '../components/StatsCard';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import dashboardService from '../services/dashboardService';
 import projectService from '../services/projectService';
-import { Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import './DashboardPage.css';
-
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function DashboardPage() {
   const [data, setData] = useState(null);
@@ -43,46 +38,36 @@ export default function DashboardPage() {
 
   if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard' }]} /><LoadingSpinner /></>;
 
-  const stats = data?.global_stats || {};
-  const chartData = {
-    labels: ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'],
-    datasets: [{
-      data: [stats.Passed || 0, stats.Failed || 0, stats.Blocked || 0, stats.Retest || 0, stats.Untested || 0],
-      backgroundColor: ['#4CAF50', '#F44336', '#FF9800', '#2196F3', '#9E9E9E'],
-      borderWidth: 0,
-    }],
-  };
-
   return (
     <div>
       <div className="page-content">
         <div className="page-toolbar">
           <h2 className="page-heading">Dashboard</h2>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Project</button>
+          <button className="btn btn-brand" onClick={() => setShowCreate(true)}>+ New Project</button>
         </div>
 
-        <div className="stats-grid">
-          <StatsCard label="Projects" value={data?.totals?.projects || 0} color="var(--primary)" />
-          <StatsCard label="Test Cases" value={data?.totals?.cases || 0} color="var(--text-primary)" />
-          <StatsCard label="Test Runs" value={data?.totals?.runs || 0} color="var(--text-primary)" />
-          <StatsCard label="Pass Rate" value={`${stats.pass_rate || 0}%`} color="var(--status-passed)" />
-        </div>
-
-        <div className="dashboard-grid">
-          <div className="dashboard-projects-card">
-            <h3>Projects</h3>
-            {data?.projects?.length > 0 ? (
-              <div className="project-list">
-                {data.projects.map((p) => (
-                  <div key={p.id} className="project-card" onClick={() => navigate(`/projects/${p.id}`)}>
-                    <div className="project-card-header">
-                      <span className="project-card-name">{p.name}</span>
-                      <span className="project-card-rate" style={{ color: p.stats.pass_rate >= 80 ? 'var(--status-passed)' : p.stats.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)' }}>
-                        {p.stats.pass_rate}%
-                      </span>
+        <div className="dashboard-section">
+          <h3 className="dashboard-section-title">Test Suites</h3>
+          {data?.projects?.length > 0 ? (
+            <div className="project-list">
+              {data.projects.map((p) => (
+                <div key={p.id} className="project-card">
+                  <div className="project-card-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="#4CAF50" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </div>
+                  <div className="project-card-body">
+                    <Link to={`/projects/${p.id}`} className="project-card-name">{p.name}</Link>
+                    <div className="project-card-links">
+                      <Link to={`/projects/${p.id}`}>Open</Link>
+                      <span className="project-card-separator">|</span>
+                      <Link to={`/projects/${p.id}`}>Suites</Link>
+                      <span className="project-card-separator">|</span>
+                      <Link to={`/projects/${p.id}`}>Runs</Link>
                     </div>
-                    <div className="project-card-meta">
-                      {p.suite_count} suites &middot; {p.case_count} cases &middot; {p.run_count} runs
+                    <div className="project-card-summary">
+                      {p.suite_count} suite{p.suite_count !== 1 ? 's' : ''} &middot; {p.case_count} test case{p.case_count !== 1 ? 's' : ''} &middot; {p.run_count} test run{p.run_count !== 1 ? 's' : ''}.
                     </div>
                     {p.stats.total > 0 && (
                       <div className="project-card-bar">
@@ -102,45 +87,50 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="empty-message">No projects yet. Create your first project to get started.</p>
-            )}
-          </div>
+                  <Link to={`/projects/${p.id}`} className="project-card-chevron" title="Open project">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-message">No projects yet. Create your first project to get started.</p>
+          )}
         </div>
 
         {data?.recent_runs?.length > 0 && (
-          <div className="card" style={{ marginTop: '20px' }}>
-            <h3>Recent Test Runs</h3>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Run</th>
-                  <th>Project</th>
-                  <th>Suite</th>
-                  <th>Tests</th>
-                  <th>Pass Rate</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recent_runs.map((run) => (
-                  <tr key={run.id} className="clickable-row" onClick={() => navigate(`/runs/${run.id}`)}>
-                    <td className="text-primary-bold">{run.name}</td>
-                    <td>{run.project_name}</td>
-                    <td>{run.suite_name}</td>
-                    <td>{run.total_results}</td>
-                    <td>
-                      <span style={{ color: run.pass_rate >= 80 ? 'var(--status-passed)' : run.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)', fontWeight: 600 }}>
+          <div className="dashboard-section">
+            <h3 className="dashboard-section-title">Recent Test Runs</h3>
+            <div className="run-list">
+              {data.recent_runs.map((run) => (
+                <div key={run.id} className="run-card">
+                  <div className="run-card-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2196F3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                  </div>
+                  <div className="run-card-body">
+                    <Link to={`/runs/${run.id}`} className="run-card-name">{run.name}</Link>
+                    <div className="run-card-summary">
+                      Project: {run.project_name} &middot; Suite: {run.suite_name} &middot; {run.total_results} test{run.total_results !== 1 ? 's' : ''} &middot;{' '}
+                      <strong style={{ color: run.pass_rate >= 80 ? 'var(--status-passed)' : run.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)' }}>
                         {run.pass_rate}%
-                      </span>
-                    </td>
-                    <td className="text-muted">{new Date(run.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </strong>
+                    </div>
+                  </div>
+                  <div className="run-card-date">
+                    {new Date(run.created_at).toLocaleDateString()}
+                  </div>
+                  <Link to={`/runs/${run.id}`} className="run-card-chevron" title="Open run">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 :root {
   --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
   --sidebar-bg: #1a3a2a;
   --sidebar-hover: #244734;
   --sidebar-active: #2c5040;
@@ -14,7 +15,7 @@
   --primary-dark: #2980b9;
   --primary-light: #ebf5fb;
 
-  --bg-main: #f0f7f2;
+  --bg-main: #e0ede4;
   --bg-white: #ffffff;
 
   --text-primary: #2c3e50;

@@ -1,14 +1,34 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import projectService from '../services/projectService';
+import authService from '../services/authService';
 import './Sidebar.css';
 
-export default function Sidebar() {
-  const { user, logout } = useAuth();
+export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMobile }) {
+  const { user, logout, updateAvatar } = useAuth();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
-  const [projectsOpen, setProjectsOpen] = useState(true);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const API_BASE = 'http://localhost:5001';
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await authService.uploadAvatar(file);
+      updateAvatar(data.avatar);
+    } catch {
+      // silently fail
+    }
+    e.target.value = '';
+  };
 
   useEffect(() => {
     projectService.getAll().then(setProjects).catch(() => {});
@@ -30,27 +50,44 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''} ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && mobileOpen ? 'sidebar--mobile-open' : ''}`}>
       <div className="sidebar-header">
-        <h1 className="sidebar-logo">StyleGuard</h1>
+        <h1 className="sidebar-logo">{collapsed ? 'S' : 'StyleGuard'}</h1>
+        {isMobile ? (
+          <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Close menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        ) : (
+          <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {collapsed
+                ? <polyline points="9 18 15 12 9 6" />
+                : <polyline points="15 18 9 12 15 6" />
+              }
+            </svg>
+          </button>
+        )}
       </div>
 
       <nav className="sidebar-nav">
-        <NavLink to="/" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+        <NavLink to="/" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Dashboard">
           <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
           </svg>
-          Dashboard
+          <span className="sidebar-label">Dashboard</span>
         </NavLink>
 
         <div className="sidebar-section">
-          <button className="sidebar-section-toggle" onClick={() => setProjectsOpen(!projectsOpen)}>
-            <svg className={`sidebar-icon sidebar-chevron ${projectsOpen ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <button className="sidebar-section-toggle" onClick={() => !collapsed && setProjectsOpen(!projectsOpen)} title="Test Suites">
+            <svg className={`sidebar-icon sidebar-chevron ${projectsOpen && !collapsed ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
-            Projects
+            <span className="sidebar-label">Test Suites</span>
           </button>
-          {projectsOpen && (
+          {projectsOpen && !collapsed && (
             <div className="sidebar-submenu">
               {projects.map((p) => (
                 <NavLink
@@ -71,14 +108,33 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <svg className="sidebar-user-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-          </svg>
-          <span className="sidebar-username">{user?.username}</span>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/jpeg,image/png"
+            style={{ display: 'none' }}
+          />
+          {user?.avatar ? (
+            <img
+              src={`${API_BASE}${user.avatar}`}
+              alt="Avatar"
+              className="sidebar-user-avatar"
+              onClick={handleAvatarClick}
+              title="Click to change avatar"
+            />
+          ) : (
+            <span className="sidebar-user-badge" onClick={handleAvatarClick} title="Click to set avatar">
+              {user?.username?.slice(0, 2).toUpperCase() || 'SG'}
+            </span>
+          )}
+          <span className="sidebar-label sidebar-username">{user?.username}</span>
         </div>
-        <button className="sidebar-logout" onClick={handleLogout}>
-          Logout
-        </button>
+        {!collapsed && (
+          <button className="sidebar-logout" onClick={handleLogout}>
+            Logout
+          </button>
+        )}
       </div>
     </aside>
   );
