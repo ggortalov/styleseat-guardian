@@ -119,7 +119,7 @@ export default function ProjectDetailPage() {
     labels: ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'],
     datasets: [{
       data: [stats.Passed, stats.Failed, stats.Blocked, stats.Retest, stats.Untested],
-      backgroundColor: ['#4CAF50', '#F44336', '#FF9800', '#2196F3', '#9E9E9E'],
+      backgroundColor: ['#4CAF50', '#F44336', '#FF9800', '#00897B', '#9E9E9E'],
       borderWidth: 0,
     }],
   } : null;

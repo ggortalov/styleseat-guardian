@@ -107,7 +107,7 @@ export default function DashboardPage() {
               {data.recent_runs.map((run) => (
                 <div key={run.id} className="run-card">
                   <div className="run-card-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2196F3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1a3a2a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="5 3 19 12 5 21 5 3" />
                     </svg>
                   </div>

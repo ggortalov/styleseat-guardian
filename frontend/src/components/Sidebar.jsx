@@ -97,14 +97,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
         </div>
         {!collapsed && (
           isMobile ? (
-            <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Close menu">
+            <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Close menu" aria-label="Close menu">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           ) : (
-            <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sidebar">
+            <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sidebar" aria-label="Collapse sidebar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
@@ -122,7 +122,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
         </NavLink>
 
         <div className="sidebar-section">
-          <button className="sidebar-section-toggle" onClick={() => !collapsed && setProjectsOpen(!projectsOpen)} title="Test Suites">
+          <button className="sidebar-section-toggle" onClick={() => !collapsed && setProjectsOpen(!projectsOpen)} title="Test Suites" aria-expanded={projectsOpen && !collapsed}>
             <svg className={`sidebar-icon sidebar-chevron ${projectsOpen && !collapsed ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>

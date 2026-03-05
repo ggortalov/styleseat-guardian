@@ -15,10 +15,10 @@
   --header-bg: #ffffff;
   --header-border: #e5e7eb;
 
-  /* Primary — blue accent */
-  --primary: #3498db;
-  --primary-dark: #2980b9;
-  --primary-light: #ebf5fb;
+  /* Primary — green accent (matches sidebar palette) */
+  --primary: #1a3a2a;
+  --primary-dark: #133125;
+  --primary-light: #e8f5e9;
 
   /* Backgrounds */
   --bg-main: #e0ede4;
@@ -38,26 +38,26 @@
   --status-passed: #4CAF50;
   --status-failed: #F44336;
   --status-blocked: #FF9800;
-  --status-retest: #2196F3;
+  --status-retest: #00897B;
   --status-untested: #9E9E9E;
 
   /* Status tint backgrounds */
   --status-passed-bg: #e8f5e9;
   --status-failed-bg: #ffebee;
   --status-blocked-bg: #fff3e0;
-  --status-retest-bg: #e3f2fd;
+  --status-retest-bg: #e0f2f1;
   --status-untested-bg: #f5f5f5;
 
   /* Priority colors */
   --priority-critical: #d32f2f;
   --priority-high: #f57c00;
-  --priority-medium: #1976d2;
+  --priority-medium: #2e7d4f;
   --priority-low: #757575;
 
   /* Priority tint backgrounds */
   --priority-critical-bg: #ffebee;
   --priority-high-bg: #fff3e0;
-  --priority-medium-bg: #e3f2fd;
+  --priority-medium-bg: #e8f5e9;
   --priority-low-bg: #f5f5f5;
 
   /* Shadows — modern elevation system */
