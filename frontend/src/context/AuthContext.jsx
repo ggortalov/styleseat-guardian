@@ -40,7 +40,12 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (_) {
+      // Token may already be expired; proceed with local cleanup
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);

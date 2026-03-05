@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import create_app, db
-from app.models import User, Project, Suite, Section, TestCase, TestRun, TestResult, ResultHistory
+from app.models import User, Project, Suite, Section, TestCase, TestRun, TestResult, ResultHistory, TokenBlocklist
 
 app = create_app()
 
@@ -19,7 +19,7 @@ with app.app_context():
 
     # Create user
     user = User(username="demo", email="demo@testtrack.com")
-    user.set_password("demo123")
+    user.set_password("Demo123!")
     db.session.add(user)
     db.session.flush()
 
@@ -255,7 +255,7 @@ with app.app_context():
     db.session.commit()
 
     print("Seed data created successfully!")
-    print(f"  User: demo / demo123")
+    print(f"  User: demo / Demo123!")
     print(f"  Projects: {len(projects)}")
     print(f"  Suites: 3")
     print(f"  Test Cases: {len(cases) + len(bank_cases)}")
