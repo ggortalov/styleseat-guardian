@@ -17,9 +17,9 @@ with app.app_context():
     db.drop_all()
     db.create_all()
 
-    # Create user
-    user = User(username="demo", email="demo@testtrack.com")
-    user.set_password("Demo123!")
+    # Create users
+    user = User(username="demo", email="ggortalov+demo@styleseat.com")
+    user.set_password("DemoStyleSeat22@")
     db.session.add(user)
     db.session.flush()
 
@@ -61,92 +61,93 @@ with app.app_context():
     db.session.add_all([reg_section, login_section, profile_section])
     db.session.flush()
 
-    # Test cases
+    # Test cases: (suite_id, section_id, title, case_type, priority, steps)
     test_cases_data = [
         # Cart
-        (cart_section.id, "Add single item to cart", "Functional", "High", [
+        (checkout_suite.id, cart_section.id, "Add single item to cart", "Functional", "High", [
             {"action": "Navigate to product page", "expected": "Product details displayed"},
             {"action": "Click 'Add to Cart'", "expected": "Item added, cart count increases"},
             {"action": "Open cart", "expected": "Item visible with correct price"},
         ]),
-        (cart_section.id, "Add multiple items to cart", "Functional", "High", [
+        (checkout_suite.id, cart_section.id, "Add multiple items to cart", "Functional", "High", [
             {"action": "Add 3 different items", "expected": "Cart shows 3 items"},
             {"action": "Verify subtotal", "expected": "Subtotal matches sum of items"},
         ]),
-        (cart_section.id, "Remove item from cart", "Functional", "Medium", [
+        (checkout_suite.id, cart_section.id, "Remove item from cart", "Functional", "Medium", [
             {"action": "Open cart with items", "expected": "Cart items displayed"},
             {"action": "Click remove on an item", "expected": "Item removed, totals updated"},
         ]),
-        (cart_section.id, "Update item quantity", "Functional", "Medium", [
+        (checkout_suite.id, cart_section.id, "Update item quantity", "Functional", "Medium", [
             {"action": "Change quantity to 3", "expected": "Quantity updated"},
             {"action": "Verify line total", "expected": "Price multiplied by 3"},
         ]),
         # Credit Card
-        (cc_section.id, "Pay with valid credit card", "Functional", "Critical", [
+        (checkout_suite.id, cc_section.id, "Pay with valid credit card", "Functional", "Critical", [
             {"action": "Enter valid card details", "expected": "Fields accepted"},
             {"action": "Click 'Pay Now'", "expected": "Payment processed successfully"},
         ]),
-        (cc_section.id, "Pay with expired card", "Functional", "High", [
+        (checkout_suite.id, cc_section.id, "Pay with expired card", "Functional", "High", [
             {"action": "Enter expired card details", "expected": "Error message displayed"},
         ]),
-        (cc_section.id, "Pay with insufficient funds", "Functional", "High", [
+        (checkout_suite.id, cc_section.id, "Pay with insufficient funds", "Functional", "High", [
             {"action": "Enter card with insufficient funds", "expected": "Decline message shown"},
         ]),
         # PayPal
-        (paypal_section.id, "Pay with PayPal account", "Functional", "High", [
+        (checkout_suite.id, paypal_section.id, "Pay with PayPal account", "Functional", "High", [
             {"action": "Select PayPal", "expected": "Redirected to PayPal"},
             {"action": "Login and confirm", "expected": "Payment successful, redirected back"},
         ]),
-        (paypal_section.id, "Cancel PayPal payment", "Functional", "Medium", [
+        (checkout_suite.id, paypal_section.id, "Cancel PayPal payment", "Functional", "Medium", [
             {"action": "Click cancel on PayPal page", "expected": "Returned to checkout"},
         ]),
         # Confirmation
-        (confirm_section.id, "Order confirmation page displays", "Functional", "High", [
+        (checkout_suite.id, confirm_section.id, "Order confirmation page displays", "Functional", "High", [
             {"action": "Complete payment", "expected": "Confirmation page with order number"},
             {"action": "Verify order details", "expected": "Items, totals, shipping address correct"},
         ]),
-        (confirm_section.id, "Confirmation email sent", "Functional", "Medium", [
+        (checkout_suite.id, confirm_section.id, "Confirmation email sent", "Functional", "Medium", [
             {"action": "Complete order", "expected": "Confirmation email received"},
         ]),
         # Registration
-        (reg_section.id, "Register with valid data", "Functional", "Critical", [
+        (user_mgmt_suite.id, reg_section.id, "Register with valid data", "Functional", "Critical", [
             {"action": "Fill all required fields", "expected": "Fields accepted"},
             {"action": "Submit form", "expected": "Account created, logged in"},
         ]),
-        (reg_section.id, "Register with existing email", "Functional", "High", [
+        (user_mgmt_suite.id, reg_section.id, "Register with existing email", "Functional", "High", [
             {"action": "Enter already registered email", "expected": "Error: email already exists"},
         ]),
-        (reg_section.id, "Register with weak password", "Security", "High", [
+        (user_mgmt_suite.id, reg_section.id, "Register with weak password", "Security", "High", [
             {"action": "Enter password '123'", "expected": "Password strength error"},
         ]),
         # Login
-        (login_section.id, "Login with valid credentials", "Functional", "Critical", [
+        (user_mgmt_suite.id, login_section.id, "Login with valid credentials", "Functional", "Critical", [
             {"action": "Enter correct username and password", "expected": "Successfully logged in"},
         ]),
-        (login_section.id, "Login with wrong password", "Functional", "High", [
+        (user_mgmt_suite.id, login_section.id, "Login with wrong password", "Functional", "High", [
             {"action": "Enter incorrect password", "expected": "Error: invalid credentials"},
         ]),
-        (login_section.id, "Forgot password flow", "Functional", "Medium", [
+        (user_mgmt_suite.id, login_section.id, "Forgot password flow", "Functional", "Medium", [
             {"action": "Click 'Forgot Password'", "expected": "Email input shown"},
             {"action": "Enter email and submit", "expected": "Reset email sent"},
         ]),
         # Profile
-        (profile_section.id, "Update profile name", "Functional", "Medium", [
+        (user_mgmt_suite.id, profile_section.id, "Update profile name", "Functional", "Medium", [
             {"action": "Edit display name", "expected": "Name field editable"},
             {"action": "Save changes", "expected": "Name updated successfully"},
         ]),
-        (profile_section.id, "Change password", "Functional", "High", [
+        (user_mgmt_suite.id, profile_section.id, "Change password", "Functional", "High", [
             {"action": "Enter current and new password", "expected": "Password changed"},
         ]),
-        (profile_section.id, "Upload avatar", "Functional", "Low", [
+        (user_mgmt_suite.id, profile_section.id, "Upload avatar", "Functional", "Low", [
             {"action": "Select image file", "expected": "Preview shown"},
             {"action": "Save", "expected": "Avatar updated"},
         ]),
     ]
 
     cases = []
-    for section_id, title, case_type, priority, steps in test_cases_data:
+    for suite_id, section_id, title, case_type, priority, steps in test_cases_data:
         tc = TestCase(
+            suite_id=suite_id,
             section_id=section_id,
             title=title,
             case_type=case_type,
@@ -172,21 +173,22 @@ with app.app_context():
     db.session.flush()
 
     bank_cases_data = [
-        (auth_section.id, "POST /auth/login returns JWT", "Functional", "Critical", []),
-        (auth_section.id, "POST /auth/login with invalid credentials", "Functional", "High", []),
-        (auth_section.id, "POST /auth/refresh token", "Functional", "High", []),
-        (accounts_section.id, "GET /accounts returns user accounts", "Functional", "Critical", []),
-        (accounts_section.id, "GET /accounts/:id returns account details", "Functional", "High", []),
-        (accounts_section.id, "GET /accounts/:id/transactions", "Functional", "High", []),
-        (transfers_section.id, "POST /transfers creates transfer", "Functional", "Critical", []),
-        (transfers_section.id, "POST /transfers insufficient funds", "Functional", "High", []),
-        (transfers_section.id, "POST /transfers invalid account", "Functional", "Medium", []),
-        (transfers_section.id, "GET /transfers/:id returns transfer status", "Functional", "Medium", []),
+        (api_suite.id, auth_section.id, "POST /auth/login returns JWT", "Functional", "Critical", []),
+        (api_suite.id, auth_section.id, "POST /auth/login with invalid credentials", "Functional", "High", []),
+        (api_suite.id, auth_section.id, "POST /auth/refresh token", "Functional", "High", []),
+        (api_suite.id, accounts_section.id, "GET /accounts returns user accounts", "Functional", "Critical", []),
+        (api_suite.id, accounts_section.id, "GET /accounts/:id returns account details", "Functional", "High", []),
+        (api_suite.id, accounts_section.id, "GET /accounts/:id/transactions", "Functional", "High", []),
+        (api_suite.id, transfers_section.id, "POST /transfers creates transfer", "Functional", "Critical", []),
+        (api_suite.id, transfers_section.id, "POST /transfers insufficient funds", "Functional", "High", []),
+        (api_suite.id, transfers_section.id, "POST /transfers invalid account", "Functional", "Medium", []),
+        (api_suite.id, transfers_section.id, "GET /transfers/:id returns transfer status", "Functional", "Medium", []),
     ]
 
     bank_cases = []
-    for section_id, title, case_type, priority, steps in bank_cases_data:
+    for suite_id, section_id, title, case_type, priority, steps in bank_cases_data:
         tc = TestCase(
+            suite_id=suite_id,
             section_id=section_id,
             title=title,
             case_type=case_type,
@@ -255,7 +257,7 @@ with app.app_context():
     db.session.commit()
 
     print("Seed data created successfully!")
-    print(f"  User: demo / Demo123!")
+    print(f"  User: demo / DemoStyleSeat22@")
     print(f"  Projects: {len(projects)}")
     print(f"  Suites: 3")
     print(f"  Test Cases: {len(cases) + len(bank_cases)}")

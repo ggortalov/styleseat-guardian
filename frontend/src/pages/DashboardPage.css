@@ -32,6 +32,16 @@
   font-weight: 700;
   color: var(--sidebar-bg);
   letter-spacing: -0.3px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-section-count {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
 }
 
 /* Project card list */
@@ -48,11 +58,11 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 16px 18px;
-  transition: box-shadow var(--transition-slow), transform var(--transition);
+  transition: border-color var(--transition), transform var(--transition);
 }
 
 .project-card:hover {
-  box-shadow: var(--shadow-md);
+  border-color: var(--border);
   transform: translateY(-1px);
 }
 
@@ -112,6 +122,26 @@
   font-size: 12px;
 }
 
+.project-card-links .link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  font-family: inherit;
+  transition: color var(--transition);
+}
+
+.project-card-links .link-btn:hover {
+  color: var(--sidebar-bg);
+}
+
+.project-card-links .link-btn.danger:hover {
+  color: var(--status-failed);
+}
+
 .project-card-summary {
   font-size: 13px;
   color: var(--status-passed);
@@ -161,11 +191,11 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 16px 18px;
-  transition: box-shadow var(--transition-slow), transform var(--transition);
+  transition: border-color var(--transition), transform var(--transition);
 }
 
 .run-card:hover {
-  box-shadow: var(--shadow-md);
+  border-color: var(--border);
   transform: translateY(-1px);
 }
 

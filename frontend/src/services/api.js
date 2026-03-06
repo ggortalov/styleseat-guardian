@@ -4,8 +4,21 @@ const api = axios.create({
   baseURL: 'http://localhost:5001/api',
 });
 
+// Helper: read token from whichever storage it lives in
+function getToken() {
+  return localStorage.getItem('token') || sessionStorage.getItem('token');
+}
+
+// Helper: clear token from both storages
+function clearAuth() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -19,8 +32,7 @@ api.interceptors.response.use(
       const url = error.config?.url || '';
       const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
       if (!isAuthEndpoint) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearAuth();
         window.location.href = '/login';
       }
     }
@@ -28,4 +40,5 @@ api.interceptors.response.use(
   }
 );
 
+export { getToken, clearAuth };
 export default api;

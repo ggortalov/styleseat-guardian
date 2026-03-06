@@ -116,7 +116,8 @@ class TestCase(db.Model):
     __tablename__ = "test_cases"
 
     id = db.Column(db.Integer, primary_key=True)
-    section_id = db.Column(db.Integer, db.ForeignKey("sections.id", ondelete="CASCADE"), nullable=False)
+    suite_id = db.Column(db.Integer, db.ForeignKey("suites.id", ondelete="CASCADE"), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey("sections.id", ondelete="SET NULL"), nullable=True)
     title = db.Column(db.String(500), nullable=False)
     case_type = db.Column(db.String(50), default="Functional")
     priority = db.Column(db.String(20), default="Medium")
@@ -124,6 +125,7 @@ class TestCase(db.Model):
     steps = db.Column(db.Text, nullable=True)  # JSON string
     expected_result = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    updated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
@@ -139,6 +141,7 @@ class TestCase(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "suite_id": self.suite_id,
             "section_id": self.section_id,
             "title": self.title,
             "case_type": self.case_type,
@@ -147,6 +150,7 @@ class TestCase(db.Model):
             "steps": self.steps_list,
             "expected_result": self.expected_result,
             "created_by": self.created_by,
+            "updated_by": self.updated_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

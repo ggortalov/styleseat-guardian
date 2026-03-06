@@ -1,8 +1,8 @@
-.section-tree {
+.category-list {
   font-size: 14px;
 }
 
-.tree-node-row {
+.category-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -13,29 +13,17 @@
   user-select: none;
 }
 
-.tree-node-row:hover {
+.category-row:hover {
   background: var(--primary-light);
 }
 
-.tree-node-row.selected {
+.category-row.selected {
   background: var(--primary-light);
   border-left: 3px solid var(--primary);
   font-weight: 600;
 }
 
-.tree-toggle {
-  font-size: 10px;
-  width: 16px;
-  text-align: center;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.tree-toggle.has-children {
-  cursor: pointer;
-}
-
-.tree-node-name {
+.category-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -43,7 +31,7 @@
   color: var(--text-primary);
 }
 
-.tree-node-count {
+.category-count {
   font-size: 11px;
   color: var(--text-muted);
   background: var(--border-light);
@@ -53,17 +41,17 @@
   font-weight: 500;
 }
 
-.tree-node-actions {
+.category-actions {
   display: none;
   gap: 2px;
   flex-shrink: 0;
 }
 
-.tree-node-row:hover .tree-node-actions {
+.category-row:hover .category-actions {
   display: flex;
 }
 
-.tree-node-actions button {
+.category-actions button {
   background: none;
   border: none;
   color: var(--text-muted);
@@ -75,12 +63,12 @@
   transition: background var(--transition), color var(--transition);
 }
 
-.tree-node-actions button:hover {
+.category-actions button:hover {
   color: var(--primary);
   background: var(--primary-light);
 }
 
-.tree-empty {
+.category-empty {
   padding: 24px;
   text-align: center;
   color: var(--text-muted);

@@ -15,7 +15,7 @@
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
-  transition: all var(--transition);
+  transition: color var(--transition), border-color var(--transition);
   font-family: inherit;
 }
 
@@ -112,11 +112,11 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 16px 18px;
-  transition: box-shadow var(--transition-slow), transform var(--transition);
+  transition: border-color var(--transition), transform var(--transition);
 }
 
 .suite-card:hover {
-  box-shadow: var(--shadow-md);
+  border-color: var(--border);
   transform: translateY(-1px);
 }
 

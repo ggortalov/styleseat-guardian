@@ -17,11 +17,13 @@ def global_dashboard():
     for project in projects:
         d = project.to_dict()
 
-        suite_ids = [s.id for s in Suite.query.filter_by(project_id=project.id).all()]
-        section_ids = [s.id for s in Section.query.filter(Section.suite_id.in_(suite_ids)).all()] if suite_ids else []
+        suites = Suite.query.filter_by(project_id=project.id).order_by(Suite.created_at.asc()).all()
+        suite_ids = [s.id for s in suites]
 
         d["suite_count"] = len(suite_ids)
-        d["case_count"] = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
+        d["first_suite_id"] = suites[0].id if suites else None
+        d["first_suite_name"] = suites[0].name if suites else None
+        d["case_count"] = TestCase.query.filter(TestCase.suite_id.in_(suite_ids)).count() if suite_ids else 0
         d["run_count"] = TestRun.query.filter_by(project_id=project.id).count()
 
         # Aggregate stats across all runs

@@ -1,24 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Background -->
-  <rect width="32" height="32" rx="6" fill="#1a2332"/>
+  <!-- Background (brand dark green) -->
+  <rect width="32" height="32" rx="6" fill="#1a3a2a"/>
   <!-- Mane (outer circle) -->
-  <circle cx="16" cy="16" r="11" fill="#C67C4E"/>
+  <circle cx="16" cy="16" r="11" fill="#4CAF50"/>
   <!-- Mane points -->
-  <path d="M16 4 L18 8 L14 8Z" fill="#B06830"/>
-  <path d="M23.5 6.5 L22 10.5 L19 8.5Z" fill="#B06830"/>
-  <path d="M27.5 12 L23.5 12.5 L23 9.5Z" fill="#B06830"/>
-  <path d="M28 18 L24 16.5 L24.5 13.5Z" fill="#B06830"/>
-  <path d="M8.5 6.5 L10 10.5 L13 8.5Z" fill="#B06830"/>
-  <path d="M4.5 12 L8.5 12.5 L9 9.5Z" fill="#B06830"/>
-  <path d="M4 18 L8 16.5 L7.5 13.5Z" fill="#B06830"/>
+  <path d="M16 4 L18 8 L14 8Z" fill="#388E3C"/>
+  <path d="M23.5 6.5 L22 10.5 L19 8.5Z" fill="#388E3C"/>
+  <path d="M27.5 12 L23.5 12.5 L23 9.5Z" fill="#388E3C"/>
+  <path d="M28 18 L24 16.5 L24.5 13.5Z" fill="#388E3C"/>
+  <path d="M8.5 6.5 L10 10.5 L13 8.5Z" fill="#388E3C"/>
+  <path d="M4.5 12 L8.5 12.5 L9 9.5Z" fill="#388E3C"/>
+  <path d="M4 18 L8 16.5 L7.5 13.5Z" fill="#388E3C"/>
   <!-- Face -->
-  <circle cx="16" cy="16.5" r="8.5" fill="#E8A65D"/>
+  <circle cx="16" cy="16.5" r="8.5" fill="#A5D6A7"/>
   <!-- Eyes -->
-  <ellipse cx="12.5" cy="14.5" rx="1.3" ry="1.5" fill="#1a2332"/>
-  <ellipse cx="19.5" cy="14.5" rx="1.3" ry="1.5" fill="#1a2332"/>
+  <ellipse cx="12.5" cy="14.5" rx="1.3" ry="1.5" fill="#1a3a2a"/>
+  <ellipse cx="19.5" cy="14.5" rx="1.3" ry="1.5" fill="#1a3a2a"/>
   <!-- Nose -->
-  <path d="M14.5 17.5 L16 19 L17.5 17.5Z" fill="#B06830"/>
+  <path d="M14.5 17.5 L16 19 L17.5 17.5Z" fill="#388E3C"/>
   <!-- Mouth -->
-  <path d="M16 19 Q14.5 21 13 20" fill="none" stroke="#B06830" stroke-width="0.8" stroke-linecap="round"/>
-  <path d="M16 19 Q17.5 21 19 20" fill="none" stroke="#B06830" stroke-width="0.8" stroke-linecap="round"/>
+  <path d="M16 19 Q14.5 21 13 20" fill="none" stroke="#388E3C" stroke-width="0.8" stroke-linecap="round"/>
+  <path d="M16 19 Q17.5 21 19 20" fill="none" stroke="#388E3C" stroke-width="0.8" stroke-linecap="round"/>
 </svg>

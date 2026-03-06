@@ -45,7 +45,7 @@
   padding: 4px;
   line-height: 1;
   border-radius: var(--radius-sm);
-  transition: all var(--transition);
+  transition: background var(--transition), color var(--transition);
   display: flex;
   align-items: center;
   justify-content: center;

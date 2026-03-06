@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import dashboardService from '../services/dashboardService';
 import projectService from '../services/projectService';
+import suiteService from '../services/suiteService';
 import './DashboardPage.css';
 
 export default function DashboardPage() {
@@ -13,6 +15,9 @@ export default function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [editSuite, setEditSuite] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [deleteSuite, setDeleteSuite] = useState(null);
   const navigate = useNavigate();
 
   const fetchData = () => {
@@ -25,15 +30,41 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchData(); }, []);
 
+  const refresh = () => {
+    fetchData();
+    if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
+  };
+
   const handleCreateProject = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    await projectService.create({ name: newName, description: newDesc });
+    const project = await projectService.create({ name: newName, description: newDesc });
+    const suite = await suiteService.create(project.id, { name: newName });
     setNewName('');
     setNewDesc('');
     setShowCreate(false);
-    fetchData();
-    if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
+    refresh();
+    navigate(`/projects/${project.id}/suites/${suite.id}`);
+  };
+
+  const handleEditSuite = async (e) => {
+    e.preventDefault();
+    if (!editName.trim() || !editSuite) return;
+    // Update both the suite name and the project name
+    if (editSuite.first_suite_id) {
+      await suiteService.update(editSuite.first_suite_id, { name: editName });
+    }
+    await projectService.update(editSuite.id, { name: editName });
+    setEditSuite(null);
+    setEditName('');
+    refresh();
+  };
+
+  const handleDeleteSuite = async () => {
+    if (!deleteSuite) return;
+    await projectService.delete(deleteSuite.id);
+    setDeleteSuite(null);
+    refresh();
   };
 
   if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard' }]} /><LoadingSpinner /></>;
@@ -47,7 +78,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard-section">
-          <h3 className="dashboard-section-title">Test Suites</h3>
+          <h3 className="dashboard-section-title">
+            Test Suites
+            {data?.totals && (
+              <span className="dashboard-section-count">
+                {data.totals.cases} test case{data.totals.cases !== 1 ? 's' : ''} &middot; {data.totals.runs} test run{data.totals.runs !== 1 ? 's' : ''}
+              </span>
+            )}
+          </h3>
           {data?.projects?.length > 0 ? (
             <div className="project-list">
               {data.projects.map((p) => (
@@ -58,16 +96,16 @@ export default function DashboardPage() {
                     </svg>
                   </div>
                   <div className="project-card-body">
-                    <Link to={`/projects/${p.id}`} className="project-card-name">{p.name}</Link>
+                    <Link to={p.first_suite_id ? `/projects/${p.id}/suites/${p.first_suite_id}` : `/projects/${p.id}`} className="project-card-name">{p.first_suite_name || p.name}</Link>
                     <div className="project-card-links">
-                      <Link to={`/projects/${p.id}`}>Open</Link>
+                      <Link to={p.first_suite_id ? `/projects/${p.id}/suites/${p.first_suite_id}` : `/projects/${p.id}`}>Open</Link>
                       <span className="project-card-separator">|</span>
-                      <Link to={`/projects/${p.id}`}>Suites</Link>
+                      <button className="link-btn" onClick={() => { setEditSuite(p); setEditName(p.first_suite_name || p.name); }}>Edit</button>
                       <span className="project-card-separator">|</span>
-                      <Link to={`/projects/${p.id}`}>Runs</Link>
+                      <button className="link-btn danger" onClick={() => setDeleteSuite(p)}>Delete</button>
                     </div>
                     <div className="project-card-summary">
-                      {p.suite_count} suite{p.suite_count !== 1 ? 's' : ''} &middot; {p.case_count} test case{p.case_count !== 1 ? 's' : ''} &middot; {p.run_count} test run{p.run_count !== 1 ? 's' : ''}.
+                      {p.case_count} test case{p.case_count !== 1 ? 's' : ''} &middot; {p.run_count} test run{p.run_count !== 1 ? 's' : ''}.
                     </div>
                     {p.stats.total > 0 && (
                       <div className="project-card-bar">
@@ -87,7 +125,7 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                  <Link to={`/projects/${p.id}`} className="project-card-chevron" title="Open project">
+                  <Link to={p.first_suite_id ? `/projects/${p.id}/suites/${p.first_suite_id}` : `/projects/${p.id}`} className="project-card-chevron" title="Open suite">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
@@ -96,7 +134,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="empty-message">No projects yet. Create your first project to get started.</p>
+            <p className="empty-message">No test suites yet. Create your first test suite to get started.</p>
           )}
         </div>
 
@@ -135,15 +173,50 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create Project">
+      <Modal isOpen={!!editSuite} onClose={() => setEditSuite(null)} title="Edit Test Suite">
+        <form onSubmit={handleEditSuite} className="modal-form">
+          <div className="form-group">
+            <label>Suite Name</label>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Enter suite name"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="form-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setEditSuite(null)}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteSuite}
+        onClose={() => setDeleteSuite(null)}
+        onConfirm={handleDeleteSuite}
+        title="Delete Suite"
+        message={(() => {
+          if (!deleteSuite) return '';
+          const name = deleteSuite.first_suite_name || deleteSuite.name;
+          const parts = [];
+          if (deleteSuite.case_count > 0) parts.push(`${deleteSuite.case_count} test case${deleteSuite.case_count !== 1 ? 's' : ''}`);
+          if (deleteSuite.run_count > 0) parts.push(`${deleteSuite.run_count} test run${deleteSuite.run_count !== 1 ? 's' : ''}`);
+          return `"${name}"${parts.length ? ` (${parts.join(', ')})` : ''} will be permanently deleted.`;
+        })()}
+      />
+
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create Test Suite">
         <form onSubmit={handleCreateProject} className="modal-form">
           <div className="form-group">
-            <label>Project Name</label>
+            <label>Suite Name</label>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter project name"
+              placeholder="Enter suite name"
               required
               autoFocus
             />
@@ -159,7 +232,7 @@ export default function DashboardPage() {
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Create Project</button>
+            <button type="submit" className="btn btn-primary">Create Suite</button>
           </div>
         </form>
       </Modal>

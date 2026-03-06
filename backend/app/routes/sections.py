@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
 from app import db
-from app.models import Section, Suite, TestCase
+from app.models import Section, Suite, TestCase, Project
 
 sections_bp = Blueprint("sections", __name__)
 
@@ -12,6 +12,23 @@ sections_bp = Blueprint("sections", __name__)
 def list_sections(suite_id):
     Suite.query.get_or_404(suite_id)
     sections = Section.query.filter_by(suite_id=suite_id).order_by(Section.display_order).all()
+    result = []
+    for s in sections:
+        d = s.to_dict()
+        d["case_count"] = TestCase.query.filter_by(section_id=s.id).count()
+        result.append(d)
+    return jsonify(result), 200
+
+
+@sections_bp.route("/projects/<int:project_id>/sections", methods=["GET"])
+@jwt_required()
+def list_sections_by_project(project_id):
+    """Return all sections across all suites in a project."""
+    Project.query.get_or_404(project_id)
+    suite_ids = [s.id for s in Suite.query.filter_by(project_id=project_id).all()]
+    if not suite_ids:
+        return jsonify([]), 200
+    sections = Section.query.filter(Section.suite_id.in_(suite_ids)).order_by(Section.display_order).all()
     result = []
     for s in sections:
         d = s.to_dict()

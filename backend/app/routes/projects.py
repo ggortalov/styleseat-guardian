@@ -11,7 +11,19 @@ projects_bp = Blueprint("projects", __name__)
 @jwt_required()
 def list_projects():
     projects = Project.query.order_by(Project.created_at.asc()).all()
-    return jsonify([p.to_dict() for p in projects]), 200
+    result = []
+    for p in projects:
+        d = p.to_dict()
+        suites = Suite.query.filter_by(project_id=p.id).order_by(Suite.created_at.asc()).all()
+        first_suite = suites[0] if suites else None
+        d["first_suite_id"] = first_suite.id if first_suite else None
+        d["first_suite_name"] = first_suite.name if first_suite else None
+        # Include categories (sections) across all suites
+        suite_ids = [s.id for s in suites]
+        sections = Section.query.filter(Section.suite_id.in_(suite_ids)).order_by(Section.display_order).all() if suite_ids else []
+        d["categories"] = [{"id": sec.id, "name": sec.name, "parent_id": sec.parent_id} for sec in sections]
+        result.append(d)
+    return jsonify(result), 200
 
 
 @projects_bp.route("/projects", methods=["POST"])

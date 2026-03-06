@@ -79,7 +79,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
   font-family: inherit;
 }
 
@@ -92,10 +92,6 @@
   background: var(--btn-color);
   border-color: var(--btn-color);
   color: #fff;
-}
-
-.btn-full {
-  width: 100%;
 }
 
 .exec-history {

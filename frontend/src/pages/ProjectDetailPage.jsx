@@ -359,7 +359,14 @@ export default function ProjectDetailPage() {
         onClose={() => setShowDelete(false)}
         onConfirm={handleDeleteProject}
         title="Delete Project"
-        message={`Are you sure you want to delete "${project?.name}"? This will delete all suites, test cases, and test runs.`}
+        message={(() => {
+          const parts = [];
+          if (suites.length > 0) parts.push(`${suites.length} suite${suites.length !== 1 ? 's' : ''}`);
+          if (project?.case_count > 0) parts.push(`${project.case_count} test case${project.case_count !== 1 ? 's' : ''}`);
+          if (runs.length > 0) parts.push(`${runs.length} test run${runs.length !== 1 ? 's' : ''}`);
+          return `"${project?.name}"${parts.length ? ` (${parts.join(', ')})` : ''} will be permanently deleted.`;
+        })()}
+        requireSafeguard
       />
 
       {/* Delete suite */}
@@ -368,7 +375,7 @@ export default function ProjectDetailPage() {
         onClose={() => setDeleteSuite(null)}
         onConfirm={handleDeleteSuite}
         title="Delete Suite"
-        message={`Are you sure you want to delete "${deleteSuite?.name}"? All sections and test cases in this suite will be deleted.`}
+        message={`"${deleteSuite?.name}"${deleteSuite?.case_count > 0 ? ` (${deleteSuite.case_count} test case${deleteSuite.case_count !== 1 ? 's' : ''})` : ''} will be permanently deleted.`}
       />
     </div>
   );

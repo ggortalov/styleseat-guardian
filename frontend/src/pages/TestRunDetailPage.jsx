@@ -48,6 +48,7 @@ export default function TestRunDetailPage() {
     <div>
       <Header breadcrumbs={[
         { label: 'Dashboard', path: '/' },
+        ...(run?.project_name ? [{ label: run.project_name, path: `/projects/${run.project_id}` }] : []),
         { label: run?.name },
       ]} />
       <div className="page-content">

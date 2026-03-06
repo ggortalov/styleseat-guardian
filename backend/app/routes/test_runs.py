@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
 
 from app import db
-from app.models import TestRun, TestResult, ResultHistory, TestCase, Section, Suite, Project
+from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Project
 
 runs_bp = Blueprint("runs", __name__)
 
@@ -65,12 +65,10 @@ def create_run(project_id):
     db.session.flush()  # get run.id
 
     # Get all test cases in the suite
-    section_ids = [s.id for s in Section.query.filter_by(suite_id=suite_id).all()]
-    if section_ids:
-        cases = TestCase.query.filter(TestCase.section_id.in_(section_ids)).all()
-        for case in cases:
-            result = TestResult(run_id=run.id, case_id=case.id, status="Untested")
-            db.session.add(result)
+    cases = TestCase.query.filter_by(suite_id=suite_id).all()
+    for case in cases:
+        result = TestResult(run_id=run.id, case_id=case.id, status="Untested")
+        db.session.add(result)
 
     db.session.commit()
 
@@ -87,6 +85,8 @@ def get_run(run_id):
     run = TestRun.query.get_or_404(run_id)
     d = run.to_dict()
     d["suite_name"] = run.suite.name if run.suite else None
+    project = Project.query.get(run.project_id) if run.project_id else None
+    d["project_name"] = project.name if project else None
 
     counts = dict(
         db.session.query(TestResult.status, func.count(TestResult.id))
@@ -157,6 +157,8 @@ def list_results(run_id):
 def get_result(result_id):
     result = TestResult.query.get_or_404(result_id)
     d = result.to_dict()
+    run = TestRun.query.get(result.run_id) if result.run_id else None
+    d["run_name"] = run.name if run else None
     if result.test_case:
         d["test_case"] = result.test_case.to_dict()
         d["test_case"]["section_name"] = result.test_case.section.name if result.test_case.section else None

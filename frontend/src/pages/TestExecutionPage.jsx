@@ -67,8 +67,8 @@ export default function TestExecutionPage() {
     <div>
       <Header breadcrumbs={[
         { label: 'Dashboard', path: '/' },
-        { label: 'Run', path: `/runs/${runId}` },
-        { label: `Execute C${tc.id}` },
+        { label: result?.run_name || 'Run', path: `/runs/${runId}` },
+        { label: `Execute C${String(tc.id).padStart(7, '0')}` },
       ]} />
       <div className="page-content">
         <div className="exec-nav">

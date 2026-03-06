@@ -30,48 +30,51 @@ export default function RegisterPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <img src="/logo.png" alt="StyleSeat Regression Guard" className="auth-brand-icon" />
-          <h1 className="auth-brand-name">StyleSeat</h1>
-          <span className="auth-brand-subtitle">Regression Guard</span>
-          <p className="auth-brand-tagline">Create your account</p>
+          <img src="/favicon.jpg" alt="StyleSeat Regression Guard" className="auth-brand-icon" />
         </div>
+
+        <h2 className="auth-welcome">Create your account</h2>
+        <p className="auth-welcome-sub">Get started with test management</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           {error && <div className="auth-error">{error}</div>}
 
-          <div className="form-group">
-            <label>Username</label>
+          <div className="floating-field">
             <input
               type="text"
+              id="reg-username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
+              placeholder=" "
               required
               autoFocus
             />
+            <label htmlFor="reg-username">Username</label>
           </div>
 
-          <div className="form-group">
-            <label>Email</label>
+          <div className="floating-field">
             <input
               type="email"
+              id="reg-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter email"
+              placeholder=" "
               required
             />
+            <label htmlFor="reg-email">Email</label>
           </div>
 
-          <div className="form-group">
-            <label>Password</label>
+          <div className="floating-field">
             <input
               type="password"
+              id="reg-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder=" "
               required
               minLength={4}
             />
+            <label htmlFor="reg-password">Password</label>
           </div>
 
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
@@ -83,6 +86,7 @@ export default function RegisterPage() {
           Already have an account? <Link to="/login">Log in</Link>
         </p>
       </div>
+      <p className="auth-trademark">Designed by StyleSeat</p>
     </div>
   );
 }

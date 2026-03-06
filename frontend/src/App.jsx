@@ -1,17 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
+import LoadingSpinner from './components/LoadingSpinner';
+
+// Auth pages — small, loaded eagerly for instant first paint
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import ProjectDetailPage from './pages/ProjectDetailPage';
-import TestSuitePage from './pages/TestSuitePage';
-import TestCaseFormPage from './pages/TestCaseFormPage';
-import TestCaseDetailPage from './pages/TestCaseDetailPage';
-import TestRunDetailPage from './pages/TestRunDetailPage';
-import TestExecutionPage from './pages/TestExecutionPage';
+
+// App pages — lazy loaded, only fetched after login
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
+const TestSuitePage = lazy(() => import('./pages/TestSuitePage'));
+const TestCaseFormPage = lazy(() => import('./pages/TestCaseFormPage'));
+const TestCaseDetailPage = lazy(() => import('./pages/TestCaseDetailPage'));
+const TestRunDetailPage = lazy(() => import('./pages/TestRunDetailPage'));
+const TestExecutionPage = lazy(() => import('./pages/TestExecutionPage'));
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -85,18 +90,20 @@ function AppLayout({ children }) {
 function AppRoutes() {
   return (
     <AppLayout>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-        <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
-        <Route path="/projects/:projectId/suites/:suiteId" element={<ProtectedRoute><TestSuitePage /></ProtectedRoute>} />
-        <Route path="/projects/:projectId/suites/:suiteId/cases/new" element={<ProtectedRoute><TestCaseFormPage /></ProtectedRoute>} />
-        <Route path="/projects/:projectId/suites/:suiteId/cases/:caseId/edit" element={<ProtectedRoute><TestCaseFormPage /></ProtectedRoute>} />
-        <Route path="/cases/:caseId" element={<ProtectedRoute><TestCaseDetailPage /></ProtectedRoute>} />
-        <Route path="/runs/:runId" element={<ProtectedRoute><TestRunDetailPage /></ProtectedRoute>} />
-        <Route path="/runs/:runId/execute/:resultId" element={<ProtectedRoute><TestExecutionPage /></ProtectedRoute>} />
-      </Routes>
+      <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/suites/:suiteId" element={<ProtectedRoute><TestSuitePage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/suites/:suiteId/cases/new" element={<ProtectedRoute><TestCaseFormPage /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/suites/:suiteId/cases/:caseId/edit" element={<ProtectedRoute><TestCaseFormPage /></ProtectedRoute>} />
+          <Route path="/cases/:caseId" element={<ProtectedRoute><TestCaseDetailPage /></ProtectedRoute>} />
+          <Route path="/runs/:runId" element={<ProtectedRoute><TestRunDetailPage /></ProtectedRoute>} />
+          <Route path="/runs/:runId/execute/:resultId" element={<ProtectedRoute><TestExecutionPage /></ProtectedRoute>} />
+        </Routes>
+      </Suspense>
     </AppLayout>
   );
 }

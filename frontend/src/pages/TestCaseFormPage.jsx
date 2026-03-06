@@ -27,6 +27,7 @@ export default function TestCaseFormPage() {
   const [expectedResult, setExpectedResult] = useState('');
   const [steps, setSteps] = useState([{ action: '', expected: '' }]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -43,7 +44,7 @@ export default function TestCaseFormPage() {
         if (isEdit) {
           const tc = await caseService.getById(caseId);
           setTitle(tc.title);
-          setSectionId(String(tc.section_id));
+          setSectionId(tc.section_id ? String(tc.section_id) : '');
           setCaseType(tc.case_type || 'Functional');
           setPriority(tc.priority || 'Medium');
           setPreconditions(tc.preconditions || '');
@@ -76,10 +77,12 @@ export default function TestCaseFormPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setError('');
     try {
       const data = {
         title,
-        section_id: parseInt(sectionId),
+        suite_id: parseInt(suiteId),
+        section_id: sectionId ? parseInt(sectionId) : null,
         case_type: caseType,
         priority,
         preconditions,
@@ -92,8 +95,9 @@ export default function TestCaseFormPage() {
         await caseService.create(data);
       }
       navigate(`/projects/${projectId}/suites/${suiteId}`);
-    } catch {
-      // handle error
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Failed to save test case';
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -105,13 +109,14 @@ export default function TestCaseFormPage() {
     <div>
       <Header breadcrumbs={[
         { label: 'Dashboard', path: '/' },
-        { label: project?.name, path: `/projects/${projectId}` },
+        ...(project?.name !== suite?.name ? [{ label: project?.name, path: `/projects/${projectId}` }] : []),
         { label: suite?.name, path: `/projects/${projectId}/suites/${suiteId}` },
         { label: isEdit ? 'Edit Test Case' : 'New Test Case' },
       ]} />
       <div className="page-content">
         <div className="card case-form-card">
           <h2 className="case-form-title">{isEdit ? 'Edit Test Case' : 'New Test Case'}</h2>
+          {error && <div className="form-error">{error}</div>}
           <form onSubmit={handleSubmit} className="case-form">
             <div className="form-row">
               <div className="form-group flex-2">
@@ -122,7 +127,7 @@ export default function TestCaseFormPage() {
 
             <div className="form-row">
               <div className="form-group">
-                <label>Section *</label>
+                <label>Category *</label>
                 <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} required>
                   {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>

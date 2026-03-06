@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService';
+import { getToken, clearAuth } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -8,13 +9,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (token) {
       authService.getMe()
         .then((data) => setUser(data))
         .catch(() => {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          clearAuth();
         })
         .finally(() => setLoading(false));
     } else {
@@ -22,20 +22,21 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (username, password, rememberMe = false) => {
     const data = await authService.login(username, password);
-    localStorage.setItem('token', data.token);
+    const storage = rememberMe ? localStorage : sessionStorage;
+    storage.setItem('token', data.token);
     const userObj = { id: data.id, username: data.username, avatar: data.avatar };
-    localStorage.setItem('user', JSON.stringify(userObj));
+    storage.setItem('user', JSON.stringify(userObj));
     setUser(userObj);
     return data;
   };
 
   const register = async (username, email, password) => {
     const data = await authService.register(username, email, password);
-    localStorage.setItem('token', data.token);
+    sessionStorage.setItem('token', data.token);
     const userObj = { id: data.id, username: data.username, avatar: data.avatar };
-    localStorage.setItem('user', JSON.stringify(userObj));
+    sessionStorage.setItem('user', JSON.stringify(userObj));
     setUser(userObj);
     return data;
   };
@@ -46,8 +47,7 @@ export function AuthProvider({ children }) {
     } catch (_) {
       // Token may already be expired; proceed with local cleanup
     }
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearAuth();
     setUser(null);
   };
 

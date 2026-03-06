@@ -2,24 +2,25 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useRef } from 'react';
 import projectService from '../services/projectService';
-import suiteService from '../services/suiteService';
 import authService from '../services/authService';
 import './Sidebar.css';
 
-function getProjectIdFromPath(pathname) {
-  const match = pathname.match(/\/projects\/(\d+)/);
-  return match ? parseInt(match[1]) : null;
+function getIdsFromPath(pathname) {
+  const projectMatch = pathname.match(/\/projects\/(\d+)/);
+  const suiteMatch = pathname.match(/\/suites\/(\d+)/);
+  return {
+    projectId: projectMatch ? parseInt(projectMatch[1]) : null,
+    suiteId: suiteMatch ? parseInt(suiteMatch[1]) : null,
+  };
 }
 
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMobile }) {
   const { user, logout, updateAvatar } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const currentProjectId = getProjectIdFromPath(location.pathname);
+  const { projectId: currentProjectId } = getIdsFromPath(location.pathname);
   const [projects, setProjects] = useState([]);
-  const [projectsOpen, setProjectsOpen] = useState(false);
-  const [expandedProject, setExpandedProject] = useState(null);
-  const [suites, setSuites] = useState([]);
+  const [suitesOpen, setSuitesOpen] = useState(true);
   const fileInputRef = useRef(null);
 
   const API_BASE = 'http://localhost:5001';
@@ -40,46 +41,45 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
     e.target.value = '';
   };
 
-  useEffect(() => {
-    projectService.getAll().then(setProjects).catch(() => {});
-  }, []);
+  const loadProjects = () => {
+    projectService.getAll()
+      .then(setProjects)
+      .catch(() => {});
+  };
 
-  // Auto-expand current project and load its suites
+  useEffect(() => { loadProjects(); }, []);
+
   useEffect(() => {
-    if (currentProjectId) {
-      setExpandedProject(currentProjectId);
-      setProjectsOpen(true);
-      suiteService.getByProject(currentProjectId).then(setSuites).catch(() => setSuites([]));
-    }
+    if (currentProjectId) setSuitesOpen(true);
   }, [currentProjectId]);
-
-  const toggleProject = (pid) => {
-    if (expandedProject === pid) {
-      setExpandedProject(null);
-      setSuites([]);
-    } else {
-      setExpandedProject(pid);
-      suiteService.getByProject(pid).then(setSuites).catch(() => setSuites([]));
-    }
-  };
-
-  const refreshProjects = () => {
-    projectService.getAll().then(setProjects).catch(() => {});
-    if (expandedProject) {
-      suiteService.getByProject(expandedProject).then(setSuites).catch(() => setSuites([]));
-    }
-  };
 
   // Expose refresh to window for cross-component updates
   useEffect(() => {
-    window.__refreshSidebarProjects = refreshProjects;
+    window.__refreshSidebarProjects = loadProjects;
     return () => { delete window.__refreshSidebarProjects; };
-  }, [expandedProject]);
+  }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const logoutTimerRef = useRef(null);
+
+  const handleLogoutClick = () => {
+    if (logoutConfirm) {
+      // Second click — actually logout
+      clearTimeout(logoutTimerRef.current);
+      setLogoutConfirm(false);
+      logout();
+      navigate('/login');
+    } else {
+      // First click — show confirm state
+      setLogoutConfirm(true);
+      logoutTimerRef.current = setTimeout(() => setLogoutConfirm(false), 3000);
+    }
   };
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(logoutTimerRef.current);
+  }, []);
 
   return (
     <aside
@@ -88,7 +88,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
     >
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img src="/logo.png" alt="StyleSeat Guardian" className="sidebar-logo-img" />
+          <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" />
           {!collapsed && (
             <div className="sidebar-logo-wordmark">
               <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Regression Guard</span></span>
@@ -122,53 +122,89 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
         </NavLink>
 
         <div className="sidebar-section">
-          <button className="sidebar-section-toggle" onClick={() => !collapsed && setProjectsOpen(!projectsOpen)} title="Test Suites" aria-expanded={projectsOpen && !collapsed}>
-            <svg className={`sidebar-icon sidebar-chevron ${projectsOpen && !collapsed ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <button className="sidebar-section-toggle" onClick={() => { if (collapsed) return; if (suitesOpen) navigate('/'); setSuitesOpen(!suitesOpen); }} title="Test Suites" aria-expanded={suitesOpen && !collapsed}>
+            <svg className={`sidebar-icon sidebar-chevron ${suitesOpen && !collapsed ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
             <span className="sidebar-label">Test Suites</span>
           </button>
-          {projectsOpen && !collapsed && (
+          {suitesOpen && !collapsed && (
             <div className="sidebar-submenu">
-              {projects.map((p) => (
-                <div key={p.id} className="sidebar-project-group">
-                  <div className="sidebar-project-row">
-                    <button
-                      className="sidebar-project-toggle"
-                      onClick={() => toggleProject(p.id)}
-                      title={expandedProject === p.id ? 'Collapse' : 'Expand'}
-                    >
-                      <svg className={`sidebar-mini-chevron ${expandedProject === p.id ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
-                    </button>
+              {projects.map((p) => {
+                const path = p.first_suite_id
+                  ? `/projects/${p.id}/suites/${p.first_suite_id}`
+                  : `/projects/${p.id}`;
+                const isActive = currentProjectId === p.id;
+                const categories = p.categories || [];
+                return (
+                  <div key={p.id} className="sidebar-project-group">
                     <NavLink
-                      to={`/projects/${p.id}`}
-                      className={({ isActive }) => `sidebar-sublink sidebar-project-link ${isActive ? 'active' : ''}`}
+                      to={path}
+                      className={({ isActive: routeActive }) =>
+                        `sidebar-sublink sidebar-suite-link ${routeActive || isActive ? 'active' : ''}`
+                      }
                     >
-                      {p.name}
+                      <svg className="sidebar-tree-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      {p.first_suite_name || p.name}
                     </NavLink>
+                    {isActive && categories.length > 0 && (() => {
+                      // Build tree from flat categories
+                      const roots = categories.filter(c => c.parent_id === null || c.parent_id === undefined);
+                      const childMap = {};
+                      categories.forEach(c => {
+                        if (c.parent_id != null) {
+                          if (!childMap[c.parent_id]) childMap[c.parent_id] = [];
+                          childMap[c.parent_id].push(c);
+                        }
+                      });
+                      return (
+                        <div className="sidebar-category-list">
+                          {roots.map((cat) => {
+                            const catPath = `${path}?categoryId=${cat.id}`;
+                            const isCatActive = location.search === `?categoryId=${cat.id}`;
+                            const children = childMap[cat.id] || [];
+                            return (
+                              <div key={cat.id}>
+                                <a
+                                  className={`sidebar-category-item ${isCatActive ? 'active' : ''}`}
+                                  href={catPath}
+                                  onClick={(e) => { e.preventDefault(); navigate(catPath); }}
+                                >
+                                  <svg className="sidebar-category-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                                  </svg>
+                                  {cat.name}
+                                </a>
+                                {children.map((sub) => {
+                                  const subPath = `${path}?categoryId=${sub.id}`;
+                                  const isSubActive = location.search === `?categoryId=${sub.id}`;
+                                  return (
+                                    <a
+                                      key={sub.id}
+                                      className={`sidebar-category-item sidebar-subcategory-item ${isSubActive ? 'active' : ''}`}
+                                      href={subPath}
+                                      onClick={(e) => { e.preventDefault(); navigate(subPath); }}
+                                    >
+                                      <svg className="sidebar-category-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="9 18 15 12 9 6" />
+                                      </svg>
+                                      {sub.name}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
-                  {expandedProject === p.id && suites.length > 0 && (
-                    <div className="sidebar-suite-list">
-                      {suites.map((s) => (
-                        <NavLink
-                          key={s.id}
-                          to={`/projects/${p.id}/suites/${s.id}`}
-                          className={({ isActive }) => `sidebar-sublink sidebar-suite-link ${isActive ? 'active' : ''}`}
-                        >
-                          {s.name}
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                  {expandedProject === p.id && suites.length === 0 && (
-                    <span className="sidebar-empty sidebar-suite-empty">No suites</span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
               {projects.length === 0 && (
-                <span className="sidebar-empty">No projects yet</span>
+                <span className="sidebar-empty">No suites yet</span>
               )}
             </div>
           )}
@@ -199,9 +235,22 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           )}
           <span className="sidebar-label sidebar-username">{user?.username}</span>
         </div>
-        {!collapsed && (
-          <button className="sidebar-logout" onClick={handleLogout}>
-            Logout
+        {collapsed ? (
+          <button className={`sidebar-logout-icon ${logoutConfirm ? 'sidebar-logout--confirm' : ''}`} onClick={(e) => { e.stopPropagation(); handleLogoutClick(); }} title={logoutConfirm ? 'Click again to confirm' : 'Logout'} aria-label="Logout">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
+        ) : (
+          <button className={`sidebar-logout ${logoutConfirm ? 'sidebar-logout--confirm' : ''}`} onClick={handleLogoutClick}>
+            <svg className="sidebar-logout-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            {logoutConfirm ? 'Confirm?' : 'Logout'}
           </button>
         )}
       </div>
