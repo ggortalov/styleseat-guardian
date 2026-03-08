@@ -100,7 +100,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   return (
     <aside
       className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''} ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && mobileOpen ? 'sidebar--mobile-open' : ''}`}
-      onClickCapture={collapsed && !isMobile ? (e) => { e.stopPropagation(); e.preventDefault(); onToggleCollapse(); } : undefined}
+      onClickCapture={collapsed && !isMobile ? (e) => { if (e.target.closest('a[href]')) return; e.stopPropagation(); e.preventDefault(); onToggleCollapse(); } : undefined}
     >
       <div className="sidebar-header">
         <div className="sidebar-logo">
@@ -136,6 +136,29 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           </svg>
           <span className="sidebar-label">Dashboard</span>
         </NavLink>
+
+        {collapsed && (
+          <NavLink to="/suites" className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/suites') || location.pathname.includes('/cases') ? 'active' : ''}`} title="Test Suites">
+            <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              <line x1="9" y1="10" x2="15" y2="10" />
+              <line x1="9" y1="14" x2="15" y2="14" />
+              <line x1="9" y1="18" x2="12" y2="18" />
+            </svg>
+            <span className="sidebar-label">Test Suites</span>
+          </NavLink>
+        )}
+
+        {collapsed && (
+          <NavLink to="/runs" className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/runs') || location.pathname.includes('/execute') ? 'active' : ''}`} title="Test Runs">
+            <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="10 8 16 12 10 16 10 8" />
+            </svg>
+            <span className="sidebar-label">Test Runs</span>
+          </NavLink>
+        )}
 
         <div className="sidebar-section">
           <button className="sidebar-section-toggle" onClick={() => { if (collapsed) return; if (suitesOpen) navigate('/'); setSuitesOpen(!suitesOpen); }} title="Test Suites" aria-expanded={suitesOpen && !collapsed}>
@@ -283,6 +306,16 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
             </div>
           )}
         </div>
+
+        {!collapsed && (
+          <NavLink to="/runs" className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/runs') || location.pathname.includes('/execute') ? 'active' : ''}`} title="Test Runs">
+            <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="10 8 16 12 10 16 10 8" />
+            </svg>
+            <span className="sidebar-label">Test Runs</span>
+          </NavLink>
+        )}
       </nav>
 
       <div className="sidebar-footer">

@@ -17,6 +17,8 @@ const TestCaseFormPage = lazy(() => import('./pages/TestCaseFormPage'));
 const TestCaseDetailPage = lazy(() => import('./pages/TestCaseDetailPage'));
 const TestRunDetailPage = lazy(() => import('./pages/TestRunDetailPage'));
 const TestExecutionPage = lazy(() => import('./pages/TestExecutionPage'));
+const TestSuitesPage = lazy(() => import('./pages/TestSuitesPage'));
+const TestRunsPage = lazy(() => import('./pages/TestRunsPage'));
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -95,6 +97,8 @@ function AppRoutes() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/suites" element={<ProtectedRoute><TestSuitesPage /></ProtectedRoute>} />
+          <Route path="/runs" element={<ProtectedRoute><TestRunsPage /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
           <Route path="/projects/:projectId/suites/:suiteId" element={<ProtectedRoute><TestSuitePage /></ProtectedRoute>} />
           <Route path="/projects/:projectId/suites/:suiteId/cases/new" element={<ProtectedRoute><TestCaseFormPage /></ProtectedRoute>} />

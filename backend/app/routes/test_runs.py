@@ -10,6 +10,35 @@ from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Proj
 runs_bp = Blueprint("runs", __name__)
 
 
+@runs_bp.route("/runs", methods=["GET"])
+@jwt_required()
+def list_all_runs():
+    runs = TestRun.query.order_by(TestRun.created_at.desc()).all()
+    result = []
+    for run in runs:
+        d = run.to_dict()
+        d["project_name"] = run.project.name if run.project else None
+        d["suite_name"] = run.suite.name if run.suite else None
+        counts = dict(
+            db.session.query(TestResult.status, func.count(TestResult.id))
+            .filter_by(run_id=run.id)
+            .group_by(TestResult.status)
+            .all()
+        )
+        d["stats"] = {
+            "Passed": counts.get("Passed", 0),
+            "Failed": counts.get("Failed", 0),
+            "Blocked": counts.get("Blocked", 0),
+            "Retest": counts.get("Retest", 0),
+            "Untested": counts.get("Untested", 0),
+        }
+        total = sum(d["stats"].values())
+        d["stats"]["total"] = total
+        d["stats"]["pass_rate"] = round(d["stats"]["Passed"] / total * 100, 1) if total > 0 else 0
+        result.append(d)
+    return jsonify(result), 200
+
+
 @runs_bp.route("/projects/<int:project_id>/runs", methods=["GET"])
 @jwt_required()
 def list_runs(project_id):
