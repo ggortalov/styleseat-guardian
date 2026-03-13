@@ -130,12 +130,19 @@ def main():
     with app.app_context():
         db.create_all()
 
-        # Ensure a user exists to own the imported data
+        # Ensure demo users exist
         user = User.query.filter_by(username="demo").first()
         if not user:
             user = User(username="demo", email="demo@styleseat.com")
-            user.set_password("DemoStyleSeat22@")
+            user.set_password("demo123")
             db.session.add(user)
+            db.session.flush()
+
+        gennady = User.query.filter_by(username="Gennady").first()
+        if not gennady:
+            gennady = User(username="Gennady", email="ggortalov@styleseat.com")
+            gennady.set_password("demo123")
+            db.session.add(gennady)
             db.session.flush()
 
         # Create or find the project

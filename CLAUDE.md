@@ -370,7 +370,7 @@ cd frontend && npm run dev
 
 ### Step 4: Verify the demo
 Open http://localhost:5173 and confirm:
-- **Login**: `demo` / `DemoStyleSeat22@`
+- **Login**: `demo` / `demo123` (or `Gennady` / `demo123`)
 - **Sidebar**: Test Suites section shows 13 suites (PO, P1 Client, P1 API, P3-Admin, PROD, P1 Pro, P1 Common, Events Mobile, Pre Prod, P0 Devices, AB Test, Communications, P1 Search) with case counts
 - **Sidebar**: Test Runs section shows runs with suite name + date + total count
 - **Test Suites page**: Category-grouped suites with case counts
