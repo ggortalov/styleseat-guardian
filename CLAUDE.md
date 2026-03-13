@@ -330,6 +330,64 @@ python seed.py      # Optional: populate demo data
 1. Create `frontend/src/services/newService.js` following the pattern in existing services
 2. Import and use in page components
 
+## Launch Demo
+
+When the user asks to "launch demo" or "launch demo with mock data", follow these steps exactly:
+
+### Step 1: Reset and seed the database
+```bash
+cd backend
+source venv/bin/activate
+rm -f app.db
+python run.py &          # Start briefly to create tables, then stop
+sleep 2 && kill %1
+python seed_testrail.py  # Import real TestRail data (Cypress Automation project with 13 suites, ~1700+ cases)
+```
+
+### Step 2: Create test runs with realistic status distributions
+After seeding, create test runs via the API to populate the Runs section. Use the backend Python shell or a script:
+
+```python
+# Create 2 test runs with mixed statuses:
+# Run 1: P0 Devices suite (id=13) — small run (~26 cases), ~80% pass rate
+# Run 2: P1 Pro suite (id=9) — large run (~887 cases), ~70% pass rate
+#
+# Status distribution pattern:
+#   ~70% Passed, ~8% Failed, ~5% Blocked, ~5% Retest, ~12% Untested
+#
+# Use: runService.create(projectId, { name, suite_id }) via API
+# Then bulk-update results to set realistic statuses
+```
+
+### Step 3: Start both servers
+```bash
+# Terminal 1 — Backend
+cd backend && source venv/bin/activate && python run.py
+
+# Terminal 2 — Frontend
+cd frontend && npm run dev
+```
+
+### Step 4: Verify the demo
+Open http://localhost:5173 and confirm:
+- **Login**: `demo` / `DemoStyleSeat22@`
+- **Sidebar**: Test Suites section shows 13 suites (PO, P1 Client, P1 API, P3-Admin, PROD, P1 Pro, P1 Common, Events Mobile, Pre Prod, P0 Devices, AB Test, Communications, P1 Search) with case counts
+- **Sidebar**: Test Runs section shows runs with suite name + date + total count
+- **Test Suites page**: Category-grouped suites with case counts
+- **Test Run Detail** (`/runs/:id`): Stat tiles (Total, Passed, Failed, Blocked, Retest, Untested, Pass Rate), section-grouped results with collapsible headers, inline status dropdowns, tested-by tags, bulk selection mode
+- **Test Runs page** (`/runs`): v2 cards with status badges, colored bar, pass rate percentage
+
+### Expected demo data shape
+| Entity | Count | Notes |
+|--------|-------|-------|
+| Users | 2 | `demo` (primary), `Gennady` |
+| Projects | 3 | E-Commerce Platform, Mobile Banking API, Cypress Automation |
+| Suites | 13 | All under Cypress Automation (imported from TestRail) |
+| Sections | ~100+ | Nested sections per suite |
+| Test Cases | ~1700+ | Real test case titles from TestRail |
+| Test Runs | 2 | P0 Devices (~26 results), P1 Pro (~887 results) |
+| Test Results | ~913 | Mixed statuses with realistic distribution |
+
 ## Dependencies
 
 ### Python (backend/requirements.txt)
