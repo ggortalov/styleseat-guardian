@@ -6,6 +6,12 @@
   animation: slideUp 0.3s ease;
 }
 
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -256,4 +262,153 @@
 
 .run-card-chevron:hover {
   color: var(--sidebar-bg);
+}
+
+/* ── Run card v2 (TestRunsPage redesign) ── */
+.run-list-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideUp 0.3s ease;
+}
+
+.run-card-v2 {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.run-card-v2:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.run-card-v2-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: 16px;
+  background: var(--status-retest-bg);
+  border-radius: var(--radius-md);
+}
+
+.run-card-v2-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+}
+
+.run-card-v2-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sidebar-bg);
+  text-decoration: none;
+  letter-spacing: -0.2px;
+}
+
+.run-card-v2-name:hover {
+  color: var(--sidebar-hover);
+}
+
+.run-card-v2-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.run-card-v2-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.run-card-v2-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.run-card-v2-bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--border-light);
+  margin-top: 2px;
+}
+
+.run-card-v2-bar .bar-segment {
+  height: 100%;
+  transition: width var(--transition-slow);
+}
+
+.run-card-v2-rate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 20px;
+  min-width: 64px;
+}
+
+.run-card-v2-rate-number {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.run-card-v2-rate-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.run-card-v2-chevron {
+  flex-shrink: 0;
+  margin-left: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.run-card-v2-chevron:hover {
+  color: var(--sidebar-bg);
+}
+
+/* v2 mobile responsive */
+@media (max-width: 768px) {
+  .run-card-v2 {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+
+  .run-card-v2-body {
+    min-width: calc(100% - 60px);
+  }
+
+  .run-card-v2-rate {
+    margin-left: auto;
+    margin-top: 10px;
+  }
+
+  .run-card-v2-chevron {
+    display: none;
+  }
 }

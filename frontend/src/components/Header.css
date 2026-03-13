@@ -44,6 +44,12 @@
   color: var(--text-primary);
 }
 
+@media (max-width: 1024px) {
+  .app-header {
+    padding: 0 20px;
+  }
+}
+
 /* Mobile: shift breadcrumbs right to clear hamburger button */
 @media (max-width: 768px) {
   .app-header {

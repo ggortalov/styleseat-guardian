@@ -140,6 +140,12 @@
   font-weight: 500;
 }
 
+@media (max-width: 1024px) {
+  .exec-layout {
+    grid-template-columns: 1fr 280px;
+  }
+}
+
 @media (max-width: 768px) {
   .exec-layout {
     grid-template-columns: 1fr;

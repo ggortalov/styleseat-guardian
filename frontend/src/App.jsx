@@ -10,7 +10,6 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 
 // App pages — lazy loaded, only fetched after login
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const TestSuitePage = lazy(() => import('./pages/TestSuitePage'));
 const TestCaseFormPage = lazy(() => import('./pages/TestCaseFormPage'));
@@ -53,9 +52,11 @@ function AppLayout({ children }) {
     }
   }, [isMobile]);
 
-  // Close mobile sidebar on navigation
+  // Close mobile sidebar on navigation & scroll to top
   useEffect(() => {
     if (isMobile) setMobileOpen(false);
+    window.scrollTo(0, 0);
+    document.querySelector('.app-main')?.scrollTo(0, 0);
   }, [location.pathname, isMobile]);
 
   if (!isAuthenticated) return children;
@@ -96,7 +97,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><TestSuitesPage /></ProtectedRoute>} />
           <Route path="/suites" element={<ProtectedRoute><TestSuitesPage /></ProtectedRoute>} />
           <Route path="/runs" element={<ProtectedRoute><TestRunsPage /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />

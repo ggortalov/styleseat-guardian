@@ -234,6 +234,63 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
   - **Halo layers**: `::before` (600px) and `::after` (900px) pseudo-elements with radial gradients fade in via `haloAppear`, then breathe via `haloBreath` (4s infinite)
   - **Content reveal** (`authContentReveal`, 0.3s, delayed 0.25s): Card children fade up (`translateY(8px)` → `0`) after bloom completes, so the card opens first then reveals its contents
 
+### Responsive Layout Rules
+
+The app uses a **3-tier responsive breakpoint system**. Every new page or component MUST follow these rules:
+
+**Breakpoints** (all `max-width`):
+- **1024px** — Mid-range screens where the 270px sidebar is still visible (~750px content area)
+- **768px** — Mobile: sidebar hidden, hamburger menu, single-column layouts
+- **640px** — Small mobile: further simplification
+
+**Critical CSS rules for flex/grid layouts:**
+1. **Always add `min-width: 0`** on flex children that contain dynamic content — prevents flex items from overflowing their container (the default `min-width: auto` causes content to push past viewport). Already set on `.app-main` globally.
+2. **Always add `overflow-x: hidden`** on content containers that should never scroll horizontally. Already set on `.app-main` globally.
+3. **Never rely on fixed-width columns alone** — every row with fixed-width columns (`width: Npx; flex-shrink: 0`) must have a `@media (max-width: 1024px)` rule that either hides secondary columns or reduces their widths.
+
+**1024px breakpoint checklist** (apply to every page):
+- Reduce `page-content` padding (28px → 20px, handled globally in `index.css`)
+- **Hide secondary data columns** (e.g., tested-by, meta, date) — keep only ID, title, and primary action column
+- **Hide less important stat tiles** (e.g., pass rate tile)
+- **Shrink remaining fixed columns** (90px → 70px for IDs, 120px → 100px for status)
+- **Reduce gaps and padding** on rows, headers, and tiles
+- **Stack page toolbars vertically** (`flex-direction: column`) so heading and buttons don't compete for horizontal space
+- **Constrain floating bars** (bulk action bars) with `max-width: calc(100% - 32px)` and `flex-wrap: wrap`
+- **Reduce tab padding** (22px → 14px) to prevent tab overflow
+- **Stack form rows** (`flex-direction: column`) instead of side-by-side columns
+- **Shrink grid columns** (4-col → 2-col for stat grids, 2-col grid → single column for overviews)
+
+**768px breakpoint checklist** (mobile):
+- All of the above, plus hide sidebar, show hamburger
+- Hide all secondary columns (meta, tested-by, chevrons)
+- Stat tiles: hide pass rate tile, reduce min-width to 70px
+- Reduce section header padding, case row padding
+- Stack all multi-column layouts to single column
+
+**Pattern for data rows with columns:**
+```css
+/* Desktop */
+.row { display: flex; align-items: center; gap: 16px; }
+.row-id { flex-shrink: 0; width: 90px; }
+.row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row-secondary { flex-shrink: 0; width: 100px; }
+.row-action { flex-shrink: 0; width: 120px; }
+
+/* Mid-range: hide secondary, shrink others */
+@media (max-width: 1024px) {
+  .row { gap: 8px; }
+  .row-id { width: 70px; }
+  .row-secondary { display: none; }
+  .row-action { width: 100px; }
+}
+
+/* Mobile: minimal */
+@media (max-width: 768px) {
+  .row-id { width: 70px; font-size: 12px; }
+  .row-action { width: 90px; }
+}
+```
+
 ### Status & Priority Values
 - **Test statuses**: `Passed`, `Failed`, `Blocked`, `Retest`, `Untested`
 - **Status colors**: Passed=#4CAF50, Failed=#F44336, Blocked=#FF9800, Retest=#00897B, Untested=#9E9E9E

@@ -18,14 +18,14 @@ def list_projects():
         first_suite = suites[0] if suites else None
         d["first_suite_id"] = first_suite.id if first_suite else None
         d["first_suite_name"] = first_suite.name if first_suite else None
-        # Include categories (sections) across all suites
-        suite_ids = [s.id for s in suites]
-        sections = Section.query.filter(Section.suite_id.in_(suite_ids)).order_by(Section.display_order).all() if suite_ids else []
-        d["categories"] = [{"id": sec.id, "name": sec.name, "parent_id": sec.parent_id} for sec in sections]
-        # Include test cases (minimal data for sidebar)
-        section_ids = [sec.id for sec in sections]
-        cases = TestCase.query.filter(TestCase.section_id.in_(section_ids)).order_by(TestCase.created_at).all() if section_ids else []
-        d["cases"] = [{"id": c.id, "title": c.title, "section_id": c.section_id} for c in cases]
+        d["suite_count"] = len(suites)
+        # Include lightweight suite list for sidebar navigation
+        suite_list = []
+        for s in suites:
+            section_ids = [sec.id for sec in Section.query.filter_by(suite_id=s.id).all()]
+            case_count = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
+            suite_list.append({"id": s.id, "name": s.name, "case_count": case_count})
+        d["suites"] = suite_list
         result.append(d)
     return jsonify(result), 200
 

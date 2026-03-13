@@ -87,6 +87,7 @@ export default function ProjectDetailPage() {
       await suiteService.delete(deleteSuite.id);
       setDeleteSuite(null);
       fetchAll();
+      if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
     }
   };
 
@@ -200,6 +201,11 @@ export default function ProjectDetailPage() {
                               setSuiteDesc(s.description || '');
                               setShowSuiteModal(true);
                             }}>Edit</a>
+                            <span className="suite-card-separator">|</span>
+                            <a href="#" className="text-danger" onClick={(e) => {
+                              e.preventDefault();
+                              setDeleteSuite(s);
+                            }}>Delete</a>
                           </div>
                           <div className="suite-card-summary">
                             Has {s.section_count || 0} section{(s.section_count || 0) !== 1 ? 's' : ''} with {s.case_count || 0} test case{(s.case_count || 0) !== 1 ? 's' : ''}.{' '}

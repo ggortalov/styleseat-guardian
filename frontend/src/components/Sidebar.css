@@ -378,6 +378,97 @@
   font-weight: 600;
 }
 
+/* Project name link inside the suite-link row */
+.sidebar-project-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-project-link:hover {
+  color: #fff;
+}
+
+.sidebar-sublink.active .sidebar-project-link {
+  color: #fff;
+}
+
+/* Suite items inside expanded project */
+.sidebar-suite-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 16px;
+  margin-right: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-suite-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-suite-item.active {
+  color: #fff;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-suite-item-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.sidebar-suite-item.active .sidebar-suite-item-icon {
+  opacity: 1;
+}
+
+.sidebar-suite-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-run-date {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.sidebar-suite-item-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.sidebar-suite-item.active .sidebar-suite-item-count {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.15);
+}
+
 /* ============ Category Tree ============ */
 .sidebar-category-list {
   padding: 2px 0 4px 0;

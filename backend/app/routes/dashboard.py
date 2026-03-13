@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from sqlalchemy import func
 
@@ -11,23 +11,22 @@ dashboard_bp = Blueprint("dashboard", __name__)
 @dashboard_bp.route("/dashboard", methods=["GET"])
 @jwt_required()
 def global_dashboard():
-    projects = Project.query.order_by(Project.created_at.asc()).all()
+    # Return a flat list of suites (no project grouping)
+    suites = Suite.query.order_by(Suite.created_at.asc()).all()
     result = []
 
-    for project in projects:
-        d = project.to_dict()
+    for suite in suites:
+        d = suite.to_dict()
+        d["project_id"] = suite.project_id
 
-        suites = Suite.query.filter_by(project_id=project.id).order_by(Suite.created_at.asc()).all()
-        suite_ids = [s.id for s in suites]
+        section_ids = [sec.id for sec in Section.query.filter_by(suite_id=suite.id).all()]
+        d["case_count"] = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
 
-        d["suite_count"] = len(suite_ids)
-        d["first_suite_id"] = suites[0].id if suites else None
-        d["first_suite_name"] = suites[0].name if suites else None
-        d["case_count"] = TestCase.query.filter(TestCase.suite_id.in_(suite_ids)).count() if suite_ids else 0
-        d["run_count"] = TestRun.query.filter_by(project_id=project.id).count()
+        # Runs for this suite
+        runs = TestRun.query.filter_by(suite_id=suite.id).all()
+        d["run_count"] = len(runs)
+        run_ids = [r.id for r in runs]
 
-        # Aggregate stats across all runs
-        run_ids = [r.id for r in TestRun.query.filter_by(project_id=project.id).all()]
         stats = {"Passed": 0, "Failed": 0, "Blocked": 0, "Retest": 0, "Untested": 0}
         if run_ids:
             counts = dict(
@@ -44,14 +43,10 @@ def global_dashboard():
         d["stats"]["total"] = total
         d["stats"]["pass_rate"] = round(stats["Passed"] / total * 100, 1) if total > 0 else 0
 
-        # Latest run
-        latest_run = TestRun.query.filter_by(project_id=project.id).order_by(TestRun.created_at.desc()).first()
-        d["latest_run"] = latest_run.to_dict() if latest_run else None
-
         result.append(d)
 
     # Global totals
-    total_projects = len(projects)
+    total_suites = len(suites)
     total_cases = TestCase.query.count()
     total_runs = TestRun.query.count()
 
@@ -83,9 +78,9 @@ def global_dashboard():
         recent.append(rd)
 
     return jsonify({
-        "projects": result,
+        "suites": result,
         "totals": {
-            "projects": total_projects,
+            "suites": total_suites,
             "cases": total_cases,
             "runs": total_runs,
         },
@@ -142,4 +137,40 @@ def project_dashboard(project_id):
         "project": project.to_dict(),
         "runs": runs_data,
         "overall_stats": overall,
+    }), 200
+
+
+@dashboard_bp.route("/retention/cleanup", methods=["POST"])
+@jwt_required()
+def manual_cleanup():
+    """Manually trigger the 30-day retention cleanup."""
+    from app.retention import run_full_cleanup
+    summary = run_full_cleanup(current_app._get_current_object())
+    return jsonify(summary), 200
+
+
+@dashboard_bp.route("/retention/status", methods=["GET"])
+@jwt_required()
+def retention_status():
+    """Return current retention config and counts of data that would be purged."""
+    from datetime import datetime, timedelta, timezone
+
+    retention_days = current_app.config.get("RETENTION_DAYS", 30)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+    expired_runs = TestRun.query.filter(
+        TestRun.is_completed.is_(True),
+        TestRun.completed_at.isnot(None),
+        TestRun.completed_at < cutoff,
+    ).count()
+
+    total_runs = TestRun.query.count()
+    total_results = TestResult.query.count()
+
+    return jsonify({
+        "retention_days": retention_days,
+        "cutoff_date": cutoff.isoformat(),
+        "expired_runs": expired_runs,
+        "total_runs": total_runs,
+        "total_results": total_results,
     }), 200

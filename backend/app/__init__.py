@@ -80,4 +80,22 @@ def create_app():
     # Ensure avatar upload directory exists
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
+    # --- Scheduled retention cleanup ---
+    from app.retention import run_full_cleanup
+    from apscheduler.schedulers.background import BackgroundScheduler
+    import atexit
+
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(
+        func=run_full_cleanup,
+        args=[app],
+        trigger="cron",
+        hour=2,        # Run daily at 2:00 AM
+        minute=0,
+        id="retention_cleanup",
+        replace_existing=True,
+    )
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown(wait=False))
+
     return app

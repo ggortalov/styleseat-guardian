@@ -35,11 +35,16 @@ export default function DashboardPage() {
     if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
   };
 
-  const handleCreateProject = async (e) => {
+  const handleCreateSuite = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const project = await projectService.create({ name: newName, description: newDesc });
-    const suite = await suiteService.create(project.id, { name: newName });
+    // Get or create default project
+    const projects = await projectService.getAll();
+    let project = projects[0];
+    if (!project) {
+      project = await projectService.create({ name: 'Default', description: '' });
+    }
+    const suite = await suiteService.create(project.id, { name: newName, description: newDesc });
     setNewName('');
     setNewDesc('');
     setShowCreate(false);
@@ -50,11 +55,7 @@ export default function DashboardPage() {
   const handleEditSuite = async (e) => {
     e.preventDefault();
     if (!editName.trim() || !editSuite) return;
-    // Update both the suite name and the project name
-    if (editSuite.first_suite_id) {
-      await suiteService.update(editSuite.first_suite_id, { name: editName });
-    }
-    await projectService.update(editSuite.id, { name: editName });
+    await suiteService.update(editSuite.id, { name: editName });
     setEditSuite(null);
     setEditName('');
     refresh();
@@ -62,7 +63,7 @@ export default function DashboardPage() {
 
   const handleDeleteSuite = async () => {
     if (!deleteSuite) return;
-    await projectService.delete(deleteSuite.id);
+    await suiteService.delete(deleteSuite.id);
     setDeleteSuite(null);
     refresh();
   };
@@ -86,52 +87,56 @@ export default function DashboardPage() {
               </span>
             )}
           </h3>
-          {data?.projects?.length > 0 ? (
+          {data?.suites?.length > 0 ? (
             <div className="project-list">
-              {data.projects.map((p) => (
-                <div key={p.id} className="project-card">
+              {data.suites.map((s) => {
+                const suiteLink = `/projects/${s.project_id}/suites/${s.id}`;
+                return (
+                <div key={s.id} className="project-card">
                   <div className="project-card-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="#4CAF50" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                     </svg>
                   </div>
                   <div className="project-card-body">
-                    <Link to={p.first_suite_id ? `/projects/${p.id}/suites/${p.first_suite_id}` : `/projects/${p.id}`} className="project-card-name">{p.first_suite_name || p.name}</Link>
+                    <Link to={suiteLink} className="project-card-name">{s.name}</Link>
                     <div className="project-card-links">
-                      <Link to={p.first_suite_id ? `/projects/${p.id}/suites/${p.first_suite_id}` : `/projects/${p.id}`}>Open</Link>
+                      <Link to={suiteLink}>Open</Link>
                       <span className="project-card-separator">|</span>
-                      <button className="link-btn" onClick={() => { setEditSuite(p); setEditName(p.first_suite_name || p.name); }}>Edit</button>
+                      <button className="link-btn" onClick={() => { setEditSuite(s); setEditName(s.name); }}>Edit</button>
                       <span className="project-card-separator">|</span>
-                      <button className="link-btn danger" onClick={() => setDeleteSuite(p)}>Delete</button>
+                      <button className="link-btn danger" onClick={() => setDeleteSuite(s)}>Delete</button>
                     </div>
                     <div className="project-card-summary">
-                      {p.case_count} test case{p.case_count !== 1 ? 's' : ''} &middot; {p.run_count} test run{p.run_count !== 1 ? 's' : ''}.
+                      {s.case_count} test case{s.case_count !== 1 ? 's' : ''} &middot; {s.run_count} test run{s.run_count !== 1 ? 's' : ''}.
                     </div>
-                    {p.stats.total > 0 && (
+                    {s.stats.total > 0 && (
                       <div className="project-card-bar">
-                        {['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'].map((s) => (
-                          p.stats[s] > 0 && (
+                        {['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'].map((st) => (
+                          s.stats[st] > 0 && (
                             <div
-                              key={s}
+                              key={st}
                               className="bar-segment"
                               style={{
-                                width: `${(p.stats[s] / p.stats.total) * 100}%`,
-                                backgroundColor: `var(--status-${s.toLowerCase()})`,
+                                width: `${(s.stats[st] / s.stats.total) * 100}%`,
+                                backgroundColor: `var(--status-${st.toLowerCase()})`,
                               }}
-                              title={`${s}: ${p.stats[s]}`}
+                              title={`${st}: ${s.stats[st]}`}
                             />
                           )
                         ))}
                       </div>
                     )}
                   </div>
-                  <Link to={p.first_suite_id ? `/projects/${p.id}/suites/${p.first_suite_id}` : `/projects/${p.id}`} className="project-card-chevron" title="Open suite">
+                  <Link to={suiteLink} className="project-card-chevron" title="Open suite">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   </Link>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="empty-message">No test suites yet. Create your first test suite to get started.</p>
@@ -152,7 +157,7 @@ export default function DashboardPage() {
                   <div className="run-card-body">
                     <Link to={`/runs/${run.id}`} className="run-card-name">{run.name}</Link>
                     <div className="run-card-summary">
-                      Project: {run.project_name} &middot; Suite: {run.suite_name} &middot; {run.total_results} test{run.total_results !== 1 ? 's' : ''} &middot;{' '}
+                      Suite: {run.suite_name} &middot; {run.total_results} test{run.total_results !== 1 ? 's' : ''} &middot;{' '}
                       <strong style={{ color: run.pass_rate >= 80 ? 'var(--status-passed)' : run.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)' }}>
                         {run.pass_rate}%
                       </strong>
@@ -200,16 +205,16 @@ export default function DashboardPage() {
         title="Delete Suite"
         message={(() => {
           if (!deleteSuite) return '';
-          const name = deleteSuite.first_suite_name || deleteSuite.name;
           const parts = [];
           if (deleteSuite.case_count > 0) parts.push(`${deleteSuite.case_count} test case${deleteSuite.case_count !== 1 ? 's' : ''}`);
           if (deleteSuite.run_count > 0) parts.push(`${deleteSuite.run_count} test run${deleteSuite.run_count !== 1 ? 's' : ''}`);
-          return `"${name}"${parts.length ? ` (${parts.join(', ')})` : ''} will be permanently deleted.`;
+          return `"${deleteSuite.name}"${parts.length ? ` (${parts.join(', ')})` : ''} will be permanently deleted.`;
         })()}
+        requireSafeguard
       />
 
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Create Test Suite">
-        <form onSubmit={handleCreateProject} className="modal-form">
+        <form onSubmit={handleCreateSuite} className="modal-form">
           <div className="form-group">
             <label>Suite Name</label>
             <input

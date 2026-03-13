@@ -66,6 +66,17 @@
   gap: 24px;
 }
 
+@media (max-width: 1024px) {
+  .tab {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .overview-grid {
     grid-template-columns: 1fr;

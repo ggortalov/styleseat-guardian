@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
 
 from app import db
-from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Project
+from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Project, User
 
 runs_bp = Blueprint("runs", __name__)
 
@@ -170,9 +170,16 @@ def delete_run(run_id):
 def list_results(run_id):
     TestRun.query.get_or_404(run_id)
     results = TestResult.query.filter_by(run_id=run_id).all()
+    # Batch-fetch usernames for all tested_by IDs
+    tester_ids = {r.tested_by for r in results if r.tested_by}
+    tester_map = {}
+    if tester_ids:
+        users = User.query.filter(User.id.in_(tester_ids)).all()
+        tester_map = {u.id: u.username for u in users}
     out = []
     for r in results:
         d = r.to_dict()
+        d["tested_by_name"] = tester_map.get(r.tested_by, "Automation") if r.tested_by else "Automation"
         if r.test_case:
             d["case_title"] = r.test_case.title
             d["section_name"] = r.test_case.section.name if r.test_case.section else None
@@ -222,7 +229,10 @@ def update_result(result_id):
     db.session.add(history)
     db.session.commit()
 
-    return jsonify(result.to_dict()), 200
+    d = result.to_dict()
+    user = User.query.get(user_id)
+    d["tested_by_name"] = user.username if user else "Unknown"
+    return jsonify(d), 200
 
 
 @runs_bp.route("/results/<int:result_id>/history", methods=["GET"])

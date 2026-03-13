@@ -17,3 +17,6 @@ class Config:
 
     # Rate limiting
     RATELIMIT_STORAGE_URI = "memory://"
+
+    # Data retention — completed test runs older than this are purged automatically
+    RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", 30))

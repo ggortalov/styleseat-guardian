@@ -448,6 +448,37 @@
   border-color: #d32f2f;
 }
 
+/* Mid-range screens */
+@media (max-width: 1024px) {
+  .case-row {
+    gap: 8px;
+    padding: 10px 14px 10px 34px;
+  }
+
+  .case-row-id {
+    width: 70px;
+    font-size: 12px;
+  }
+
+  .case-row-meta {
+    display: none;
+  }
+
+  .category-header {
+    padding: 12px 14px;
+  }
+
+  .category-header-name {
+    font-size: 16px;
+  }
+
+  .bulk-action-bar {
+    max-width: calc(100% - 32px);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
 /* Mobile */
 @media (max-width: 640px) {
   /* Page toolbar: stack heading above buttons */

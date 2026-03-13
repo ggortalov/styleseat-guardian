@@ -66,6 +66,18 @@
   flex: 1;
 }
 
+@media (max-width: 1024px) {
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .step-fields {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
 .btn-sm {
   padding: 6px 14px;
   font-size: 12px;

@@ -11,6 +11,109 @@ import projectService from '../services/projectService';
 import { playConfirmation } from '../services/soundService';
 import './TestSuitePage.css';
 
+function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selectionMode, selectedCases, toggleAllCases, toggleCase, navigate, projectId, suiteId, setSectionParentId, setEditSection, setSectionName, setSectionDescription, setShowSectionModal, setDeleteSection }) {
+  const group = grouped.map[sec.id];
+  const children = grouped.childrenMap[sec.id] || [];
+  const totalCases = grouped.totalCasesFor(sec.id);
+  const collapseKey = depth === 0 ? sec.id : `sub-${sec.id}`;
+  const isCollapsed = !!collapsed[collapseKey];
+  const isRoot = depth === 0;
+
+  const wrapperClass = isRoot ? 'category-group' : 'subcategory-group';
+  const headerClass = isRoot ? 'category-header' : 'subcategory-header';
+  const nameClass = isRoot ? 'category-header-name' : 'subcategory-header-name';
+  const chevronSize = isRoot ? '16' : '14';
+  const casesClass = isRoot ? 'category-cases' : 'category-cases subcategory-cases';
+  const selectAllClass = isRoot ? 'category-select-all' : 'category-select-all subcategory-select-all';
+
+  return (
+    <div id={`category-${sec.id}`} className={wrapperClass}>
+      <div className={headerClass} onClick={() => toggleCategory(collapseKey)}>
+        <svg className={`category-chevron ${isCollapsed ? '' : 'open'}`} width={chevronSize} height={chevronSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <div className="category-header-info">
+          <div className="category-header-top">
+            <span className={nameClass}>{sec.name}</span>
+            <span className="category-header-count">{totalCases}</span>
+          </div>
+          {sec.description && <span className="category-header-desc">{sec.description}</span>}
+        </div>
+        <div className="category-header-actions">
+          <button
+            className="category-action-btn"
+            data-tooltip="Add subcategory"
+            onClick={(e) => { e.stopPropagation(); setSectionParentId(sec.id); setEditSection(null); setSectionName(''); setSectionDescription(''); setShowSectionModal(true); }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" /></svg>
+          </button>
+          <button
+            className="category-action-btn"
+            data-tooltip="Add test case"
+            onClick={(e) => { e.stopPropagation(); navigate(`/projects/${projectId}/suites/${suiteId}/cases/new?sectionId=${sec.id}`); }}
+          >+</button>
+          <button
+            className="category-action-btn"
+            data-tooltip="Edit"
+            onClick={(e) => { e.stopPropagation(); setEditSection(sec); setSectionName(sec.name); setSectionDescription(sec.description || ''); setShowSectionModal(true); }}
+          >&#9998;</button>
+          <button
+            className="category-action-btn danger"
+            data-tooltip="Delete"
+            onClick={(e) => { e.stopPropagation(); setDeleteSection(sec); }}
+          >&times;</button>
+        </div>
+      </div>
+      {!isCollapsed && (
+        <>
+          {selectionMode && group.cases.length > 0 && (
+            <div className={selectAllClass} onClick={(e) => toggleAllCases(group.cases, e)}>
+              <input type="checkbox" checked={group.cases.every(c => selectedCases.has(c.id))} readOnly className="case-checkbox" />
+              <span className="select-all-label">Select All</span>
+            </div>
+          )}
+          <div className={casesClass}>
+            {group.cases.length > 0 ? group.cases.map((c) => (
+              <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
+                {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
+                <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
+                <span className="case-row-title">{c.title}</span>
+                <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
+                <span className="case-row-meta">{c.author_name || ''}</span>
+              </div>
+            )) : children.length === 0 ? (
+              <div className="category-empty-msg">No test cases in this category</div>
+            ) : null}
+          </div>
+          {children.map((child) => (
+            <SectionNode
+              key={child.id}
+              sec={child}
+              depth={depth + 1}
+              grouped={grouped}
+              collapsed={collapsed}
+              toggleCategory={toggleCategory}
+              selectionMode={selectionMode}
+              selectedCases={selectedCases}
+              toggleAllCases={toggleAllCases}
+              toggleCase={toggleCase}
+              navigate={navigate}
+              projectId={projectId}
+              suiteId={suiteId}
+              setSectionParentId={setSectionParentId}
+              setEditSection={setEditSection}
+              setSectionName={setSectionName}
+              setSectionDescription={setSectionDescription}
+              setShowSectionModal={setShowSectionModal}
+              setDeleteSection={setDeleteSection}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function TestSuitePage() {
   const { projectId, suiteId } = useParams();
   const navigate = useNavigate();
@@ -36,6 +139,9 @@ export default function TestSuitePage() {
   // Delete confirm
   const [deleteSection, setDeleteSection] = useState(null);
 
+  // Delete suite
+  const [showDeleteSuite, setShowDeleteSuite] = useState(false);
+
   // Bulk selection
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedCases, setSelectedCases] = useState(new Set());
@@ -46,7 +152,7 @@ export default function TestSuitePage() {
       const [p, s, secs] = await Promise.all([
         projectService.getById(projectId),
         suiteService.getById(suiteId),
-        sectionService.getByProject(projectId),
+        sectionService.getBySuite(suiteId),
       ]);
       setProject(p);
       setSuite(s);
@@ -59,11 +165,17 @@ export default function TestSuitePage() {
   };
 
   const fetchCases = () => {
-    caseService.getByProject(projectId).then(setCases).catch(() => setCases([]));
+    caseService.getBySuite(suiteId).then(setCases).catch(() => setCases([]));
+  };
+
+  const handleDeleteSuite = async () => {
+    await suiteService.delete(suiteId);
+    if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
+    navigate(`/projects/${projectId}`);
   };
 
   useEffect(() => { fetchData(); }, [projectId, suiteId]);
-  useEffect(() => { fetchCases(); }, [projectId]);
+  useEffect(() => { fetchCases(); }, [suiteId]);
 
   // Scroll to newly created case
   useEffect(() => {
@@ -106,7 +218,19 @@ export default function TestSuitePage() {
         childrenMap[sec.parent_id].push(sec);
       }
     }
-    return { map, uncategorized, roots, childrenMap };
+    // Recursive total case count for a section and all its descendants
+    const totalCasesFor = (sectionId) => {
+      const own = map[sectionId]?.cases.length || 0;
+      const kids = childrenMap[sectionId] || [];
+      return own + kids.reduce((sum, sub) => sum + totalCasesFor(sub.id), 0);
+    };
+    // Recursive collection of all descendant cases
+    const allCasesUnder = (sectionId) => {
+      const own = map[sectionId]?.cases || [];
+      const kids = childrenMap[sectionId] || [];
+      return [...own, ...kids.flatMap(sub => allCasesUnder(sub.id))];
+    };
+    return { map, uncategorized, roots, childrenMap, totalCasesFor, allCasesUnder };
   }, [sections, cases]);
 
   const toggleCategory = (id) => {
@@ -195,14 +319,7 @@ export default function TestSuitePage() {
 
   // When filtering by a single category — include subcategory cases too
   const filterSection = filterCategoryId ? sections.find(s => s.id === filterCategoryId) : null;
-  const filterCases = (() => {
-    if (!filterSection) return [];
-    const direct = grouped.map[filterSection.id]?.cases || [];
-    // Also gather cases from child categories
-    const children = grouped.childrenMap[filterSection.id] || [];
-    const childCases = children.flatMap(sub => grouped.map[sub.id]?.cases || []);
-    return [...direct, ...childCases];
-  })();
+  const filterCases = filterSection ? grouped.allCasesUnder(filterSection.id) : [];
   const suitePath = `/projects/${projectId}/suites/${suiteId}`;
 
   // Build breadcrumbs (skip project if same name as suite to avoid duplication)
@@ -290,6 +407,7 @@ export default function TestSuitePage() {
             <div className="page-toolbar">
               <h2 className="page-heading">{suite?.name}</h2>
               <div className="toolbar-actions">
+                <button className="btn btn-danger" onClick={() => setShowDeleteSuite(true)}>Delete Suite</button>
                 <button className={`btn ${selectionMode ? 'btn-manage-active' : 'btn-secondary'}`} onClick={toggleSelectionMode}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
                   Manage
@@ -311,135 +429,29 @@ export default function TestSuitePage() {
 
             {hasCases || hasCategories ? (
               <div className="category-tree">
-                {grouped.roots.map((sec) => {
-                  const group = grouped.map[sec.id];
-                  const children = grouped.childrenMap[sec.id] || [];
-                  const totalCases = group.cases.length + children.reduce((sum, sub) => sum + (grouped.map[sub.id]?.cases.length || 0), 0);
-                  const isCollapsed = !!collapsed[sec.id];
-                  return (
-                    <div key={sec.id} id={`category-${sec.id}`} className="category-group">
-                      <div className="category-header" onClick={() => toggleCategory(sec.id)}>
-                        <svg className={`category-chevron ${isCollapsed ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                        <div className="category-header-info">
-                          <div className="category-header-top">
-                            <span className="category-header-name">{sec.name}</span>
-                            <span className="category-header-count">{totalCases}</span>
-                          </div>
-                          {sec.description && <span className="category-header-desc">{sec.description}</span>}
-                        </div>
-                        <div className="category-header-actions">
-                          <button
-                            className="category-action-btn"
-                            data-tooltip="Add subcategory"
-                            onClick={(e) => { e.stopPropagation(); setSectionParentId(sec.id); setEditSection(null); setSectionName(''); setSectionDescription(''); setShowSectionModal(true); }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="9" y1="14" x2="15" y2="14" /></svg>
-                          </button>
-                          <button
-                            className="category-action-btn"
-                            data-tooltip="Add test case"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/projects/${projectId}/suites/${suiteId}/cases/new?sectionId=${sec.id}`); }}
-                          >+</button>
-                          <button
-                            className="category-action-btn"
-                            data-tooltip="Edit"
-                            onClick={(e) => { e.stopPropagation(); setEditSection(sec); setSectionName(sec.name); setSectionDescription(sec.description || ''); setShowSectionModal(true); }}
-                          >&#9998;</button>
-                          <button
-                            className="category-action-btn danger"
-                            data-tooltip="Delete"
-                            onClick={(e) => { e.stopPropagation(); setDeleteSection(sec); }}
-                          >&times;</button>
-                        </div>
-                      </div>
-                      {!isCollapsed && (
-                        <>
-                          {selectionMode && group.cases.length > 0 && (
-                            <div className="category-select-all" onClick={(e) => toggleAllCases(group.cases, e)}>
-                              <input type="checkbox" checked={group.cases.every(c => selectedCases.has(c.id))} readOnly className="case-checkbox" />
-                              <span className="select-all-label">Select All</span>
-                            </div>
-                          )}
-                          <div className="category-cases">
-                            {group.cases.length > 0 ? group.cases.map((c) => (
-                              <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
-                                {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                                <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
-                                <span className="case-row-title">{c.title}</span>
-                                <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
-                                <span className="case-row-meta">{c.author_name || ''}</span>
-                              </div>
-                            )) : children.length === 0 ? (
-                              <div className="category-empty-msg">No test cases in this category</div>
-                            ) : null}
-                          </div>
-                          {children.map((sub) => {
-                            const subGroup = grouped.map[sub.id];
-                            const isSubCollapsed = !!collapsed[`sub-${sub.id}`];
-                            return (
-                              <div key={sub.id} id={`category-${sub.id}`} className="subcategory-group">
-                                <div className="subcategory-header" onClick={() => toggleCategory(`sub-${sub.id}`)}>
-                                  <svg className={`category-chevron ${isSubCollapsed ? '' : 'open'}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="9 18 15 12 9 6" />
-                                  </svg>
-                                  <div className="category-header-info">
-                                    <div className="category-header-top">
-                                      <span className="subcategory-header-name">{sub.name}</span>
-                                      <span className="category-header-count">{subGroup.cases.length}</span>
-                                    </div>
-                                    {sub.description && <span className="category-header-desc">{sub.description}</span>}
-                                  </div>
-                                  <div className="category-header-actions">
-                                    <button
-                                      className="category-action-btn"
-                                      data-tooltip="Add test case"
-                                      onClick={(e) => { e.stopPropagation(); navigate(`/projects/${projectId}/suites/${suiteId}/cases/new?sectionId=${sub.id}`); }}
-                                    >+</button>
-                                    <button
-                                      className="category-action-btn"
-                                      data-tooltip="Edit"
-                                      onClick={(e) => { e.stopPropagation(); setEditSection(sub); setSectionName(sub.name); setSectionDescription(sub.description || ''); setShowSectionModal(true); }}
-                                    >&#9998;</button>
-                                    <button
-                                      className="category-action-btn danger"
-                                      data-tooltip="Delete"
-                                      onClick={(e) => { e.stopPropagation(); setDeleteSection(sub); }}
-                                    >&times;</button>
-                                  </div>
-                                </div>
-                                {!isSubCollapsed && (
-                                  <>
-                                  {selectionMode && subGroup.cases.length > 0 && (
-                                    <div className="category-select-all subcategory-select-all" onClick={(e) => toggleAllCases(subGroup.cases, e)}>
-                                      <input type="checkbox" checked={subGroup.cases.every(c => selectedCases.has(c.id))} readOnly className="case-checkbox" />
-                                      <span className="select-all-label">Select All</span>
-                                    </div>
-                                  )}
-                                  <div className="category-cases subcategory-cases">
-                                    {subGroup.cases.length > 0 ? subGroup.cases.map((c) => (
-                                      <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
-                                        {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                                        <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
-                                        <span className="case-row-title">{c.title}</span>
-                                        <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
-                                        <span className="case-row-meta">{c.author_name || ''}</span>
-                                      </div>
-                                    )) : (
-                                      <div className="category-empty-msg">No test cases in this subcategory</div>
-                                    )}
-                                  </div>
-                                  </>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                {grouped.roots.map((sec) => (
+                  <SectionNode
+                    key={sec.id}
+                    sec={sec}
+                    depth={0}
+                    grouped={grouped}
+                    collapsed={collapsed}
+                    toggleCategory={toggleCategory}
+                    selectionMode={selectionMode}
+                    selectedCases={selectedCases}
+                    toggleAllCases={toggleAllCases}
+                    toggleCase={toggleCase}
+                    navigate={navigate}
+                    projectId={projectId}
+                    suiteId={suiteId}
+                    setSectionParentId={setSectionParentId}
+                    setEditSection={setEditSection}
+                    setSectionName={setSectionName}
+                    setSectionDescription={setSectionDescription}
+                    setShowSectionModal={setShowSectionModal}
+                    setDeleteSection={setDeleteSection}
+                  />
+                ))}
 
                 {grouped.uncategorized.length > 0 && (
                   <div className="category-group">
@@ -516,11 +528,8 @@ export default function TestSuitePage() {
         title="Delete Category"
         message={(() => {
           if (!deleteSection) return '';
-          const direct = grouped.map[deleteSection.id]?.cases.length || 0;
-          const children = (grouped.childrenMap[deleteSection.id] || []);
-          const childCases = children.reduce((sum, sub) => sum + (grouped.map[sub.id]?.cases.length || 0), 0);
-          const total = direct + childCases;
-          const subCount = children.length;
+          const total = grouped.totalCasesFor(deleteSection.id);
+          const subCount = (grouped.childrenMap[deleteSection.id] || []).length;
           const parts = [];
           if (total > 0) parts.push(`${total} test case${total !== 1 ? 's' : ''}`);
           if (subCount > 0) parts.push(`${subCount} subcategor${subCount !== 1 ? 'ies' : 'y'}`);
@@ -545,6 +554,15 @@ export default function TestSuitePage() {
         onConfirm={handleBulkDelete}
         title="Delete Test Cases"
         message={`${selectedCases.size} test case${selectedCases.size !== 1 ? 's' : ''} will be permanently deleted. This cannot be undone.`}
+        requireSafeguard
+      />
+
+      <ConfirmDialog
+        isOpen={showDeleteSuite}
+        onClose={() => setShowDeleteSuite(false)}
+        onConfirm={handleDeleteSuite}
+        title="Delete Suite"
+        message={`"${suite?.name}" (${cases.length} test case${cases.length !== 1 ? 's' : ''}, ${sections.length} section${sections.length !== 1 ? 's' : ''}) will be permanently deleted.`}
         requireSafeguard
       />
     </div>
