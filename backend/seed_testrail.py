@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 # ---------------------------------------------------------------------------
 TESTRAIL_BASE = "https://styleseat.testrail.io/index.php?/api/v2"
 TESTRAIL_EMAIL = "ggortalov@styleseat.com"
-TESTRAIL_PASSWORD = "Nikolay2013@home"
+TESTRAIL_PASSWORD = "REDACTED_PASSWORD"
 PROJECT_ID = 23
 
 AUTH_HEADER = "Basic " + base64.b64encode(
@@ -124,44 +124,18 @@ def main():
 
     from app import create_app, db
     from app.models import User, Project, Suite, Section, TestCase
-    from app.suite_utils import cypress_path_to_name
-
-    # Map known TestRail suite names to cypress paths
-    TESTRAIL_PATH_MAP = {
-        'PO': 'cypress/e2e/p0/',
-        'P1 API': 'cypress/e2e/p1/api/',
-        'P1 Client': 'cypress/e2e/p1/client/',
-        'P1 Common': 'cypress/e2e/p1/common/',
-        'P1 Pro': 'cypress/e2e/p1/pro/',
-        'P1 Search': 'cypress/e2e/p1/search/',
-        'P3 - Admin': 'cypress/e2e/p3/',
-        'PROD': 'cypress/e2e/prod/',
-        'Pre Prod': 'cypress/e2e/preprod/',
-        'P0 Devices': 'cypress/e2e/devices/p0/',
-        'P1 Devices': 'cypress/e2e/devices/p1/',
-        'AB Test': 'cypress/e2e/abtest/',
-        'Communications': 'cypress/e2e/communications/',
-        'Events Mobile': 'cypress/e2e/events/',
-    }
 
     app = create_app()
 
     with app.app_context():
         db.create_all()
 
-        # Ensure demo users exist
+        # Ensure a user exists to own the imported data
         user = User.query.filter_by(username="demo").first()
         if not user:
             user = User(username="demo", email="demo@styleseat.com")
             user.set_password("DemoStyleSeat22@")
             db.session.add(user)
-            db.session.flush()
-
-        gennady = User.query.filter_by(username="Gennady").first()
-        if not gennady:
-            gennady = User(username="Gennady", email="ggortalov@styleseat.com")
-            gennady.set_password("demo123")
-            db.session.add(gennady)
             db.session.flush()
 
         # Create or find the project
@@ -211,7 +185,6 @@ def main():
                 project_id=project.id,
                 name=suite_name,
                 description=tr_suite.get("description"),
-                cypress_path=TESTRAIL_PATH_MAP.get(suite_name),
             )
             db.session.add(suite)
             db.session.flush()
