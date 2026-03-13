@@ -1,11 +1,9 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import runService from '../services/runService';
 import { useAuth } from '../context/AuthContext';
-import stripTestRailId from '../utils/stripTestRailId';
 import './TestRunDetailPage.css';
 
 const STATUSES = ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'];
@@ -26,7 +24,7 @@ function computeStats(results) {
 }
 
 /* ── Inline status dropdown ── */
-function StatusDropdown({ status, onChangeStatus, locked }) {
+function StatusDropdown({ status, onChangeStatus }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -37,29 +35,20 @@ function StatusDropdown({ status, onChangeStatus, locked }) {
   }, []);
 
   return (
-    <div className={`status-dropdown ${locked ? 'status-dropdown--locked' : ''}`} ref={ref}>
+    <div className="status-dropdown" ref={ref}>
       <button
         className="status-dropdown-trigger"
         style={{
           color: `var(--status-${status.toLowerCase()})`,
           backgroundColor: `var(--status-${status.toLowerCase()}-bg)`,
         }}
-        onClick={() => !locked && setOpen(!open)}
-        disabled={locked}
-        title={locked ? 'Locked - edits not allowed after 24 hours' : undefined}
+        onClick={() => setOpen(!open)}
       >
         <span className="status-dropdown-icon">{STATUS_ICONS[status]}</span>
         {status}
-        {locked ? (
-          <svg className="status-dropdown-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        ) : (
-          <svg className="status-dropdown-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        )}
+        <svg className="status-dropdown-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      {open && !locked && (
+      {open && (
         <div className="status-dropdown-menu">
           {STATUSES.map((s) => (
             <button
@@ -90,7 +79,7 @@ function groupBySection(results) {
   for (const r of results) {
     const key = r.section_name || 'Uncategorized';
     if (!map[key]) {
-      map[key] = { name: key, describeTitle: r.describe_title || null, results: [] };
+      map[key] = { name: key, results: [] };
       groups.push(map[key]);
     }
     map[key].results.push(r);
@@ -102,28 +91,16 @@ function groupBySection(results) {
 export default function TestRunDetailPage() {
   const { runId } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [run, setRun] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const filter = searchParams.get('status') || 'All';
-  const setFilter = (status) => {
-    if (status === 'All') {
-      searchParams.delete('status');
-    } else {
-      searchParams.set('status', status);
-    }
-    setSearchParams(searchParams, { replace: true });
-  };
+  const [filter, setFilter] = useState('All');
   const [updating, setUpdating] = useState({});
   const [collapsed, setCollapsed] = useState({});
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkUpdating, setBulkUpdating] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [copiedRowId, setCopiedRowId] = useState(null);
-  const [showDeleteRun, setShowDeleteRun] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -141,31 +118,6 @@ export default function TestRunDetailPage() {
   }, [runId, navigate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  // Restore scroll position and highlight after content loads
-  useLayoutEffect(() => {
-    if (!loading) {
-      const savedScroll = sessionStorage.getItem('runPageScroll');
-      const highlightId = sessionStorage.getItem('highlightResult');
-
-      if (highlightId && savedScroll) {
-        // Restore scroll synchronously before paint
-        window.scrollTo(0, parseInt(savedScroll, 10));
-
-        // Clean up and highlight
-        sessionStorage.removeItem('highlightResult');
-        sessionStorage.removeItem('runPageScroll');
-
-        requestAnimationFrame(() => {
-          const element = document.getElementById(`result-${highlightId}`);
-          if (element) {
-            element.classList.add('run-case-row--highlight');
-            setTimeout(() => element.classList.remove('run-case-row--highlight'), 2000);
-          }
-        });
-      }
-    }
-  }, [loading]);
 
   const handleStatusChange = async (resultId, newStatus) => {
     setUpdating((prev) => ({ ...prev, [resultId]: true }));
@@ -227,31 +179,6 @@ export default function TestRunDetailPage() {
 
   const toggleSection = (name) => setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
 
-  const copyResults = () => {
-    const lines = filtered.map((r) => {
-      const title = stripTestRailId(r.case_title);
-      const file = r.source_file || r.section_name || '';
-      return `${file}\t${title}`;
-    });
-    const header = `File\tTitle`;
-    const text = [header, ...lines].join('\n');
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  const copyRow = (r, e) => {
-    e.stopPropagation();
-    const title = stripTestRailId(r.case_title);
-    const file = r.source_file || r.section_name || '';
-    const text = `${file}\t${title}`;
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedRowId(r.id);
-      setTimeout(() => setCopiedRowId(null), 1500);
-    });
-  };
-
   if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
 
   const passRateColor = stats.pass_rate >= 80 ? 'var(--status-passed)' : stats.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
@@ -261,12 +188,12 @@ export default function TestRunDetailPage() {
       <Header breadcrumbs={[
         { label: 'Dashboard', path: '/' },
         ...(run?.project_name ? [{ label: run.project_name, path: `/projects/${run.project_id}` }] : []),
-        { label: formatRunDate(run?.run_date || run?.created_at) || run?.name },
+        { label: formatRunDate(run?.created_at) || run?.name },
       ]} />
       <div className="page-content">
         <div className="page-toolbar">
           <div>
-            <h2 className="page-heading">{run?.name?.split(' · ')[0] || run?.suite_name} &middot; {formatRunDate(run?.run_date || run?.created_at)}</h2>
+            <h2 className="page-heading">{run?.suite_name} &middot; {formatRunDate(run?.created_at)}</h2>
             <p className="page-description">{run?.name} &middot; {run?.is_completed ? 'Completed' : 'Active'}</p>
           </div>
           <div className="toolbar-actions">
@@ -274,7 +201,6 @@ export default function TestRunDetailPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
               Manage
             </button>
-            <button className="btn btn-danger" onClick={() => setShowDeleteRun(true)}>Delete</button>
             <button className="btn btn-secondary" onClick={() => navigate(`/projects/${run.project_id}`)}>Back to Project</button>
           </div>
         </div>
@@ -321,51 +247,17 @@ export default function TestRunDetailPage() {
               </button>
             )}
           </h3>
-          {filtered.length > 0 && (
-            <button className={`btn btn-copy ${copied ? 'btn-copy--copied' : ''}`} onClick={copyResults}>
-              {copied ? (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                  Copy All ({filtered.length})
-                </>
-              )}
-            </button>
-          )}
         </div>
 
         {sections.length > 0 ? (
           <div className="run-section-tree">
             {sections.map((sec) => (
               <div key={sec.name} className="run-section-group">
-                <div
-                  className="run-section-header"
-                  onClick={(e) => {
-                    // Only toggle if user clicked the chevron, count badge, or empty header area — not the selectable text
-                    const tag = e.target.closest('.run-section-name, .run-section-file, .run-section-info');
-                    if (!tag) toggleSection(sec.name);
-                  }}
-                >
+                <div className="run-section-header" onClick={() => toggleSection(sec.name)}>
                   <svg className={`run-section-chevron ${collapsed[sec.name] ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
-                  {sec.describeTitle ? (
-                    <span className="run-section-info">
-                      <span className="run-section-name">{sec.describeTitle}</span>
-                      <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
-                    </span>
-                  ) : (
-                    <span className="run-section-name">{sec.name}</span>
-                  )}
+                  <span className="run-section-name">{sec.name}</span>
                   <span className="run-section-count">{sec.results.length}</span>
                 </div>
                 {!collapsed[sec.name] && (
@@ -377,51 +269,23 @@ export default function TestRunDetailPage() {
                       </div>
                     )}
                     {sec.results.map((r) => (
-                      <div
-                        key={r.id}
-                        id={`result-${r.id}`}
-                        className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
-                        onClick={() => {
-                          if (!selectionMode) {
-                            sessionStorage.setItem('runPageScroll', window.scrollY.toString());
-                            navigate(`/runs/${runId}/execute/${r.id}`);
-                          }
-                        }}
-                      >
+                      <div key={r.id} className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}>
                         {selectionMode && (
                           <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                         )}
-                        <span className="run-case-title">
-                          {stripTestRailId(r.case_title)}
-                        </span>
+                        <span className="run-case-id">C{String(r.case_id).padStart(7, '0')}</span>
+                        <span className="run-case-title">{r.case_title}</span>
                         <span className="run-case-tested-by">
                           <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>
                             {r.tested_by_name || 'Automation'}
                           </span>
                         </span>
-                        <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
+                        <span className="run-case-status">
                           <StatusDropdown
                             status={r.status}
                             onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)}
-                            locked={r.is_locked}
                           />
                         </span>
-                        <button
-                          className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`}
-                          onClick={(e) => copyRow(r, e)}
-                          title="Copy test ID, file, and title"
-                        >
-                          {copiedRowId === r.id ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                          )}
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -455,19 +319,6 @@ export default function TestRunDetailPage() {
           <button className="btn btn-secondary btn-sm bulk-status-clear" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
-
-      <ConfirmDialog
-        isOpen={showDeleteRun}
-        onClose={() => setShowDeleteRun(false)}
-        onConfirm={async () => {
-          await runService.delete(runId);
-          window.__refreshSidebarProjects?.();
-          navigate(`/projects/${run.project_id}`);
-        }}
-        title="Delete Test Run"
-        message={`"${run?.name}" (${results.length} result${results.length !== 1 ? 's' : ''}) will be permanently deleted.`}
-        requireSafeguard
-      />
     </div>
   );
 }

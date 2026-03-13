@@ -137,46 +137,7 @@
 }
 
 .results-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   margin-bottom: 16px;
-}
-
-/* Copy button */
-.btn-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg-white);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
-}
-
-.btn-copy:hover {
-  color: var(--sidebar-bg);
-  border-color: var(--sidebar-bg);
-  background: var(--primary-light);
-}
-
-.btn-copy--copied {
-  color: var(--status-passed);
-  border-color: var(--status-passed);
-  background: var(--status-passed-bg);
-}
-
-.btn-copy--copied:hover {
-  color: var(--status-passed);
-  border-color: var(--status-passed);
-  background: var(--status-passed-bg);
 }
 
 /* ── Section tree (mirrors TestSuitePage) ── */
@@ -197,10 +158,12 @@
 
 .run-section-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding: 14px 18px;
   background: var(--bg-subtle);
+  cursor: pointer;
+  user-select: none;
   transition: background var(--transition);
 }
 
@@ -208,27 +171,14 @@
   background: var(--border-light);
 }
 
-.run-section-header:hover .run-section-chevron {
-  color: var(--text-primary);
-}
-
 .run-section-chevron {
   flex-shrink: 0;
   color: var(--text-muted);
   transition: transform 0.2s ease;
-  margin-top: 3px;
-  cursor: pointer;
 }
 
 .run-section-chevron.open {
   transform: rotate(90deg);
-}
-
-.run-section-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 
 .run-section-name {
@@ -236,73 +186,6 @@
   font-weight: 700;
   color: #111;
   letter-spacing: -0.2px;
-  user-select: text;
-  cursor: text;
-}
-
-.run-section-file {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: 0;
-  user-select: text;
-  cursor: pointer;
-  position: relative;
-  border-radius: var(--radius-sm);
-  padding: 1px 6px;
-  margin-left: -6px;
-  width: fit-content;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.run-section-file::after {
-  content: 'Click to copy';
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 6px;
-  background: var(--text-muted);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: var(--font-sans);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.1s ease;
-  z-index: 10;
-}
-
-.run-section-file:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.run-section-file:hover::after {
-  opacity: 1;
-}
-
-.run-section-file.copied::after {
-  content: 'Copied!';
-  background: var(--status-passed);
-  opacity: 1;
-}
-
-.run-section-file.copied {
-  background: var(--status-passed-bg);
-  color: var(--status-passed);
-  animation: runFileCopiedFlash 1.5s ease forwards;
-}
-
-@keyframes runFileCopiedFlash {
-  0%, 50% {
-    background: var(--status-passed-bg);
-    color: var(--status-passed);
-  }
-  100% {
-    background: transparent;
-    color: var(--text-secondary);
-  }
 }
 
 .run-section-count {
@@ -314,8 +197,6 @@
   padding: 2px 9px;
   min-width: 22px;
   text-align: center;
-  margin-top: 3px;
-  cursor: pointer;
 }
 
 /* ── Case rows inside sections ── */
@@ -331,7 +212,6 @@
   border-bottom: 1px solid var(--border-light);
   transition: background var(--transition);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  cursor: pointer;
 }
 
 .run-case-row:last-child {
@@ -342,26 +222,22 @@
   background: var(--bg-subtle);
 }
 
+.run-case-id {
+  flex-shrink: 0;
+  width: 90px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
 .run-case-title {
   flex: 1;
   min-width: 0;
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.run-case-file {
-  flex-shrink: 0;
-  max-width: 180px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: var(--bg-subtle);
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -377,41 +253,6 @@
 .run-case-status {
   flex-shrink: 0;
   width: 120px;
-}
-
-/* Row copy button */
-.run-case-copy {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1.5px solid var(--border-light);
-  background: var(--bg-white);
-  color: var(--text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  opacity: 1;
-  transition: all var(--transition);
-}
-
-.run-case-copy:hover {
-  background: var(--primary-light);
-  border-color: var(--sidebar-bg);
-  color: var(--sidebar-bg);
-}
-
-.run-case-copy--copied {
-  opacity: 1;
-  color: var(--status-passed);
-  background: var(--status-passed-bg);
-}
-
-.run-case-copy--copied:hover {
-  color: var(--status-passed);
-  background: var(--status-passed-bg);
 }
 
 /* fallback panel for empty state */
@@ -538,22 +379,6 @@
   flex-shrink: 0;
 }
 
-/* ── Locked status ── */
-.status-dropdown--locked .status-dropdown-trigger {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.status-dropdown--locked .status-dropdown-trigger:hover {
-  box-shadow: none;
-}
-
-.status-dropdown-lock {
-  margin-left: 2px;
-  opacity: 0.5;
-  flex-shrink: 0;
-}
-
 /* ── Bulk selection ── */
 .run-checkbox {
   width: 16px;
@@ -569,21 +394,6 @@
 
 .run-case-row--selected:hover {
   background: rgba(26, 58, 42, 0.1);
-}
-
-.run-case-row--highlight {
-  animation: highlightRow 2s ease;
-}
-
-@keyframes highlightRow {
-  0%, 40% {
-    background: rgba(26, 58, 42, 0.25);
-    box-shadow: inset 0 0 0 2px var(--sidebar-bg);
-  }
-  100% {
-    background: transparent;
-    box-shadow: none;
-  }
 }
 
 .run-select-all {
@@ -712,21 +522,17 @@
     padding: 10px 12px 10px 30px;
   }
 
+  .run-case-id {
+    width: 70px;
+    font-size: 12px;
+  }
+
   .run-case-tested-by {
     display: none;
   }
 
   .run-case-status {
     width: 100px;
-  }
-
-  .run-case-copy {
-    opacity: 1;
-  }
-
-  .run-case-file {
-    max-width: 140px;
-    font-size: 11px;
   }
 
   .run-section-header {
@@ -786,8 +592,12 @@
     gap: 8px;
   }
 
-  .run-case-tested-by,
-  .run-case-file {
+  .run-case-id {
+    width: 70px;
+    font-size: 12px;
+  }
+
+  .run-case-tested-by {
     display: none;
   }
 

@@ -45,7 +45,6 @@ export default function ProjectDetailPage() {
   // Delete confirm
   const [showDelete, setShowDelete] = useState(false);
   const [deleteSuite, setDeleteSuite] = useState(null);
-  const [deleteRun, setDeleteRun] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -58,7 +57,7 @@ export default function ProjectDetailPage() {
       ]);
       setProject(p);
       setSuites(s);
-      setRuns(r.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+      setRuns(r);
       setStats(st);
     } catch {
       navigate('/');
@@ -89,15 +88,6 @@ export default function ProjectDetailPage() {
       setDeleteSuite(null);
       fetchAll();
       if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
-    }
-  };
-
-  const handleDeleteRun = async () => {
-    if (deleteRun) {
-      await runService.delete(deleteRun.id);
-      setDeleteRun(null);
-      fetchAll();
-      window.__refreshSidebarProjects?.();
     }
   };
 
@@ -253,7 +243,7 @@ export default function ProjectDetailPage() {
             {runs.length > 0 ? (
               <table className="data-table">
                 <thead>
-                  <tr><th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th>Created</th><th></th></tr>
+                  <tr><th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th>Created</th></tr>
                 </thead>
                 <tbody>
                   {runs.map((r) => (
@@ -272,13 +262,6 @@ export default function ProjectDetailPage() {
                         <span className="mini-bar-label">{r.stats.pass_rate}%</span>
                       </td>
                       <td className="text-muted">{new Date(r.created_at).toLocaleDateString()}</td>
-                      <td className="row-action-cell" onClick={(e) => e.stopPropagation()}>
-                        <button className="btn-icon-delete" onClick={() => setDeleteRun(r)} title="Delete run">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                          </svg>
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -399,16 +382,6 @@ export default function ProjectDetailPage() {
         onConfirm={handleDeleteSuite}
         title="Delete Suite"
         message={`"${deleteSuite?.name}"${deleteSuite?.case_count > 0 ? ` (${deleteSuite.case_count} test case${deleteSuite.case_count !== 1 ? 's' : ''})` : ''} will be permanently deleted.`}
-      />
-
-      {/* Delete run */}
-      <ConfirmDialog
-        isOpen={!!deleteRun}
-        onClose={() => setDeleteRun(null)}
-        onConfirm={handleDeleteRun}
-        title="Delete Test Run"
-        message={`"${deleteRun?.name}" (${deleteRun?.stats?.total || 0} result${(deleteRun?.stats?.total || 0) !== 1 ? 's' : ''}) will be permanently deleted.`}
-        requireSafeguard
       />
     </div>
   );
