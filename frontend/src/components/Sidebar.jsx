@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState, useRef } from 'react';
 import projectService from '../services/projectService';
 import runService from '../services/runService';
-import UserSettingsModal from './UserSettingsModal';
+import authService from '../services/authService';
 import './Sidebar.css';
 
 function getIdsFromPath(pathname) {
@@ -18,18 +18,19 @@ function getIdsFromPath(pathname) {
 }
 
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMobile }) {
-  const { user, logout } = useAuth();
+  const { user, logout, updateAvatar } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: pathProjectId, suiteId: pathSuiteId, runId: pathRunId } = getIdsFromPath(location.pathname);
   const [projects, setProjects] = useState([]);
   const [runs, setRuns] = useState([]);
-  const [suitesOpen, setSuitesOpen] = useState(true);
+  const [suitesOpen, setSuitesOpen] = useState(false);
   const [runsOpen, setRunsOpen] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const API_BASE = 'http://localhost:5001';
 
-  // Flatten all suites from all projects into a single list
   const allSuites = projects.flatMap((p) =>
     (p.suites || []).map((s) => ({ ...s, project_id: p.id }))
   );
@@ -42,42 +43,60 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
 
   const loadRuns = () => {
     runService.getAll()
-      .then(setRuns)
+      .then((allRuns) => setRuns(
+        allRuns
+          .filter(r => !r.is_locked)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      ))
       .catch(() => {});
   };
 
   useEffect(() => { loadProjects(); loadRuns(); }, []);
 
-  // Expose refresh to window for cross-component updates
   useEffect(() => {
     window.__refreshSidebarProjects = loadProjects;
     window.__refreshSidebarRuns = loadRuns;
     return () => { delete window.__refreshSidebarProjects; delete window.__refreshSidebarRuns; };
   }, []);
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const logoutTimerRef = useRef(null);
 
   const handleLogoutClick = () => {
     if (logoutConfirm) {
-      // Second click — actually logout
       clearTimeout(logoutTimerRef.current);
       setLogoutConfirm(false);
       logout();
       navigate('/login');
     } else {
-      // First click — show confirm state
       setLogoutConfirm(true);
       logoutTimerRef.current = setTimeout(() => setLogoutConfirm(false), 3000);
     }
   };
 
-  // Clean up timer on unmount
   useEffect(() => {
     return () => clearTimeout(logoutTimerRef.current);
   }, []);
+
+  const handleAvatarClick = (e) => {
+    e.stopPropagation();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const data = await authService.uploadAvatar(file);
+      updateAvatar(data.avatar);
+    } catch {
+      // silently fail
+    } finally {
+      setUploading(false);
+    }
+    e.target.value = '';
+  };
 
   return (
     <aside
@@ -204,26 +223,36 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-user sidebar-user--clickable" onClick={(e) => { e.stopPropagation(); setSettingsOpen(true); }} title="User Settings">
-          {user?.avatar ? (
-            <img
-              src={`${API_BASE}${user.avatar}`}
-              alt="Avatar"
-              className="sidebar-user-avatar"
-            />
-          ) : (
-            <span className="sidebar-user-badge">
-              {user?.username?.slice(0, 2).toUpperCase() || 'SG'}
-            </span>
-          )}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="image/*"
+          style={{ display: 'none' }}
+        />
+        <div className="sidebar-user">
+          <div
+            className={`sidebar-avatar ${uploading ? 'sidebar-avatar--uploading' : ''}`}
+            onClick={handleAvatarClick}
+            title="Change profile photo"
+          >
+            {user?.avatar ? (
+              <img src={`${API_BASE}${user.avatar}`} alt="Avatar" />
+            ) : (
+              <span className="sidebar-avatar-initials">
+                {user?.username?.slice(0, 2).toUpperCase() || 'SG'}
+              </span>
+            )}
+            <div className="sidebar-avatar-overlay">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </div>
+            {uploading && <div className="sidebar-avatar-spinner" />}
+          </div>
           {!collapsed && (
-            <span className="sidebar-label sidebar-username">{user?.username}</span>
-          )}
-          {!collapsed && (
-            <svg className="sidebar-user-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <span className="sidebar-username">{user?.username}</span>
           )}
         </div>
         {collapsed ? (
@@ -245,8 +274,6 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           </button>
         )}
       </div>
-
-      <UserSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </aside>
   );
 }
