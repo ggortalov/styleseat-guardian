@@ -222,8 +222,16 @@ def list_results(run_id):
         d["is_locked"] = is_result_locked(r)
         if r.test_case:
             d["case_title"] = r.test_case.title
-            d["section_name"] = r.test_case.section.name if r.test_case.section else None
             d["priority"] = r.test_case.priority
+            # Extract source file from preconditions if present
+            preconditions = r.test_case.preconditions or ""
+            if preconditions.startswith("Source:"):
+                source_path = preconditions.replace("Source:", "").strip()
+                d["source_file"] = source_path.split("/")[-1]  # Just the filename
+            else:
+                d["source_file"] = None
+            # Group by source file
+            d["section_name"] = d.get("source_file") or (r.test_case.section.name if r.test_case.section else "Uncategorized")
         out.append(d)
     return jsonify(out), 200
 

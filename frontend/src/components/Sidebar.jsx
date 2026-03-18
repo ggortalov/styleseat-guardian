@@ -43,7 +43,11 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
 
   const loadRuns = () => {
     runService.getAll()
-      .then((allRuns) => setRuns(allRuns.filter(r => !r.is_locked)))
+      .then((allRuns) => setRuns(
+        allRuns
+          .filter(r => !r.is_locked)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      ))
       .catch(() => {});
   };
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import runService from '../services/runService';
@@ -100,16 +100,27 @@ function groupBySection(results) {
 export default function TestRunDetailPage() {
   const { runId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [run, setRun] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('All');
+  const filter = searchParams.get('status') || 'All';
+  const setFilter = (status) => {
+    if (status === 'All') {
+      searchParams.delete('status');
+    } else {
+      searchParams.set('status', status);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
   const [updating, setUpdating] = useState({});
   const [collapsed, setCollapsed] = useState({});
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copiedRowId, setCopiedRowId] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -213,6 +224,33 @@ export default function TestRunDetailPage() {
 
   const toggleSection = (name) => setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
 
+  const copyResults = () => {
+    const lines = filtered.map((r) => {
+      const testId = r.case_title.match(/^(C\d+)/)?.[1] || `C${String(r.case_id).padStart(7, '0')}`;
+      const title = r.case_title.replace(/^C\d+\s*/, '').trim();
+      const file = r.source_file || r.section_name || '';
+      return `${testId}\t${file}\t${title}`;
+    });
+    const header = `Test ID\tFile\tTitle`;
+    const text = [header, ...lines].join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const copyRow = (r, e) => {
+    e.stopPropagation();
+    const testId = r.case_title.match(/^(C\d+)/)?.[1] || `C${String(r.case_id).padStart(7, '0')}`;
+    const title = r.case_title.replace(/^C\d+\s*/, '').trim();
+    const file = r.source_file || r.section_name || '';
+    const text = `${testId}\t${file}\t${title}`;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedRowId(r.id);
+      setTimeout(() => setCopiedRowId(null), 1500);
+    });
+  };
+
   if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
 
   const passRateColor = stats.pass_rate >= 80 ? 'var(--status-passed)' : stats.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
@@ -281,6 +319,26 @@ export default function TestRunDetailPage() {
               </button>
             )}
           </h3>
+          {filtered.length > 0 && (
+            <button className={`btn btn-copy ${copied ? 'btn-copy--copied' : ''}`} onClick={copyResults}>
+              {copied ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Copy All ({filtered.length})
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {sections.length > 0 ? (
@@ -331,6 +389,22 @@ export default function TestRunDetailPage() {
                             locked={r.is_locked}
                           />
                         </span>
+                        <button
+                          className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`}
+                          onClick={(e) => copyRow(r, e)}
+                          title="Copy test ID, file, and title"
+                        >
+                          {copiedRowId === r.id ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     ))}
                   </div>
