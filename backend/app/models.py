@@ -199,9 +199,22 @@ class TestResult(db.Model):
     defect_id = db.Column(db.String(100), nullable=True)
     tested_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     tested_at = db.Column(db.DateTime, nullable=True)
+    # CircleCI integration fields
+    error_message = db.Column(db.Text, nullable=True)
+    artifacts = db.Column(db.Text, nullable=True)  # JSON array of artifact URLs
+    circleci_job_id = db.Column(db.String(100), nullable=True)
 
     history = db.relationship("ResultHistory", backref="result", cascade="all, delete-orphan", lazy=True,
                               order_by="ResultHistory.changed_at.desc()")
+
+    @property
+    def artifacts_list(self):
+        if not self.artifacts:
+            return []
+        try:
+            return json.loads(self.artifacts)
+        except:
+            return []
 
     def to_dict(self):
         return {
@@ -213,6 +226,9 @@ class TestResult(db.Model):
             "defect_id": self.defect_id,
             "tested_by": self.tested_by,
             "tested_at": self.tested_at.isoformat() if self.tested_at else None,
+            "error_message": self.error_message,
+            "artifacts": self.artifacts_list,
+            "circleci_job_id": self.circleci_job_id,
         }
 
 
@@ -224,8 +240,19 @@ class ResultHistory(db.Model):
     status = db.Column(db.String(20), nullable=False)
     comment = db.Column(db.Text, nullable=True)
     defect_id = db.Column(db.String(100), nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    artifacts = db.Column(db.Text, nullable=True)  # JSON array of artifact URLs
     changed_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     changed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def artifacts_list(self):
+        if not self.artifacts:
+            return []
+        try:
+            return json.loads(self.artifacts)
+        except:
+            return []
 
     def to_dict(self):
         return {
@@ -234,6 +261,8 @@ class ResultHistory(db.Model):
             "status": self.status,
             "comment": self.comment,
             "defect_id": self.defect_id,
+            "error_message": self.error_message,
+            "artifacts": self.artifacts_list,
             "changed_by": self.changed_by,
             "changed_at": self.changed_at.isoformat() if self.changed_at else None,
         }

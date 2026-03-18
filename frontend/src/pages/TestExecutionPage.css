@@ -55,43 +55,237 @@
   white-space: pre-wrap;
 }
 
+.exec-html-content {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.exec-html-content ul,
+.exec-html-content ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.exec-html-content li {
+  margin-bottom: 4px;
+}
+
+.exec-html-content p {
+  margin: 0 0 8px;
+}
+
+.exec-html-content p:last-child {
+  margin-bottom: 0;
+}
+
 .exec-panel h3 {
-  margin: 0 0 18px;
+  margin: 0;
   font-size: 16px;
   font-weight: 700;
 }
 
-.status-buttons {
+.exec-panel-header {
   display: flex;
-  gap: 8px;
-  margin-bottom: 18px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
-.status-btn {
-  flex: 1;
-  min-width: 60px;
-  padding: 10px 4px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--text-secondary);
-  font-size: 12px;
+.exec-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 600;
+  color: var(--text-muted);
+  background: var(--status-untested-bg);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+
+/* ── Status dropdown pill ── */
+.exec-status-section {
+  margin-bottom: 20px;
+}
+
+.exec-status-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.exec-status-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background var(--transition), color var(--transition), border-color var(--transition);
   font-family: inherit;
+  transition: opacity var(--transition), box-shadow var(--transition), transform var(--transition);
+  white-space: nowrap;
 }
 
-.status-btn:hover {
-  border-color: var(--btn-color);
-  color: var(--btn-color);
+.exec-status-trigger:hover:not(:disabled) {
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.08);
+  transform: scale(1.02);
 }
 
-.status-btn.active {
-  background: var(--btn-color);
-  border-color: var(--btn-color);
-  color: #fff;
+.exec-status-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.exec-status-caret {
+  margin-left: 2px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.exec-status-lock {
+  margin-left: 2px;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.exec-status-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  min-width: 160px;
+  animation: scaleIn 0.12s ease;
+}
+
+.exec-status-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition);
+}
+
+.exec-status-option:hover {
+  background: var(--bg-subtle);
+}
+
+.exec-status-option.selected {
+  background: var(--primary-light);
+  font-weight: 700;
+}
+
+.exec-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.exec-status-dropdown--locked .exec-status-trigger {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.exec-status-dropdown--locked .exec-status-trigger:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+/* ── Error section below test case ── */
+.exec-error-section {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--status-failed-bg);
+  border: 1px solid rgba(198, 40, 40, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.exec-error-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--status-failed);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 12px;
+}
+
+.exec-error-message {
+  margin: 0;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ── Artifacts section ── */
+.exec-artifacts-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.exec-artifacts-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 12px;
+}
+
+.exec-artifacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exec-artifact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sidebar-bg);
+  text-decoration: none;
+  padding: 8px 12px;
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.exec-artifact-link:hover {
+  background: var(--primary-light);
+  border-color: var(--sidebar-bg);
 }
 
 .exec-history {
@@ -117,14 +311,22 @@
 }
 
 .history-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.history-user {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .history-date {
   font-size: 12px;
   color: var(--text-muted);
+  text-align: right;
 }
 
 .history-comment {
@@ -138,6 +340,84 @@
   font-size: 12px;
   color: var(--status-failed);
   font-weight: 500;
+}
+
+/* CircleCI Error and Artifacts */
+.history-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--status-failed-bg);
+  border: 1px solid rgba(198, 40, 40, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.history-error-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-failed);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.history-error-message {
+  margin: 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.history-artifacts {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+
+.history-artifacts-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.history-artifacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-artifact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sidebar-bg);
+  text-decoration: none;
+  padding: 4px 8px;
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.history-artifact-link:hover {
+  background: var(--primary-light);
+  border-color: var(--sidebar-bg);
 }
 
 @media (max-width: 1024px) {
