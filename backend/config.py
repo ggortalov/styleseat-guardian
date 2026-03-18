@@ -20,3 +20,7 @@ class Config:
 
     # Data retention — completed test runs older than this are purged automatically
     RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", 30))
+
+    # CircleCI Integration
+    CIRCLECI_API_TOKEN = os.environ.get("CIRCLECI_API_TOKEN")
+    CIRCLECI_PROJECT_SLUG = os.environ.get("CIRCLECI_PROJECT_SLUG")  # e.g., "gh/org/repo"

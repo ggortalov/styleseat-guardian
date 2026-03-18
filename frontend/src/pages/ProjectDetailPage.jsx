@@ -57,7 +57,7 @@ export default function ProjectDetailPage() {
       ]);
       setProject(p);
       setSuites(s);
-      setRuns(r);
+      setRuns(r.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
       setStats(st);
     } catch {
       navigate('/');

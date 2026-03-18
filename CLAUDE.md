@@ -332,61 +332,38 @@ python seed.py      # Optional: populate demo data
 
 ## Launch Demo
 
-When the user asks to "launch demo" or "launch demo with mock data", follow these steps exactly:
+When the user asks to "start demo" or "launch demo", follow these steps:
 
-### Step 1: Reset and seed the database
+### Step 1: Kill existing servers and reset database
 ```bash
+lsof -ti:5001 -ti:5173 -ti:5174 | xargs kill -9 2>/dev/null || true
 cd backend
-source venv/bin/activate
 rm -f app.db
-python run.py &          # Start briefly to create tables, then stop
-sleep 2 && kill %1
-python seed_testrail.py  # Import real TestRail data (Cypress Automation project with 13 suites, ~1700+ cases)
+source venv/bin/activate
+python seed_testrail.py   # Creates demo user + imports TestRail suites/cases
 ```
 
-### Step 2: Create test runs with realistic status distributions
-After seeding, create test runs via the API to populate the Runs section. Use the backend Python shell or a script:
-
-```python
-# Create 2 test runs with mixed statuses:
-# Run 1: P0 Devices suite (id=13) — small run (~26 cases), ~80% pass rate
-# Run 2: P1 Pro suite (id=9) — large run (~887 cases), ~70% pass rate
-#
-# Status distribution pattern:
-#   ~70% Passed, ~8% Failed, ~5% Blocked, ~5% Retest, ~12% Untested
-#
-# Use: runService.create(projectId, { name, suite_id }) via API
-# Then bulk-update results to set realistic statuses
-```
-
-### Step 3: Start both servers
+### Step 2: Start both servers (background)
 ```bash
-# Terminal 1 — Backend
-cd backend && source venv/bin/activate && python run.py
-
-# Terminal 2 — Frontend
-cd frontend && npm run dev
+cd backend && source venv/bin/activate && python run.py &
+cd frontend && npm run dev &
 ```
 
-### Step 4: Verify the demo
-Open http://localhost:5173 and confirm:
-- **Login**: `demo` / `demo123` (or `Gennady` / `demo123`)
-- **Sidebar**: Test Suites section shows 13 suites (PO, P1 Client, P1 API, P3-Admin, PROD, P1 Pro, P1 Common, Events Mobile, Pre Prod, P0 Devices, AB Test, Communications, P1 Search) with case counts
-- **Sidebar**: Test Runs section shows runs with suite name + date + total count
-- **Test Suites page**: Category-grouped suites with case counts
-- **Test Run Detail** (`/runs/:id`): Stat tiles (Total, Passed, Failed, Blocked, Retest, Untested, Pass Rate), section-grouped results with collapsible headers, inline status dropdowns, tested-by tags, bulk selection mode
-- **Test Runs page** (`/runs`): v2 cards with status badges, colored bar, pass rate percentage
+### Step 3: Confirm servers are running
+Check that both servers started successfully.
 
-### Expected demo data shape
+### Expected demo data
 | Entity | Count | Notes |
 |--------|-------|-------|
-| Users | 2 | `demo` (primary), `Gennady` |
-| Projects | 3 | E-Commerce Platform, Mobile Banking API, Cypress Automation |
-| Suites | 13 | All under Cypress Automation (imported from TestRail) |
-| Sections | ~100+ | Nested sections per suite |
-| Test Cases | ~1700+ | Real test case titles from TestRail |
-| Test Runs | 2 | P0 Devices (~26 results), P1 Pro (~887 results) |
-| Test Results | ~913 | Mixed statuses with realistic distribution |
+| Users | 2 | `demo` / `demo123`, `Gennady` / `demo123` |
+| Projects | 1 | Cypress Automation |
+| Suites | 14 | Imported from TestRail |
+| Sections | 821 | Nested sections per suite |
+| Test Cases | 2,422 | Real test case titles from TestRail |
+| Test Runs | 0 | Use `/circleci-import` to import runs |
+
+**Login:** `demo` / `demo123`
+**URL:** http://localhost:5173
 
 ## Dependencies
 
@@ -414,3 +391,58 @@ Open http://localhost:5173 and confirm:
 - **Max file size**: 2MB (`MAX_CONTENT_LENGTH` in `config.py`)
 - **Allowed formats**: JPEG, PNG
 - **Filename pattern**: `{user_id}_{secure_filename}` to avoid collisions
+
+## Test Data Workflow
+
+The system uses a two-source approach for test management:
+
+### Source of Truth
+
+1. **Cypress Repo** (`styleseat/cypress`) → Test case definitions
+   - All test cases are synced from the Cypress repo
+   - Test structure maps to suites: `cypress/e2e/p1/common/` → P1 Common
+   - Use `/cypress-sync` to pull latest test definitions
+
+2. **CircleCI** → Test results
+   - Test run results are imported from CircleCI workflows
+   - Use `/circleci-import <workflow-url>` to import results
+   - Automatically creates test cases for new tests not yet synced
+
+### Workflow
+
+```bash
+# 1. Start demo (seeds TestRail data for baseline)
+# This is handled by "start demo" command
+
+# 2. Sync test cases from Cypress repo
+/cypress-sync
+
+# 3. Import CircleCI results
+/circleci-import https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
+```
+
+### Suite Mapping
+
+| Cypress Path | Suite Name |
+|--------------|------------|
+| `cypress/e2e/p0/` | PO |
+| `cypress/e2e/p1/api/` | P1 API |
+| `cypress/e2e/p1/client/` | P1 Client |
+| `cypress/e2e/p1/common/` | P1 Common |
+| `cypress/e2e/p1/pro/` | P1 Pro |
+| `cypress/e2e/p1/search/` | P1 Search |
+| `cypress/e2e/p3/` | P3 - Admin |
+| `cypress/e2e/prod/` | PROD |
+| `cypress/e2e/preprod/` | Pre Prod |
+| `cypress/e2e/devices/p0/` | P0 Devices |
+| `cypress/e2e/devices/p1/` | P1 Devices |
+| `cypress/e2e/abtest/` | AB Test |
+| `cypress/e2e/communications/` | Communications |
+| `cypress/e2e/events/` | Events Mobile |
+
+### Handling Failed File Loads
+
+When a Cypress test file fails to load (syntax error, import error, etc.):
+1. CircleCI reports a synthetic "An uncaught error was detected outside of a test" failure
+2. The `/circleci-import` detects this and marks all tests from that file as "Blocked"
+3. The error message from CircleCI is attached to each blocked result
