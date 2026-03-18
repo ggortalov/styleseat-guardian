@@ -230,8 +230,8 @@ def list_results(run_id):
                 d["source_file"] = source_path.split("/")[-1]  # Just the filename
             else:
                 d["source_file"] = None
-            # Group by source file
-            d["section_name"] = d.get("source_file") or (r.test_case.section.name if r.test_case.section else "Uncategorized")
+            # Group by file name when available, otherwise by section name
+            d["section_name"] = d["source_file"] or (r.test_case.section.name if r.test_case.section else "Uncategorized")
         out.append(d)
     return jsonify(out), 200
 

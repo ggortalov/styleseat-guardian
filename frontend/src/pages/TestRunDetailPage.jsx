@@ -375,8 +375,12 @@ export default function TestRunDetailPage() {
                         {selectionMode && (
                           <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                         )}
-                        <span className="run-case-id">C{String(r.case_id).padStart(7, '0')}</span>
-                        <span className="run-case-title">{r.case_title}</span>
+                        <span className="run-case-id">
+                          {r.case_title.match(/^(C\d+)/) ? r.case_title.match(/^(C\d+)/)[1] : `C${String(r.case_id).padStart(7, '0')}`}
+                        </span>
+                        <span className="run-case-title">
+                          {r.case_title.replace(/^C\d+\s*/, '')}
+                        </span>
                         <span className="run-case-tested-by">
                           <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>
                             {r.tested_by_name || 'Automation'}
