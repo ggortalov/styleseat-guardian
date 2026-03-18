@@ -3,6 +3,7 @@
 const STORAGE_KEYS = {
   enabled: 'soundEnabled',
   choice: 'soundChoice',
+  volume: 'soundVolume',
 };
 
 export const SOUND_OPTIONS = [
@@ -45,9 +46,18 @@ export function setSoundChoice(name) {
   localStorage.setItem(STORAGE_KEYS.choice, name);
 }
 
+export function getSoundVolume() {
+  const val = localStorage.getItem(STORAGE_KEYS.volume);
+  return val === null ? 75 : parseInt(val, 10);
+}
+
+export function setSoundVolume(volume) {
+  localStorage.setItem(STORAGE_KEYS.volume, String(volume));
+}
+
 // ── Sound generators ────────────────────────────────────
 
-function playDroplet(ctx) {
+function playDroplet(ctx, dest) {
   const t = ctx.currentTime;
   const drop = ctx.createOscillator();
   const dropGain = ctx.createGain();
@@ -56,7 +66,7 @@ function playDroplet(ctx) {
   drop.frequency.exponentialRampToValueAtTime(300, t + 0.06);
   dropGain.gain.setValueAtTime(0.4, t);
   dropGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-  drop.connect(dropGain).connect(ctx.destination);
+  drop.connect(dropGain).connect(dest);
   drop.start(t);
   drop.stop(t + 0.1);
   const ripple = ctx.createOscillator();
@@ -67,13 +77,13 @@ function playDroplet(ctx) {
   ripGain.gain.setValueAtTime(0.001, t);
   ripGain.gain.linearRampToValueAtTime(0.12, t + 0.05);
   ripGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-  ripple.connect(ripGain).connect(ctx.destination);
+  ripple.connect(ripGain).connect(dest);
   ripple.start(t + 0.04);
   ripple.stop(t + 0.25);
   return 350;
 }
 
-function playBirdsong(ctx) {
+function playBirdsong(ctx, dest) {
   const t = ctx.currentTime;
   // First chirp — quick ascending trill
   const c1 = ctx.createOscillator();
@@ -84,7 +94,7 @@ function playBirdsong(ctx) {
   c1.frequency.exponentialRampToValueAtTime(2200, t + 0.08);
   g1.gain.setValueAtTime(0.3, t);
   g1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-  c1.connect(g1).connect(ctx.destination);
+  c1.connect(g1).connect(dest);
   c1.start(t);
   c1.stop(t + 0.1);
   // Second chirp — higher reply
@@ -96,13 +106,13 @@ function playBirdsong(ctx) {
   c2.frequency.exponentialRampToValueAtTime(2600, t + 0.2);
   g2.gain.setValueAtTime(0.25, t + 0.12);
   g2.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-  c2.connect(g2).connect(ctx.destination);
+  c2.connect(g2).connect(dest);
   c2.start(t + 0.12);
   c2.stop(t + 0.25);
   return 350;
 }
 
-function playThunder(ctx) {
+function playThunder(ctx, dest) {
   const t = ctx.currentTime;
   // Low rumble via filtered noise
   const bufferSize = ctx.sampleRate * 0.6;
@@ -120,7 +130,7 @@ function playThunder(ctx) {
   gain.gain.setValueAtTime(0.5, t);
   gain.gain.linearRampToValueAtTime(0.6, t + 0.05);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-  noise.connect(filter).connect(gain).connect(ctx.destination);
+  noise.connect(filter).connect(gain).connect(dest);
   noise.start(t);
   noise.stop(t + 0.6);
   // Subtle crack at the start
@@ -131,13 +141,13 @@ function playThunder(ctx) {
   crack.frequency.exponentialRampToValueAtTime(30, t + 0.15);
   cGain.gain.setValueAtTime(0.2, t);
   cGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-  crack.connect(cGain).connect(ctx.destination);
+  crack.connect(cGain).connect(dest);
   crack.start(t);
   crack.stop(t + 0.15);
   return 700;
 }
 
-function playMarimba(ctx) {
+function playMarimba(ctx, dest) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -146,7 +156,7 @@ function playMarimba(ctx) {
   osc.frequency.exponentialRampToValueAtTime(660, t + 0.15);
   gain.gain.setValueAtTime(0.5, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(dest);
   osc.start(t);
   osc.stop(t + 0.3);
   const osc2 = ctx.createOscillator();
@@ -156,13 +166,13 @@ function playMarimba(ctx) {
   osc2.frequency.exponentialRampToValueAtTime(1320, t + 0.1);
   gain2.gain.setValueAtTime(0.15, t);
   gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-  osc2.connect(gain2).connect(ctx.destination);
+  osc2.connect(gain2).connect(dest);
   osc2.start(t);
   osc2.stop(t + 0.15);
   return 400;
 }
 
-function playHarp(ctx) {
+function playHarp(ctx, dest) {
   const t = ctx.currentTime;
   // Fundamental string pluck
   const osc = ctx.createOscillator();
@@ -171,7 +181,7 @@ function playHarp(ctx) {
   osc.frequency.setValueAtTime(523, t); // C5
   gain.gain.setValueAtTime(0.35, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(dest);
   osc.start(t);
   osc.stop(t + 0.6);
   // Shimmer overtone
@@ -181,7 +191,7 @@ function playHarp(ctx) {
   osc2.frequency.setValueAtTime(1046, t); // C6
   g2.gain.setValueAtTime(0.15, t);
   g2.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-  osc2.connect(g2).connect(ctx.destination);
+  osc2.connect(g2).connect(dest);
   osc2.start(t);
   osc2.stop(t + 0.4);
   // Third partial — airy
@@ -191,13 +201,13 @@ function playHarp(ctx) {
   osc3.frequency.setValueAtTime(1568, t); // G6
   g3.gain.setValueAtTime(0.06, t);
   g3.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-  osc3.connect(g3).connect(ctx.destination);
+  osc3.connect(g3).connect(dest);
   osc3.start(t);
   osc3.stop(t + 0.3);
   return 700;
 }
 
-function playPiano(ctx) {
+function playPiano(ctx, dest) {
   const t = ctx.currentTime;
   // C major chord: C4, E4, G4
   const notes = [261.6, 329.6, 392.0];
@@ -208,7 +218,7 @@ function playPiano(ctx) {
     osc.frequency.setValueAtTime(freq, t);
     gain.gain.setValueAtTime(0.25, t + i * 0.015);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(dest);
     osc.start(t + i * 0.015);
     osc.stop(t + 0.5);
     // Add harmonic richness
@@ -218,14 +228,14 @@ function playPiano(ctx) {
     h.frequency.setValueAtTime(freq * 2, t);
     hg.gain.setValueAtTime(0.06, t + i * 0.015);
     hg.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    h.connect(hg).connect(ctx.destination);
+    h.connect(hg).connect(dest);
     h.start(t + i * 0.015);
     h.stop(t + 0.3);
   });
   return 600;
 }
 
-function playGlass(ctx) {
+function playGlass(ctx, dest) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -234,7 +244,7 @@ function playGlass(ctx) {
   osc.frequency.exponentialRampToValueAtTime(1800, t + 0.4);
   gain.gain.setValueAtTime(0.35, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(dest);
   osc.start(t);
   osc.stop(t + 0.5);
   const osc2 = ctx.createOscillator();
@@ -244,13 +254,13 @@ function playGlass(ctx) {
   osc2.frequency.exponentialRampToValueAtTime(2700, t + 0.3);
   gain2.gain.setValueAtTime(0.12, t);
   gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-  osc2.connect(gain2).connect(ctx.destination);
+  osc2.connect(gain2).connect(dest);
   osc2.start(t);
   osc2.stop(t + 0.35);
   return 600;
 }
 
-function playSwoosh(ctx) {
+function playSwoosh(ctx, dest) {
   const t = ctx.currentTime;
   const sweep = ctx.createOscillator();
   const sweepGain = ctx.createGain();
@@ -259,7 +269,7 @@ function playSwoosh(ctx) {
   sweep.frequency.exponentialRampToValueAtTime(1200, t + 0.08);
   sweepGain.gain.setValueAtTime(0.15, t);
   sweepGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-  sweep.connect(sweepGain).connect(ctx.destination);
+  sweep.connect(sweepGain).connect(dest);
   sweep.start(t);
   sweep.stop(t + 0.12);
   const ping = ctx.createOscillator();
@@ -270,13 +280,13 @@ function playSwoosh(ctx) {
   pingGain.gain.setValueAtTime(0.001, t);
   pingGain.gain.linearRampToValueAtTime(0.3, t + 0.08);
   pingGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-  ping.connect(pingGain).connect(ctx.destination);
+  ping.connect(pingGain).connect(dest);
   ping.start(t + 0.06);
   ping.stop(t + 0.3);
   return 400;
 }
 
-function playCoin(ctx) {
+function playCoin(ctx, dest) {
   const t = ctx.currentTime;
   // First blip — lower
   const o1 = ctx.createOscillator();
@@ -285,7 +295,7 @@ function playCoin(ctx) {
   o1.frequency.setValueAtTime(988, t); // B5
   g1.gain.setValueAtTime(0.25, t);
   g1.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-  o1.connect(g1).connect(ctx.destination);
+  o1.connect(g1).connect(dest);
   o1.start(t);
   o1.stop(t + 0.08);
   // Second blip — higher (classic coin)
@@ -295,13 +305,13 @@ function playCoin(ctx) {
   o2.frequency.setValueAtTime(1319, t + 0.07); // E6
   g2.gain.setValueAtTime(0.25, t + 0.07);
   g2.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-  o2.connect(g2).connect(ctx.destination);
+  o2.connect(g2).connect(dest);
   o2.start(t + 0.07);
   o2.stop(t + 0.22);
   return 300;
 }
 
-function playLaser(ctx) {
+function playLaser(ctx, dest) {
   const t = ctx.currentTime;
   // Descending zap
   const osc = ctx.createOscillator();
@@ -311,7 +321,7 @@ function playLaser(ctx) {
   osc.frequency.exponentialRampToValueAtTime(100, t + 0.15);
   gain.gain.setValueAtTime(0.2, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(dest);
   osc.start(t);
   osc.stop(t + 0.18);
   // Bright overtone flash
@@ -322,13 +332,13 @@ function playLaser(ctx) {
   osc2.frequency.exponentialRampToValueAtTime(200, t + 0.1);
   g2.gain.setValueAtTime(0.1, t);
   g2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-  osc2.connect(g2).connect(ctx.destination);
+  osc2.connect(g2).connect(dest);
   osc2.start(t);
   osc2.stop(t + 0.1);
   return 250;
 }
 
-function playChime(ctx) {
+function playChime(ctx, dest) {
   const t = ctx.currentTime;
   // Three ascending notes like wind chimes
   const freqs = [880, 1109, 1319]; // A5, C#6, E6
@@ -340,14 +350,14 @@ function playChime(ctx) {
     gain.gain.setValueAtTime(0.001, t);
     gain.gain.linearRampToValueAtTime(0.25, t + i * 0.1 + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.35);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(dest);
     osc.start(t + i * 0.1);
     osc.stop(t + i * 0.1 + 0.35);
   });
   return 600;
 }
 
-function playGong(ctx) {
+function playGong(ctx, dest) {
   const t = ctx.currentTime;
   // Deep fundamental
   const osc = ctx.createOscillator();
@@ -357,7 +367,7 @@ function playGong(ctx) {
   osc.frequency.exponentialRampToValueAtTime(100, t + 0.8);
   gain.gain.setValueAtTime(0.4, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(dest);
   osc.start(t);
   osc.stop(t + 0.9);
   // Mid resonance
@@ -368,7 +378,7 @@ function playGong(ctx) {
   osc2.frequency.exponentialRampToValueAtTime(200, t + 0.6);
   g2.gain.setValueAtTime(0.2, t);
   g2.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-  osc2.connect(g2).connect(ctx.destination);
+  osc2.connect(g2).connect(dest);
   osc2.start(t);
   osc2.stop(t + 0.7);
   // Metallic shimmer
@@ -379,7 +389,7 @@ function playGong(ctx) {
   osc3.frequency.exponentialRampToValueAtTime(520, t + 0.4);
   g3.gain.setValueAtTime(0.08, t);
   g3.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-  osc3.connect(g3).connect(ctx.destination);
+  osc3.connect(g3).connect(dest);
   osc3.start(t);
   osc3.stop(t + 0.5);
   return 1000;
@@ -413,8 +423,15 @@ export function playConfirmation() {
 export function previewSound(name) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const volume = getSoundVolume() / 100;
+
+    // Create a master gain node for volume control
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = volume;
+    masterGain.connect(ctx.destination);
+
     const generator = GENERATORS[name] || GENERATORS.Droplet;
-    const duration = generator(ctx);
+    const duration = generator(ctx, masterGain);
     setTimeout(() => ctx.close(), duration);
   } catch {
     // AudioContext not available
