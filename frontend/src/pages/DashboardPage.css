@@ -265,6 +265,59 @@
 }
 
 /* ── Run card v2 (TestRunsPage redesign) ── */
+/* ── Run Sections ── */
+.run-section {
+  margin-bottom: 32px;
+}
+
+.run-section:last-child {
+  margin-bottom: 0;
+}
+
+.run-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+  letter-spacing: -0.2px;
+}
+
+.run-section-title svg {
+  color: var(--sidebar-bg);
+  opacity: 0.7;
+}
+
+.run-section-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-left: 4px;
+}
+
+/* Date groups for completed runs */
+.run-date-group {
+  margin-bottom: 20px;
+}
+
+.run-date-group:last-child {
+  margin-bottom: 0;
+}
+
+.run-date-header {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 8px;
+}
+
 .run-list-v2 {
   display: flex;
   flex-direction: column;
@@ -298,6 +351,64 @@
   margin-right: 16px;
   background: var(--status-retest-bg);
   border-radius: var(--radius-md);
+}
+
+.run-card-v2--locked {
+  opacity: 0.85;
+}
+
+.run-card-v2--locked .run-card-v2-icon {
+  background: var(--status-untested-bg);
+}
+
+/* Compact style for completed runs */
+.run-card-v2--compact {
+  text-decoration: none;
+  padding: 12px 16px;
+  min-height: auto;
+}
+
+.run-card-v2--compact .run-card-v2-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.run-card-v2--compact .run-card-v2-name {
+  font-size: 14px;
+}
+
+.run-card-v2--compact .run-card-v2-date {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.run-card-v2--compact:hover {
+  background: var(--bg-subtle);
+}
+
+.run-card-v2-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.run-card-v2-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--status-untested-bg);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.run-card-v2-locked-badge svg {
+  opacity: 0.7;
 }
 
 .run-card-v2-body {
