@@ -110,7 +110,7 @@ export default function TestRunsPage() {
 
   useEffect(() => {
     runService.getAll()
-      .then(setRuns)
+      .then((data) => setRuns(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

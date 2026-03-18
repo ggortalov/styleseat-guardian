@@ -16,14 +16,14 @@ from app import create_app, db
 from app.models import User, Project, Suite, Section, TestCase, TestRun, TestResult, ResultHistory
 
 # CircleCI config
-CIRCLECI_TOKEN = 'CCIPAT_viPDJFUPE6SkpK28xtBzF_b2b0141bff75f1c1b1d4a78adba9ae68369fb199'
+CIRCLECI_TOKEN = 'REDACTED_CIRCLECI_TOKEN'
 PROJECT_SLUG = 'gh/styleseat/cypress'
 CIRCLECI_BASE_URL = 'https://circleci.com/api/v2'
 
 # TestRail config
 TESTRAIL_BASE = "https://styleseat.testrail.io/index.php?/api/v2"
 TESTRAIL_EMAIL = "ggortalov@styleseat.com"
-TESTRAIL_PASSWORD = "Nikolay2013@home"
+TESTRAIL_PASSWORD = "REDACTED_PASSWORD"
 TESTRAIL_PROJECT_ID = 23
 
 TESTRAIL_AUTH_HEADER = "Basic " + base64.b64encode(
