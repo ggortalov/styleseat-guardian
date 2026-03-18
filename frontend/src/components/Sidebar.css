@@ -23,7 +23,7 @@
 
 /* ============ Header / Brand ============ */
 .sidebar-header {
-  padding: 20px 20px 18px;
+  padding: 24px 20px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   align-items: center;
@@ -42,7 +42,7 @@
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
   text-decoration: none;
 }
@@ -69,20 +69,19 @@
 .sidebar-logo-name {
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
   line-height: 1.2;
 }
 
 .sidebar-logo-accent {
-  font-weight: 300;
-  opacity: 0.65;
+  font-weight: 400;
+  opacity: 0.7;
   display: block;
-  font-size: 10px;
-  letter-spacing: 5.5px;
+  font-size: 11px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
-  margin-top: 4px;
 }
 
 /* ============ Collapse Button ============ */
@@ -673,7 +672,6 @@
 }
 
 .sidebar-user {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -946,31 +944,4 @@
 
 @keyframes avatarSpin {
   to { transform: rotate(360deg); }
-}
-
-.sidebar-upload-error {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #d32f2f;
-  color: #fff;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  cursor: pointer;
-  z-index: 200;
-  animation: fadeIn 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.sidebar-upload-error::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #d32f2f;
 }

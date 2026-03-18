@@ -73,7 +73,6 @@ class Suite(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    cypress_path = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sections = db.relationship("Section", backref="suite", cascade="all, delete-orphan", lazy=True)
@@ -84,7 +83,6 @@ class Suite(db.Model):
             "project_id": self.project_id,
             "name": self.name,
             "description": self.description,
-            "cypress_path": self.cypress_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -169,7 +167,6 @@ class TestRun(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-    run_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
     is_completed = db.Column(db.Boolean, default=False)
@@ -185,7 +182,6 @@ class TestRun(db.Model):
             "name": self.name,
             "description": self.description,
             "created_by": self.created_by,
-            "run_date": self.run_date.isoformat() if self.run_date else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "is_completed": self.is_completed,
@@ -217,7 +213,7 @@ class TestResult(db.Model):
             return []
         try:
             return json.loads(self.artifacts)
-        except (ValueError, json.JSONDecodeError):
+        except:
             return []
 
     def to_dict(self):
@@ -255,7 +251,7 @@ class ResultHistory(db.Model):
             return []
         try:
             return json.loads(self.artifacts)
-        except (ValueError, json.JSONDecodeError):
+        except:
             return []
 
     def to_dict(self):

@@ -212,6 +212,7 @@
   border-bottom: 1px solid var(--border-light);
   transition: background var(--transition);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  cursor: pointer;
 }
 
 .run-case-row:last-child {
@@ -379,6 +380,22 @@
   flex-shrink: 0;
 }
 
+/* ── Locked status ── */
+.status-dropdown--locked .status-dropdown-trigger {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.status-dropdown--locked .status-dropdown-trigger:hover {
+  box-shadow: none;
+}
+
+.status-dropdown-lock {
+  margin-left: 2px;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
 /* ── Bulk selection ── */
 .run-checkbox {
   width: 16px;
@@ -394,6 +411,21 @@
 
 .run-case-row--selected:hover {
   background: rgba(26, 58, 42, 0.1);
+}
+
+.run-case-row--highlight {
+  animation: highlightRow 2s ease;
+}
+
+@keyframes highlightRow {
+  0%, 40% {
+    background: rgba(26, 58, 42, 0.25);
+    box-shadow: inset 0 0 0 2px var(--sidebar-bg);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
 }
 
 .run-select-all {
