@@ -1,4 +1,8 @@
-/make test file te# CircleCI Test Results Import Skill
+---
+allowed-tools: Bash(*)
+---
+
+# CircleCI Test Results Import Skill
 
 Import test results from a CircleCI workflow URL into the Regression Guard system. Uses Cypress repo as source of truth for test definitions.
 
@@ -49,9 +53,9 @@ WORKFLOW_ID = '<REPLACE_WITH_WORKFLOW_ID>'
 headers = {'Circle-Token': TOKEN, 'Content-Type': 'application/json'}
 
 # Regex to extract test titles from Cypress files
-# Handles: it("title"), it([Tag.X], "title"), it.only("title"), escaped quotes (doesn\'t)
+# Handles: it("title"), it([Tag.X], "title"), it.only("title"), itStage("title"), escaped quotes (doesn\'t)
 # Works with double quotes, single quotes, and template literals
-IT_PATTERN = r'it(?:\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
+IT_PATTERN = r'it(?:Stage|\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
 
 # Regex to extract describe() title from Cypress files (first describe block)
 DESCRIBE_PATTERN = r'describe(?:\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
@@ -172,16 +176,19 @@ jobs = response.json()
 
 print(f'Found {len(jobs.get("items", []))} jobs:')
 job_numbers = []
+job_info = {}  # job_num → {name, status}
 workflow_name = None
 for job in jobs.get('items', []):
     print(f"  - Job {job.get('job_number')}: {job.get('name')} ({job.get('status')})")
     job_numbers.append(job.get('job_number'))
+    job_info[job.get('job_number')] = {'name': job.get('name', ''), 'status': job.get('status', '')}
     if not workflow_name:
         workflow_name = re.sub(r'_\d+$', '', job.get('name', ''))
 
 print(f"\nWorkflow: {workflow_name}")
 
 all_ci_tests, job_artifacts, failed_files = [], {}, set()
+failed_jobs = []  # Jobs that failed/errored without producing a report.json
 for job_num in job_numbers:
     artifacts = requests.get(f'{BASE_URL}/project/{PROJECT_SLUG}/{job_num}/artifacts', headers=headers, timeout=30).json().get('items', [])
     job_artifacts[job_num] = [{'name': a.get('path', '').split('/')[-1], 'url': a.get('url'), 'path': a.get('path')} for a in artifacts if '.png' in a.get('path', '') or '.mp4' in a.get('path', '')]
@@ -194,8 +201,21 @@ for job_num in job_numbers:
             if 'uncaught error' in t['title'].lower() and t.get('file'):
                 failed_files.add(t['file'])
         print(f"Job {job_num}: {len(tests)} tests")
+    else:
+        ji = job_info[job_num]
+        if ji['status'] in ('failed', 'error', 'infrastructure_fail', 'timedout'):
+            failed_jobs.append(ji)
+            print(f"Job {job_num}: NO report.json (job {ji['status']})")
+        else:
+            print(f"Job {job_num}: no report.json (status: {ji['status']})")
 
 print(f"\nCircleCI: {len(all_ci_tests)} tests  |  States: {dict(Counter(t['state'] for t in all_ci_tests))}")
+if failed_jobs:
+    total_jobs = len(job_numbers)
+    print(f"\n⚠ WARNING: {len(failed_jobs)}/{total_jobs} job(s) failed without producing test results:")
+    for fj in failed_jobs:
+        print(f"  - {fj['name']} ({fj['status']})")
+    print(f"  Tests from these jobs will be marked as Untested.")
 if failed_files:
     print(f"Files that failed to load: {len(failed_files)}")
     for f in failed_files:
@@ -252,8 +272,11 @@ with app.app_context():
     existing_cases = {normalize(c.title): c for c in TestCase.query.filter_by(suite_id=suite.id).all()}
 
     # Create test run
+    run_desc = f'Imported from CircleCI workflow {WORKFLOW_ID[:8]}'
+    if failed_jobs:
+        run_desc += f'\n⚠ {len(failed_jobs)}/{len(job_numbers)} job(s) failed without results: ' + ', '.join(fj["name"] for fj in failed_jobs)
     run = TestRun(project_id=project.id, suite_id=suite.id, name=f'cronschedule_{workflow_name}',
-                  description=f'Imported from CircleCI workflow {WORKFLOW_ID[:8]}')
+                  description=run_desc)
     db.session.add(run)
     db.session.flush()
 
@@ -331,7 +354,10 @@ with app.app_context():
                     failed_tests.append(title)
             elif not is_blocked_file:
                 status = 'Untested'
-                error_msg = f"Test not found in CircleCI results.\nSource: {file_path}"
+                if failed_jobs:
+                    error_msg = f"Test not found in CircleCI results — {len(failed_jobs)} job(s) failed without producing results.\nSource: {file_path}"
+                else:
+                    error_msg = f"Test not found in CircleCI results.\nSource: {file_path}"
                 artifacts_json = None
                 untested_tests.append(title)
 
@@ -394,6 +420,10 @@ with app.app_context():
     print(f"IMPORT COMPLETE")
     print(f"{'='*60}")
     print(f"Run: {run.name}  |  Suite: {suite.name}")
+    if failed_jobs:
+        print(f"\n  ⚠ INCOMPLETE RUN: {len(failed_jobs)}/{len(job_numbers)} job(s) failed without results")
+        for fj in failed_jobs:
+            print(f"    - {fj['name']} ({fj['status']})")
     print(f"\n  Passed:   {results_created['Passed']}")
     print(f"  Failed:   {results_created['Failed']}")
     print(f"  Blocked:  {results_created['Blocked']}")
@@ -466,6 +496,7 @@ The `it()` regex handles these Cypress patterns:
 - `it("title", ...)` — standard
 - `it([Tag.CRITICAL], "title", ...)` — tag array as first arg
 - `it.only("title", ...)` / `it.skip("title", ...)` — mocha modifiers
+- `itStage("title", ...)` — custom wrapper for staging-only tests
 - `it("doesn\'t break", ...)` — escaped quotes in title
 - Single quotes, double quotes, and template literals
 - Titles with or without case ID prefix (`C12345 title` or just `title`)
