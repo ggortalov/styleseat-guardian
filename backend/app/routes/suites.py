@@ -31,7 +31,8 @@ def create_suite(project_id):
     if not name:
         return jsonify({"error": "Suite name is required"}), 400
 
-    suite = Suite(project_id=project_id, name=name, description=data.get("description", ""))
+    suite = Suite(project_id=project_id, name=name, description=data.get("description", ""),
+                  cypress_path=data.get("cypress_path"))
     db.session.add(suite)
     db.session.commit()
     return jsonify(suite.to_dict()), 201
@@ -56,6 +57,8 @@ def update_suite(suite_id):
         suite.name = data["name"].strip()
     if "description" in data:
         suite.description = data["description"]
+    if "cypress_path" in data:
+        suite.cypress_path = data["cypress_path"]
     db.session.commit()
     return jsonify(suite.to_dict()), 200
 

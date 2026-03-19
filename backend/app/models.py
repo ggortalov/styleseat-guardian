@@ -73,6 +73,7 @@ class Suite(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
+    cypress_path = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sections = db.relationship("Section", backref="suite", cascade="all, delete-orphan", lazy=True)
@@ -83,6 +84,7 @@ class Suite(db.Model):
             "project_id": self.project_id,
             "name": self.name,
             "description": self.description,
+            "cypress_path": self.cypress_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

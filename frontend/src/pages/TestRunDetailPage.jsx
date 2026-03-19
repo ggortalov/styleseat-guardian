@@ -88,7 +88,7 @@ function groupBySection(results) {
   for (const r of results) {
     const key = r.section_name || 'Uncategorized';
     if (!map[key]) {
-      map[key] = { name: key, results: [] };
+      map[key] = { name: key, describeTitle: r.describe_title || null, results: [] };
       groups.push(map[key]);
     }
     map[key].results.push(r);
@@ -345,11 +345,25 @@ export default function TestRunDetailPage() {
           <div className="run-section-tree">
             {sections.map((sec) => (
               <div key={sec.name} className="run-section-group">
-                <div className="run-section-header" onClick={() => toggleSection(sec.name)}>
+                <div
+                  className="run-section-header"
+                  onClick={(e) => {
+                    // Only toggle if user clicked the chevron, count badge, or empty header area — not the selectable text
+                    const tag = e.target.closest('.run-section-name, .run-section-file, .run-section-info');
+                    if (!tag) toggleSection(sec.name);
+                  }}
+                >
                   <svg className={`run-section-chevron ${collapsed[sec.name] ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
-                  <span className="run-section-name">{sec.name}</span>
+                  {sec.describeTitle ? (
+                    <span className="run-section-info">
+                      <span className="run-section-name">{sec.describeTitle}</span>
+                      <span className="run-section-file">{sec.name}</span>
+                    </span>
+                  ) : (
+                    <span className="run-section-name">{sec.name}</span>
+                  )}
                   <span className="run-section-count">{sec.results.length}</span>
                 </div>
                 {!collapsed[sec.name] && (
@@ -375,8 +389,12 @@ export default function TestRunDetailPage() {
                         {selectionMode && (
                           <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                         )}
-                        <span className="run-case-id">C{String(r.case_id).padStart(7, '0')}</span>
-                        <span className="run-case-title">{r.case_title}</span>
+                        <span className="run-case-id">
+                          {r.case_title.match(/^(C\d+)/) ? r.case_title.match(/^(C\d+)/)[1] : `C${String(r.case_id).padStart(7, '0')}`}
+                        </span>
+                        <span className="run-case-title">
+                          {r.case_title.replace(/^C\d+\s*/, '')}
+                        </span>
                         <span className="run-case-tested-by">
                           <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>
                             {r.tested_by_name || 'Automation'}
