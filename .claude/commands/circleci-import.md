@@ -2,7 +2,7 @@
 allowed-tools: Bash(*)
 ---
 
-/make test file te# CircleCI Test Results Import Skill
+# CircleCI Test Results Import Skill
 
 Import test results from a CircleCI workflow URL into the Regression Guard system. Uses Cypress repo as source of truth for test definitions.
 
