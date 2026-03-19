@@ -48,7 +48,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       .then((allRuns) => setRuns(
         allRuns
           .filter(r => !r.is_locked)
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .sort((a, b) => new Date(b.run_date || b.created_at) - new Date(a.run_date || a.created_at))
       ))
       .catch(() => {});
   };
@@ -223,8 +223,8 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
                     <polygon points="10 8 16 12 10 16 10 8" />
                   </svg>
                   <span className="sidebar-suite-item-name">
-                    {r.suite_name || r.name}
-                    {r.created_at && <span className="sidebar-run-date">{new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    {r.name?.split(' · ')[0] || r.suite_name || r.name}
+                    {(r.run_date || r.created_at) && <span className="sidebar-run-date">{new Date(r.run_date || r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                   </span>
                   <span className="sidebar-suite-item-count">{r.stats?.total || 0}</span>
                 </NavLink>

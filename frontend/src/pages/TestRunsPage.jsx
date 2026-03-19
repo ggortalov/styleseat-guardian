@@ -26,7 +26,7 @@ function RunCard({ run }) {
     return (
       <Link to={`/runs/${run.id}`} className="run-card-v2 run-card-v2--compact">
         <div className="run-card-v2-body">
-          <span className="run-card-v2-name">{run.suite_name}</span>
+          <span className="run-card-v2-name">{run.name?.split(' · ')[0] || run.suite_name}</span>
           <span className="run-card-v2-date">
             {run.completed_at && new Date(run.completed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
           </span>
@@ -49,7 +49,7 @@ function RunCard({ run }) {
 
       <div className="run-card-v2-body">
         <div className="run-card-v2-header">
-          <Link to={`/runs/${run.id}`} className="run-card-v2-name">{run.suite_name}</Link>
+          <Link to={`/runs/${run.id}`} className="run-card-v2-name">{run.name?.split(' · ')[0] || run.suite_name}</Link>
         </div>
         <div className="run-card-v2-meta">
           {total} test{total !== 1 ? 's' : ''} &middot; {new Date(run.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
