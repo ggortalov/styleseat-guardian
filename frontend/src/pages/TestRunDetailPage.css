@@ -197,12 +197,10 @@
 
 .run-section-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 14px 18px;
   background: var(--bg-subtle);
-  cursor: pointer;
-  user-select: none;
   transition: background var(--transition);
 }
 
@@ -210,14 +208,27 @@
   background: var(--border-light);
 }
 
+.run-section-header:hover .run-section-chevron {
+  color: var(--text-primary);
+}
+
 .run-section-chevron {
   flex-shrink: 0;
   color: var(--text-muted);
   transition: transform 0.2s ease;
+  margin-top: 3px;
+  cursor: pointer;
 }
 
 .run-section-chevron.open {
   transform: rotate(90deg);
+}
+
+.run-section-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .run-section-name {
@@ -225,6 +236,17 @@
   font-weight: 700;
   color: #111;
   letter-spacing: -0.2px;
+  user-select: text;
+  cursor: text;
+}
+
+.run-section-file {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  user-select: text;
+  cursor: text;
 }
 
 .run-section-count {
@@ -236,6 +258,8 @@
   padding: 2px 9px;
   min-width: 22px;
   text-align: center;
+  margin-top: 3px;
+  cursor: pointer;
 }
 
 /* ── Case rows inside sections ── */
@@ -318,21 +342,18 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
+  border: 1.5px solid var(--border-light);
+  background: var(--bg-white);
+  color: var(--text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
-  opacity: 0;
+  opacity: 1;
   transition: all var(--transition);
 }
 
-.run-case-row:hover .run-case-copy {
-  opacity: 1;
-}
-
 .run-case-copy:hover {
-  background: var(--border-light);
+  background: var(--primary-light);
+  border-color: var(--sidebar-bg);
   color: var(--sidebar-bg);
 }
 

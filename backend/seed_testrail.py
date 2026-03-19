@@ -124,6 +124,25 @@ def main():
 
     from app import create_app, db
     from app.models import User, Project, Suite, Section, TestCase
+    from app.suite_utils import cypress_path_to_name
+
+    # Map known TestRail suite names to cypress paths
+    TESTRAIL_PATH_MAP = {
+        'PO': 'cypress/e2e/p0/',
+        'P1 API': 'cypress/e2e/p1/api/',
+        'P1 Client': 'cypress/e2e/p1/client/',
+        'P1 Common': 'cypress/e2e/p1/common/',
+        'P1 Pro': 'cypress/e2e/p1/pro/',
+        'P1 Search': 'cypress/e2e/p1/search/',
+        'P3 - Admin': 'cypress/e2e/p3/',
+        'PROD': 'cypress/e2e/prod/',
+        'Pre Prod': 'cypress/e2e/preprod/',
+        'P0 Devices': 'cypress/e2e/devices/p0/',
+        'P1 Devices': 'cypress/e2e/devices/p1/',
+        'AB Test': 'cypress/e2e/abtest/',
+        'Communications': 'cypress/e2e/communications/',
+        'Events Mobile': 'cypress/e2e/events/',
+    }
 
     app = create_app()
 
@@ -192,6 +211,7 @@ def main():
                 project_id=project.id,
                 name=suite_name,
                 description=tr_suite.get("description"),
+                cypress_path=TESTRAIL_PATH_MAP.get(suite_name),
             )
             db.session.add(suite)
             db.session.flush()
