@@ -20,7 +20,7 @@ npm run dev             # Starts on http://localhost:5173
 cd frontend && npm run build
 ```
 
-**Demo credentials:** `demo` / `demo123`
+**Demo credentials:** `demo` / `demo123` or `Gennady` / `demo123`
 
 ## Architecture
 
@@ -364,7 +364,7 @@ Check that both servers started successfully.
 | Test Cases | 2,608 | Extracted from Cypress `it()` blocks + manual Devices cases |
 | Test Runs | 0 | Use `/circleci-import` to import runs |
 
-**Login:** `demo` / `demo123`
+**Login:** `demo` / `demo123` or `Gennady` / `demo123`
 **URL:** http://localhost:5173
 
 ## Dependencies
