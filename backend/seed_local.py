@@ -43,7 +43,7 @@ def main():
             user = User.query.filter_by(username=u_data["username"]).first()
             if not user:
                 user = User(username=u_data["username"], email=u_data["email"])
-                user.set_password("demo123")
+                user.set_password("DemoStyleSeat22@")
                 db.session.add(user)
                 db.session.flush()
                 print(f"Created user: {user.username} (id={user.id})")
@@ -209,7 +209,7 @@ def main():
         print(f"  Sections:   {len(section_map)}")
         print(f"  Test Cases: {case_count}")
         print(f"  Test Runs:  {runs_created}")
-        print(f"  Credentials: demo / demo123, Gennady / demo123")
+        print(f"  Credentials: demo / DemoStyleSeat22@, Gennady / DemoStyleSeat22@")
         print("=" * 50)
 
 

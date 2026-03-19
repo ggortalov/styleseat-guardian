@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone, timedelta
 
 from flask import Blueprint, request, jsonify
@@ -16,10 +17,9 @@ def is_result_locked(result):
     """Check if a result is locked (tested more than LOCK_HOURS ago)."""
     if not result.tested_at:
         return False
-    # Use naive datetime for comparison (database stores naive datetimes)
-    lock_threshold = datetime.utcnow() - timedelta(hours=LOCK_HOURS)
-    # Handle both naive and aware datetimes
-    tested_at = result.tested_at.replace(tzinfo=None) if result.tested_at.tzinfo else result.tested_at
+    lock_threshold = datetime.now(timezone.utc) - timedelta(hours=LOCK_HOURS)
+    # Ensure both sides are comparable (handle naive datetimes from DB)
+    tested_at = result.tested_at.replace(tzinfo=timezone.utc) if not result.tested_at.tzinfo else result.tested_at
     return tested_at < lock_threshold
 
 
@@ -29,11 +29,11 @@ def is_run_locked(run_id):
     if not results:
         return False
     # Run is locked only if ALL results are locked (all tested > 24h ago)
-    lock_threshold = datetime.utcnow() - timedelta(hours=LOCK_HOURS)
+    lock_threshold = datetime.now(timezone.utc) - timedelta(hours=LOCK_HOURS)
     for r in results:
         if not r.tested_at:
             return False  # Untested result means run is still open
-        tested_at = r.tested_at.replace(tzinfo=None) if r.tested_at.tzinfo else r.tested_at
+        tested_at = r.tested_at.replace(tzinfo=timezone.utc) if not r.tested_at.tzinfo else r.tested_at
         if tested_at >= lock_threshold:
             return False  # Result tested within 24h means run is still open
     return True
@@ -276,7 +276,6 @@ def update_result(result_id):
     if "error_message" in data:
         result.error_message = data["error_message"]
     if "artifacts" in data:
-        import json
         result.artifacts = json.dumps(data["artifacts"]) if isinstance(data["artifacts"], list) else data["artifacts"]
     if "circleci_job_id" in data:
         result.circleci_job_id = data["circleci_job_id"]
@@ -285,7 +284,6 @@ def update_result(result_id):
     result.tested_at = datetime.now(timezone.utc)
 
     # Record history
-    import json
     history = ResultHistory(
         result_id=result.id,
         status=result.status,
@@ -364,7 +362,6 @@ def fetch_circleci_for_result(result_id):
     circleci_data = circleci_service.fetch_failure_data(job_number)
 
     # Update result
-    import json
     result.circleci_job_id = str(job_number)
     if circleci_data.get("error_message"):
         result.error_message = circleci_data["error_message"]

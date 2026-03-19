@@ -169,7 +169,7 @@ export default function TestExecutionPage() {
             {tc.preconditions && (
               <div className="exec-section">
                 <h4>Preconditions</h4>
-                <div className="exec-html-content" dangerouslySetInnerHTML={{ __html: tc.preconditions }} />
+                <pre className="exec-text-content">{tc.preconditions}</pre>
               </div>
             )}
 
@@ -196,7 +196,7 @@ export default function TestExecutionPage() {
             {tc.expected_result && (
               <div className="exec-section">
                 <h4>Expected Result</h4>
-                <div className="exec-html-content" dangerouslySetInnerHTML={{ __html: tc.expected_result }} />
+                <pre className="exec-text-content">{tc.expected_result}</pre>
               </div>
             )}
 

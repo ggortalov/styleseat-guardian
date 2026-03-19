@@ -215,7 +215,7 @@ class TestResult(db.Model):
             return []
         try:
             return json.loads(self.artifacts)
-        except:
+        except (ValueError, json.JSONDecodeError):
             return []
 
     def to_dict(self):
@@ -253,7 +253,7 @@ class ResultHistory(db.Model):
             return []
         try:
             return json.loads(self.artifacts)
-        except:
+        except (ValueError, json.JSONDecodeError):
             return []
 
     def to_dict(self):
