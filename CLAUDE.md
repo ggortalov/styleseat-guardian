@@ -456,9 +456,19 @@ New suites are auto-created when a new Cypress folder or CircleCI workflow is en
 
 The fuzzy match report shows each match with its score so you can audit false positives.
 
+Test title extraction supports: `it()`, `it.only()`, `it.skip()`, `itStage()` (staging-only wrapper), tag arrays (`it([Tag.X], "title")`), escaped quotes, and template literals.
+
 ### Handling Failed File Loads
 
 When a Cypress test file fails to load (syntax error, import error, etc.):
 1. CircleCI reports a synthetic "An uncaught error was detected outside of a test" failure
 2. The `/circleci-import` detects this and marks all tests from that file as "Blocked"
 3. The error message from CircleCI is attached to each blocked result
+
+### Handling Failed CircleCI Jobs
+
+When a CircleCI job fails entirely (crash, timeout, infrastructure failure) and produces no `report.json`:
+1. The `/circleci-import` detects jobs with status `failed`/`error`/`infrastructure_fail`/`timedout` that have no report artifact
+2. A warning is printed listing the failed jobs and count (e.g., "2/4 job(s) failed without results")
+3. Cypress tests that would have run in those jobs appear as "Untested" with an error message noting the job failures
+4. The test run description in the database includes the failed job names for visibility in the UI
