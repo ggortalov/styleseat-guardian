@@ -4,6 +4,7 @@
   "description": "StyleSeat Guardian Dashboard",
   "main": "index.js",
   "scripts": {
+    "demo": "bash scripts/start-demo.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
