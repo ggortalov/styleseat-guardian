@@ -30,6 +30,7 @@ dashboard/
 │   ├── app/
 │   │   ├── __init__.py         # App factory: Flask + SQLAlchemy + JWT + CORS init + uploads dir
 │   │   ├── models.py           # 8 SQLAlchemy models (all tables)
+│   │   ├── suite_utils.py      # Shared suite derivation: cypress_path↔name↔workflow mappings
 │   │   └── routes/
 │   │       ├── auth.py         # Register, login, current user, avatar upload/serve (JWT)
 │   │       ├── projects.py     # Project CRUD + stats
@@ -98,7 +99,7 @@ dashboard/
 |-------|-------|-----------|-------|
 | `User` | `users` | id, username, email, password_hash, avatar | `set_password()` / `check_password()` using werkzeug. `avatar` stores uploaded filename |
 | `Project` | `projects` | id, name, description, created_by (FK users) | Cascades delete to suites and runs |
-| `Suite` | `suites` | id, project_id (FK projects), name | Cascades delete to sections |
+| `Suite` | `suites` | id, project_id (FK projects), name, cypress_path (nullable) | Cascades delete to sections. `cypress_path` stores the Cypress repo folder (e.g. `cypress/e2e/p1/common/`) as the canonical suite identifier |
 | `Section` | `sections` | id, suite_id (FK suites), parent_id (FK sections, nullable), name, display_order | Self-referential tree. `parent_id=NULL` = root. Frontend builds tree from flat list |
 | `TestCase` | `test_cases` | id, section_id (FK sections), title, case_type, priority, preconditions, steps (JSON text), expected_result | `steps` is a JSON string: `[{"action": "...", "expected": "..."}]`. Access via `steps_list` property |
 | `TestRun` | `test_runs` | id, project_id (FK projects), suite_id (FK suites), name, is_completed | Creating a run auto-inserts one `TestResult` per case in the suite |
@@ -132,9 +133,9 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/projects/:pid/suites` | List suites in project (with case counts) |
-| POST | `/api/projects/:pid/suites` | Create suite `{name, description}` |
+| POST | `/api/projects/:pid/suites` | Create suite `{name, description, cypress_path?}` |
 | GET | `/api/suites/:id` | Get suite |
-| PUT | `/api/suites/:id` | Update suite |
+| PUT | `/api/suites/:id` | Update suite (accepts `cypress_path`) |
 | DELETE | `/api/suites/:id` | Delete suite (cascades) |
 
 ### Sections (`/api`)
@@ -201,6 +202,7 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 - **Section tree** returned as a flat list — frontend reconstructs the tree using `parent_id`
 - **Test case steps** stored as JSON text in the `steps` column, accessed via `steps_list` property
 - **Avatar upload** accepts JPEG/PNG (max 2MB), stores files in `uploads/avatars/` with user ID prefix, served via `send_from_directory`
+- **Suite path derivation** in `app/suite_utils.py` — single source of truth replacing all hardcoded SUITE_MAP dictionaries. Three functions: `cypress_path_to_name()` (path→display name), `workflow_name_to_cypress_path()` (CircleCI job name→path), `determine_cypress_path()` (file path→suite path). Both `/cypress-sync` and `/circleci-import` import from this module. Suites are matched by `cypress_path` column, not by name
 
 ### Frontend
 - **Service layer**: Each entity has a service file (`services/*.js`) wrapping Axios calls
@@ -423,8 +425,10 @@ The system uses a two-source approach for test management:
 
 ### Suite Mapping
 
-| Cypress Path | Suite Name |
-|--------------|------------|
+Suite names are auto-derived from `cypress_path` by `backend/app/suite_utils.py`. The `cypress_path` column on the `Suite` model is the single source of truth — no hardcoded dictionaries. Both `/cypress-sync` and `/circleci-import` use `suite_utils` to derive paths and look up suites.
+
+| Cypress Path (`cypress_path` column) | Auto-derived Suite Name |
+|---------------------------------------|------------------------|
 | `cypress/e2e/p0/` | PO |
 | `cypress/e2e/p1/api/` | P1 API |
 | `cypress/e2e/p1/client/` | P1 Client |
@@ -439,6 +443,18 @@ The system uses a two-source approach for test management:
 | `cypress/e2e/abtest/` | AB Test |
 | `cypress/e2e/communications/` | Communications |
 | `cypress/e2e/events/` | Events Mobile |
+
+New suites are auto-created when a new Cypress folder or CircleCI workflow is encountered — no code changes needed.
+
+### Test Matching (CircleCI → Cypress)
+
+`/circleci-import` uses a three-tier matching strategy to pair CircleCI results with Cypress test definitions:
+
+1. **Exact match** — normalized title (case-insensitive) direct lookup
+2. **File-path + fuzzy match** — if exact fails, narrows CI candidates to the same source file, then tries substring containment (catches template-literal interpolation) and token overlap (Jaccard index ≥ 0.6, catches minor wording differences)
+3. **Unmatched** — CI tests with no match go to "CircleCI Only" section; Cypress tests with no CI result are marked "Untested"
+
+The fuzzy match report shows each match with its score so you can audit false positives.
 
 ### Handling Failed File Loads
 
