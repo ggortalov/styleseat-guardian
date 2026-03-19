@@ -27,7 +27,9 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   const [suitesOpen, setSuitesOpen] = useState(false);
   const [runsOpen, setRunsOpen] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
+  const errorTimerRef = useRef(null);
 
   const API_BASE = 'http://localhost:5001';
 
@@ -83,15 +85,28 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
     fileInputRef.current?.click();
   };
 
+  const showUploadError = (msg) => {
+    clearTimeout(errorTimerRef.current);
+    setUploadError(msg);
+    errorTimerRef.current = setTimeout(() => setUploadError(''), 4000);
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setUploadError('');
+    if (file.size > 5 * 1024 * 1024) {
+      showUploadError('File too large (max 5 MB)');
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     try {
       const data = await authService.uploadAvatar(file);
       updateAvatar(data.avatar);
-    } catch {
-      // silently fail
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Upload failed. Please try again.';
+      showUploadError(msg);
     } finally {
       setUploading(false);
     }
@@ -251,6 +266,11 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
             </div>
             {uploading && <div className="sidebar-avatar-spinner" />}
           </div>
+          {uploadError && (
+            <div className="sidebar-upload-error" onClick={() => setUploadError('')}>
+              {uploadError}
+            </div>
+          )}
           {!collapsed && (
             <span className="sidebar-username">{user?.username}</span>
           )}
