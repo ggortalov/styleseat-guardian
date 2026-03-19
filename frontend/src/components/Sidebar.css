@@ -672,6 +672,7 @@
 }
 
 .sidebar-user {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -944,4 +945,31 @@
 
 @keyframes avatarSpin {
   to { transform: rotate(360deg); }
+}
+
+.sidebar-upload-error {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #d32f2f;
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 200;
+  animation: fadeIn 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-upload-error::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #d32f2f;
 }

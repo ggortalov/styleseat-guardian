@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.models import User, TokenBlocklist
 
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic", "heif", "avif", "tiff", "tif"}
 
 EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.-]+$")
@@ -149,7 +149,7 @@ def upload_avatar():
         return jsonify({"error": "No file selected"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": "Only image files are allowed (JPEG, PNG, GIF, WebP, BMP, SVG)"}), 400
+        return jsonify({"error": "Only image files are allowed (JPEG, PNG, GIF, WebP, BMP, SVG, HEIC, AVIF, TIFF)"}), 400
 
     filename = secure_filename(file.filename)
     ext = filename.rsplit(".", 1)[1].lower()
