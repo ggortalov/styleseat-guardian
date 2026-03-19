@@ -11,6 +11,25 @@ import projectService from '../services/projectService';
 import { playConfirmation } from '../services/soundService';
 import './TestSuitePage.css';
 
+function extractFileName(preconditions) {
+  if (!preconditions) return null;
+  const match = preconditions.match(/File:\s*(.+)/);
+  if (match) {
+    const full = match[1].trim();
+    const parts = full.split('/');
+    return parts[parts.length - 1];
+  }
+  return null;
+}
+
+function getSectionFileName(cases) {
+  for (const c of cases) {
+    const name = extractFileName(c.preconditions);
+    if (name) return name;
+  }
+  return null;
+}
+
 function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selectionMode, selectedCases, toggleAllCases, toggleCase, navigate, projectId, suiteId, setSectionParentId, setEditSection, setSectionName, setSectionDescription, setShowSectionModal, setDeleteSection }) {
   const group = grouped.map[sec.id];
   const children = grouped.childrenMap[sec.id] || [];
@@ -25,6 +44,7 @@ function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selection
   const chevronSize = isRoot ? '16' : '14';
   const casesClass = isRoot ? 'category-cases' : 'category-cases subcategory-cases';
   const selectAllClass = isRoot ? 'category-select-all' : 'category-select-all subcategory-select-all';
+  const sectionFileName = getSectionFileName(group.cases);
 
   return (
     <div id={`category-${sec.id}`} className={wrapperClass}>
@@ -37,6 +57,7 @@ function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selection
             <span className={nameClass}>{sec.name}</span>
             <span className="category-header-count">{totalCases}</span>
           </div>
+          {sectionFileName && <span className="category-header-filepath">{sectionFileName}</span>}
           {sec.description && <span className="category-header-desc">{sec.description}</span>}
         </div>
         <div className="category-header-actions">

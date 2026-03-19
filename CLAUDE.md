@@ -342,8 +342,7 @@ When the user asks to "start demo" or "launch demo", follow these steps:
 lsof -ti:5001 -ti:5173 -ti:5174 | xargs kill -9 2>/dev/null || true
 cd backend
 rm -f app.db
-source venv/bin/activate
-python seed_testrail.py   # Creates demo user + imports TestRail suites/cases
+cp app.db.demo app.db    # Restore demo snapshot (curated Cypress test data)
 ```
 
 ### Step 2: Start both servers (background)
@@ -360,9 +359,9 @@ Check that both servers started successfully.
 |--------|-------|-------|
 | Users | 2 | `demo` / `demo123` (demo@styleseat.com), `Gennady` / `demo123` (ggortalov@styleseat.com) |
 | Projects | 1 | Cypress Automation |
-| Suites | 14 | Imported from TestRail |
-| Sections | 821 | Nested sections per suite |
-| Test Cases | 2,422 | Real test case titles from TestRail |
+| Suites | 12 | Curated from Cypress repo (ABTEST, API, Admin, Client, Common, Communications, Events, PO, PROD, Pre Prod, Pro, Search) |
+| Sections | 684 | Named from `describe()` blocks in Cypress files |
+| Test Cases | 2,582 | Extracted from Cypress `it()` blocks |
 | Test Runs | 0 | Use `/circleci-import` to import runs |
 
 **Login:** `demo` / `demo123`
