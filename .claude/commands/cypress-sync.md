@@ -52,7 +52,7 @@ def get_file_content(path):
     return None
 
 # Full regex: handles it(), it.only(), it.skip(), itStage(), tag arrays, escaped quotes, template literals
-IT_PATTERN = r'it(?:Stage|\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
+IT_PATTERN = r'\bit(?:Stage|\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
 
 def extract_it_title(match):
     """Extract and unescape test title from regex match."""
