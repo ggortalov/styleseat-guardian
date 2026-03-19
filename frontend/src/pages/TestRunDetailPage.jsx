@@ -260,12 +260,12 @@ export default function TestRunDetailPage() {
       <Header breadcrumbs={[
         { label: 'Dashboard', path: '/' },
         ...(run?.project_name ? [{ label: run.project_name, path: `/projects/${run.project_id}` }] : []),
-        { label: formatRunDate(run?.created_at) || run?.name },
+        { label: formatRunDate(run?.run_date || run?.created_at) || run?.name },
       ]} />
       <div className="page-content">
         <div className="page-toolbar">
           <div>
-            <h2 className="page-heading">{run?.suite_name} &middot; {formatRunDate(run?.created_at)}</h2>
+            <h2 className="page-heading">{run?.name?.split(' · ')[0] || run?.suite_name} &middot; {formatRunDate(run?.run_date || run?.created_at)}</h2>
             <p className="page-description">{run?.name} &middot; {run?.is_completed ? 'Completed' : 'Active'}</p>
           </div>
           <div className="toolbar-actions">
