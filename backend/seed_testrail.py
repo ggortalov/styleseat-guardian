@@ -153,7 +153,7 @@ def main():
         user = User.query.filter_by(username="demo").first()
         if not user:
             user = User(username="demo", email="demo@styleseat.com")
-            user.set_password("demo123")
+            user.set_password("DemoStyleSeat22@")
             db.session.add(user)
             db.session.flush()
 

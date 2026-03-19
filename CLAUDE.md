@@ -116,7 +116,7 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 | POST | `/api/auth/register` | Register user `{username, email, password}` → `{id, username, token}` |
 | POST | `/api/auth/login` | Login `{username, password}` → `{id, username, token}` |
 | GET | `/api/auth/me` | Get current user info |
-| POST | `/api/auth/avatar` | Upload avatar image (multipart/form-data, JPEG/PNG, max 2MB) |
+| POST | `/api/auth/avatar` | Upload avatar image (multipart/form-data, max 5MB, magic-byte validated) |
 | GET | `/api/auth/avatars/:filename` | Serve uploaded avatar image file |
 
 ### Projects (`/api`)
@@ -201,7 +201,8 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 - **Cascade deletes** configured on SQLAlchemy relationships (`cascade="all, delete-orphan"`)
 - **Section tree** returned as a flat list — frontend reconstructs the tree using `parent_id`
 - **Test case steps** stored as JSON text in the `steps` column, accessed via `steps_list` property
-- **Avatar upload** accepts JPEG/PNG (max 2MB), stores files in `uploads/avatars/` with user ID prefix, served via `send_from_directory`
+- **Avatar upload** accepts JPEG, PNG, GIF, WebP, BMP, HEIC, AVIF, TIFF (max 5MB), validated by both file extension and magic bytes, stored in `uploads/avatars/` with UUID filename, served via `send_from_directory`
+- **Email domain restriction** — only `@styleseat.com` emails can register or log in. Enforced at both registration (`is_allowed_email_domain()`) and login (post-authentication domain check). Uses OWASP-compliant generic error messages: registration returns "Unable to create account. Please contact your administrator." for both bad domain and duplicate user (same 403 status); login returns "Invalid username or password" for all failures. Constant `ALLOWED_EMAIL_DOMAIN` in `routes/auth.py`
 - **Suite path derivation** in `app/suite_utils.py` — single source of truth replacing all hardcoded SUITE_MAP dictionaries. Three functions: `cypress_path_to_name()` (path→display name), `workflow_name_to_cypress_path()` (CircleCI job name→path), `determine_cypress_path()` (file path→suite path). Both `/cypress-sync` and `/circleci-import` import from this module. Suites are matched by `cypress_path` column, not by name
 
 ### Frontend
@@ -357,7 +358,7 @@ Check that both servers started successfully.
 ### Expected demo data
 | Entity | Count | Notes |
 |--------|-------|-------|
-| Users | 2 | `demo` / `demo123`, `Gennady` / `demo123` |
+| Users | 2 | `demo` / `demo123` (demo@styleseat.com), `Gennady` / `demo123` (ggortalov@styleseat.com) |
 | Projects | 1 | Cypress Automation |
 | Suites | 14 | Imported from TestRail |
 | Sections | 821 | Nested sections per suite |
@@ -390,8 +391,16 @@ Check that both servers started successfully.
 
 ## Upload Configuration
 - **Avatar storage**: `backend/uploads/avatars/` (auto-created on app start)
-- **Max file size**: 2MB (`MAX_CONTENT_LENGTH` in `config.py`)
-- **Allowed formats**: JPEG, PNG
+- **Max file size**: 5MB (`MAX_CONTENT_LENGTH` in `config.py`)
+- **Allowed formats**: JPEG, PNG, GIF, WebP, BMP, HEIC, HEIF, AVIF, TIFF
+- **Validation**: Dual-layer — file extension check + magic byte header verification (rejects renamed non-image files)
+- **Filename pattern**: `{uuid}.{ext}` (non-predictable UUIDs to prevent enumeration)
+
+## Access Control
+- **Email domain restriction**: Only `@styleseat.com` email addresses can register or log in
+- **Registration enforcement**: `is_allowed_email_domain()` check combined with duplicate-user check under a single generic 403 response — "Unable to create account. Please contact your administrator." — to prevent both domain discovery and user enumeration (OWASP Authentication Cheat Sheet compliant)
+- **Login enforcement**: Post-authentication domain check returns the same "Invalid username or password" 401 as a wrong password — indistinguishable to an attacker
+- **Configuration**: `ALLOWED_EMAIL_DOMAIN` constant in `backend/app/routes/auth.py`
 - **Filename pattern**: `{user_id}_{secure_filename}` to avoid collisions
 
 ## Test Data Workflow

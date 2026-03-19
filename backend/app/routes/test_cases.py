@@ -70,9 +70,12 @@ def create_case():
     if not title or not suite_id or not section_id:
         return jsonify({"error": "Title, suite_id, and section_id are required"}), 400
 
-    existing = TestCase.query.filter(db.func.lower(TestCase.title) == title.lower()).first()
+    existing = TestCase.query.filter(
+        db.func.lower(TestCase.title) == title.lower(),
+        TestCase.suite_id == suite_id
+    ).first()
     if existing:
-        return jsonify({"error": f"A test case with the title \"{title}\" already exists"}), 409
+        return jsonify({"error": f"A test case with the title \"{title}\" already exists in this suite"}), 409
 
     Suite.query.get_or_404(suite_id)
     Section.query.get_or_404(section_id)
@@ -129,10 +132,11 @@ def update_case(case_id):
         if new_title.lower() != case.title.lower():
             existing = TestCase.query.filter(
                 db.func.lower(TestCase.title) == new_title.lower(),
+                TestCase.suite_id == case.suite_id,
                 TestCase.id != case_id
             ).first()
             if existing:
-                return jsonify({"error": f"A test case with the title \"{new_title}\" already exists"}), 409
+                return jsonify({"error": f"A test case with the title \"{new_title}\" already exists in this suite"}), 409
         case.title = new_title
     if "suite_id" in data:
         case.suite_id = data["suite_id"]

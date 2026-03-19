@@ -63,12 +63,17 @@ Classify every finding into one of these:
 - [ ] All string inputs `.strip()`-ped before processing
 - [ ] No raw user input interpolated into SQL (SQLAlchemy ORM parameterizes)
 - [ ] File uploads: whitelist extensions, `secure_filename()`, max size enforced
+- [ ] File uploads: magic byte validation (verify file header matches claimed format, reject renamed files)
+- [ ] SVG uploads blocked (XSS vector via embedded `<script>` tags)
 - [ ] Avatar filenames use UUID (not predictable `user_id_` prefix)
+- [ ] Email domain restriction: `ALLOWED_EMAIL_DOMAIN` enforced at both registration and login
 
-### Enumeration Prevention
+### Enumeration & Domain Discovery Prevention
 
-- [ ] Login error: generic message `"Invalid username or password"` (no username/email differentiation)
-- [ ] Registration error: single message `"An account with that username or email already exists"` (never reveals which field matched)
+- [ ] Login error: generic message `"Invalid username or password"` for ALL failure cases (wrong password, non-existent user, AND disallowed email domain) — same 401 status code
+- [ ] Registration error: single generic message `"Unable to create account. Please contact your administrator."` for disallowed domain, duplicate username, AND duplicate email — same 403 status code, no differentiation
+- [ ] Error messages NEVER reveal allowed email domains, accepted extensions, internal paths, or which specific check failed
+- [ ] HTTP status codes are identical across all rejection paths within the same endpoint (prevents status-code enumeration)
 - [ ] Password reset (if implemented): always returns success regardless of whether email exists
 
 ### HTTP Security Headers
@@ -214,22 +219,62 @@ def set_security_headers(response):
 ```python
 import uuid
 saved_name = f"{uuid.uuid4().hex}.{ext}"  # non-predictable filename
+
+# Magic byte validation — verify file content matches claimed format
+def validate_image_bytes(file_stream):
+    header = file_stream.read(32)
+    file_stream.seek(0)
+    if not header:
+        return False
+    if header.startswith(b'\x89PNG\r\n\x1a\n'):       return True  # PNG
+    if header.startswith(b'\xff\xd8\xff'):              return True  # JPEG
+    if header[:6] in (b'GIF87a', b'GIF89a'):           return True  # GIF
+    if header[:4] == b'RIFF' and header[8:12] == b'WEBP': return True  # WebP
+    if header[:2] == b'BM':                             return True  # BMP
+    if header[:4] in (b'II\x2a\x00', b'MM\x00\x2a'):  return True  # TIFF
+    if len(header) >= 12 and header[4:8] == b'ftyp':                # HEIC/AVIF
+        brand = header[8:12].lower()
+        if brand in (b'heic', b'heix', b'hevc', b'heif', b'avif', b'avis', b'mif1'):
+            return True
+    return False
+# Never allow SVG — can contain <script> tags (XSS vector)
+```
+
+### Domain-restricted registration (OWASP compliant)
+```python
+ALLOWED_EMAIL_DOMAIN = "styleseat.com"
+
+# Combine domain check + duplicate check under ONE generic error
+# Same message + same HTTP status prevents enumeration and domain discovery
+if (not is_allowed_email_domain(email)
+        or User.query.filter_by(username=username).first()
+        or User.query.filter_by(email=email).first()):
+    return jsonify({"error": "Unable to create account. Please contact your administrator."}), 403
+
+# Login: domain rejection returns same error as wrong password
+if domain != ALLOWED_EMAIL_DOMAIN:
+    return jsonify({"error": "Invalid username or password"}), 401
 ```
 
 ## Post-Fix Verification
 
 After applying fixes, run this smoke test sequence:
 
-1. Login with correct credentials returns 200 + token
-2. Login with wrong password returns 401 + generic error
-3. Register with weak password returns 400 + specific validation error
-4. Register with invalid email returns 400
-5. Register with short/invalid username returns 400
-6. Register with duplicate username/email returns 409 + generic message (no enumeration)
-7. Logout blacklists token — subsequent requests with that token return 401
-8. Security headers present on all responses
-9. Rate limits trigger 429 after threshold exceeded
-10. Avatar upload produces UUID-based filename
+1. Login with correct credentials (@styleseat.com user) returns 200 + token
+2. Login with wrong password returns 401 + `"Invalid username or password"`
+3. Login with disallowed email domain returns 401 + same `"Invalid username or password"` (indistinguishable)
+4. Register with weak password returns 400 + specific validation error
+5. Register with invalid email format returns 400
+6. Register with short/invalid username returns 400
+7. Register with disallowed email domain returns 403 + `"Unable to create account. Please contact your administrator."`
+8. Register with duplicate username/email returns 403 + same generic message (no enumeration)
+9. Verify 7 and 8 return identical response body and status code
+10. Logout blacklists token — subsequent requests with that token return 401
+11. Security headers present on all responses
+12. Rate limits trigger 429 after threshold exceeded
+13. Avatar upload produces UUID-based filename
+14. Avatar upload with renamed non-image file returns 400 (magic byte validation)
+15. SVG upload attempt returns 400 (blocked extension)
 
 ## Ongoing Monitoring Recommendations
 

@@ -46,9 +46,15 @@ def create_section(suite_id):
     if not name:
         return jsonify({"error": "Section name is required"}), 400
 
+    parent_id = data.get("parent_id")
+    if parent_id:
+        parent = Section.query.get(parent_id)
+        if not parent or parent.suite_id != suite_id:
+            return jsonify({"error": "Parent section does not belong to this suite"}), 400
+
     section = Section(
         suite_id=suite_id,
-        parent_id=data.get("parent_id"),
+        parent_id=parent_id,
         name=name,
         description=data.get("description", ""),
         display_order=data.get("display_order", 0),
@@ -70,7 +76,12 @@ def update_section(section_id):
     if "display_order" in data:
         section.display_order = data["display_order"]
     if "parent_id" in data:
-        section.parent_id = data["parent_id"]
+        new_parent_id = data["parent_id"]
+        if new_parent_id:
+            parent = Section.query.get(new_parent_id)
+            if not parent or parent.suite_id != section.suite_id:
+                return jsonify({"error": "Parent section does not belong to this suite"}), 400
+        section.parent_id = new_parent_id
     db.session.commit()
     return jsonify(section.to_dict()), 200
 
