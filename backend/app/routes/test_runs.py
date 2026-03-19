@@ -223,15 +223,21 @@ def list_results(run_id):
         if r.test_case:
             d["case_title"] = r.test_case.title
             d["priority"] = r.test_case.priority
-            # Extract source file from preconditions if present
+            # Extract source file and describe title from preconditions if present
             preconditions = r.test_case.preconditions or ""
-            if preconditions.startswith("Source:"):
-                source_path = preconditions.replace("Source:", "").strip()
-                d["source_file"] = source_path.split("/")[-1]  # Just the filename
-            else:
-                d["source_file"] = None
+            source_file = None
+            describe_title = None
+            for line in preconditions.split('\n'):
+                line = line.strip()
+                if line.startswith("Source:") or line.startswith("File:"):
+                    source_path = line.split(":", 1)[1].strip()
+                    source_file = source_path.split("/")[-1]
+                elif line.startswith("Describe:"):
+                    describe_title = line.split(":", 1)[1].strip()
+            d["source_file"] = source_file
+            d["describe_title"] = describe_title
             # Group by file name when available, otherwise by section name
-            d["section_name"] = d["source_file"] or (r.test_case.section.name if r.test_case.section else "Uncategorized")
+            d["section_name"] = source_file or (r.test_case.section.name if r.test_case.section else "Uncategorized")
         out.append(d)
     return jsonify(out), 200
 

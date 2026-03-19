@@ -29,24 +29,7 @@ import re
 from collections import defaultdict
 from app import create_app, db
 from app.models import Suite, Section, TestCase, Project
-
-# Suite mapping: folder name -> suite name
-SUITE_MAP = {
-    'p0': 'PO',
-    'p1/api': 'P1 API',
-    'p1/client': 'P1 Client',
-    'p1/common': 'P1 Common',
-    'p1/pro': 'P1 Pro',
-    'p1/search': 'P1 Search',
-    'p3/admin': 'P3 - Admin',
-    'prod': 'PROD',
-    'events': 'Events Mobile',
-    'preprod': 'Pre Prod',
-    'devices/p0': 'P0 Devices',
-    'devices/p1': 'P1 Devices',
-    'abtest': 'AB Test',
-    'communications': 'Communications',
-}
+from app.suite_utils import determine_cypress_path, cypress_path_to_name
 
 def get_repo_tree():
     """Get all files from cypress/e2e directory."""
@@ -92,24 +75,9 @@ def extract_describe(content):
         return match.group(1).strip()
     return None
 
-def determine_suite(file_path):
-    """Determine which suite a file belongs to based on path."""
-    path = file_path.replace('cypress/e2e/', '')
-
-    for folder, suite_name in SUITE_MAP.items():
-        if path.startswith(folder + '/') or path.startswith(folder.replace('/', '/') + '/'):
-            return suite_name
-
-    # Default mapping by first folder
-    parts = path.split('/')
-    if parts[0] == 'p1' and len(parts) > 1:
-        return f"P1 {parts[1].title()}"
-    elif parts[0] == 'p0':
-        return 'PO'
-    elif parts[0] == 'p3':
-        return 'P3 - Admin'
-
-    return parts[0].upper()
+def determine_suite_path(file_path):
+    """Determine which suite cypress_path a file belongs to."""
+    return determine_cypress_path(file_path)
 
 def get_section_path(file_path):
     """Extract section path from file path."""
@@ -146,11 +114,11 @@ with app.app_context():
     files = get_repo_tree()
     print(f"Found {len(files)} test files")
 
-    # Group files by suite
+    # Group files by cypress_path
     suite_files = defaultdict(list)
     for f in files:
-        suite_name = determine_suite(f['path'])
-        suite_files[suite_name].append(f['path'])
+        cp = determine_suite_path(f['path'])
+        suite_files[cp].append(f['path'])
 
     print(f"\nSuites found: {list(suite_files.keys())}")
 
@@ -158,16 +126,18 @@ with app.app_context():
     total_new = 0
     total_updated = 0
 
-    for suite_name, file_paths in suite_files.items():
+    for cypress_path, file_paths in suite_files.items():
+        suite_name = cypress_path_to_name(cypress_path)
         print(f"\n=== {suite_name} ({len(file_paths)} files) ===")
 
-        # Find or create suite
-        suite = Suite.query.filter_by(project_id=project.id, name=suite_name).first()
+        # Find or create suite by cypress_path
+        suite = Suite.query.filter_by(project_id=project.id, cypress_path=cypress_path).first()
         if not suite:
-            suite = Suite(project_id=project.id, name=suite_name, description=f'Synced from Cypress repo')
+            suite = Suite(project_id=project.id, name=suite_name, cypress_path=cypress_path,
+                          description=f'Synced from Cypress repo')
             db.session.add(suite)
             db.session.flush()
-            print(f"  Created suite: {suite_name}")
+            print(f"  Created suite: {suite_name} ({cypress_path})")
 
         # Cache existing sections and cases
         existing_sections = {s.name: s for s in Section.query.filter_by(suite_id=suite.id).all()}
