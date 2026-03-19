@@ -209,9 +209,9 @@ After syncing, the `/circleci-import` command will automatically match results t
 
 - The Cypress repo structure maps to suites:
   - `cypress/e2e/p0/` → PO suite
-  - `cypress/e2e/p1/common/` → P1 Common suite
-  - `cypress/e2e/p1/client/` → P1 Client suite
-  - etc.
+  - `cypress/e2e/p1/common/` → Common suite
+  - `cypress/e2e/p1/client/` → Client suite
+  - etc. (suite names are curated in the demo snapshot)
 - Section names are derived from the first `describe()` block title in each Cypress file (falls back to filename without extension if no describe found)
 - Test titles are extracted using the full IT_PATTERN regex: `it()`, `it.only()`, `it.skip()`, `itStage()`, tag arrays (`it([Tag.X], "title")`), escaped quotes, and template literals
 - The `preconditions` field stores the source filename (e.g. `File: proProfileSetupTest.cy.js`) for display in the UI section header

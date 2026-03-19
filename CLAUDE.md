@@ -359,9 +359,9 @@ Check that both servers started successfully.
 |--------|-------|-------|
 | Users | 2 | `demo` / `demo123` (demo@styleseat.com), `Gennady` / `demo123` (ggortalov@styleseat.com) |
 | Projects | 1 | Cypress Automation |
-| Suites | 12 | Curated from Cypress repo (ABTEST, API, Admin, Client, Common, Communications, Events, PO, PROD, Pre Prod, Pro, Search) |
-| Sections | 684 | Named from `describe()` blocks in Cypress files |
-| Test Cases | 2,582 | Extracted from Cypress `it()` blocks |
+| Suites | 13 | Curated from Cypress repo (ABTEST, API, Admin, Client, Common, Communications, Devices, Events, PO, PROD, Pre Prod, Pro, Search) |
+| Sections | 686 | Named from `describe()` blocks in Cypress files |
+| Test Cases | 2,608 | Extracted from Cypress `it()` blocks + manual Devices cases |
 | Test Runs | 0 | Use `/circleci-import` to import runs |
 
 **Login:** `demo` / `demo123`
@@ -421,10 +421,10 @@ The system uses a two-source approach for test management:
 ### Workflow
 
 ```bash
-# 1. Start demo (seeds TestRail data for baseline)
+# 1. Start demo (restores curated demo snapshot)
 # This is handled by "start demo" command
 
-# 2. Sync test cases from Cypress repo
+# 2. (Optional) Sync latest test cases from Cypress repo
 /cypress-sync
 
 # 3. Import CircleCI results
@@ -435,22 +435,21 @@ The system uses a two-source approach for test management:
 
 Suite names are auto-derived from `cypress_path` by `backend/app/suite_utils.py`. The `cypress_path` column on the `Suite` model is the single source of truth — no hardcoded dictionaries. Both `/cypress-sync` and `/circleci-import` use `suite_utils` to derive paths and look up suites.
 
-| Cypress Path (`cypress_path` column) | Auto-derived Suite Name |
+| Cypress Path (`cypress_path` column) | Demo Suite Name |
 |---------------------------------------|------------------------|
+| `cypress/e2e/abTest/` | ABTEST |
+| `cypress/e2e/p1/api/` | API |
+| `cypress/e2e/p3/` | Admin |
+| `cypress/e2e/p1/client/` | Client |
+| `cypress/e2e/p1/common/` | Common |
+| `cypress/e2e/communications/` | Communications |
+| `cypress/e2e/events/` | Events |
+| `cypress/e2e/devices/p1/` | Devices |
 | `cypress/e2e/p0/` | PO |
-| `cypress/e2e/p1/api/` | P1 API |
-| `cypress/e2e/p1/client/` | P1 Client |
-| `cypress/e2e/p1/common/` | P1 Common |
-| `cypress/e2e/p1/pro/` | P1 Pro |
-| `cypress/e2e/p1/search/` | P1 Search |
-| `cypress/e2e/p3/` | P3 - Admin |
 | `cypress/e2e/prod/` | PROD |
 | `cypress/e2e/preprod/` | Pre Prod |
-| `cypress/e2e/devices/p0/` | P0 Devices |
-| `cypress/e2e/devices/p1/` | P1 Devices |
-| `cypress/e2e/abtest/` | AB Test |
-| `cypress/e2e/communications/` | Communications |
-| `cypress/e2e/events/` | Events Mobile |
+| `cypress/e2e/p1/pro/` | Pro |
+| `cypress/e2e/p1/search/` | Search |
 
 New suites are auto-created when a new Cypress folder or CircleCI workflow is encountered — no code changes needed.
 
