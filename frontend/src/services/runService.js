@@ -1,7 +1,12 @@
 import api from './api';
 
 const runService = {
-  getAll: () => api.get('/runs').then(r => r.data),
+  getAll: ({ limit, offset } = {}) => {
+    const params = {};
+    if (limit != null) params.limit = limit;
+    if (offset != null) params.offset = offset;
+    return api.get('/runs', { params }).then(r => r.data);
+  },
   getByProject: (pid) => api.get(`/projects/${pid}/runs`).then(r => r.data),
   getById: (id) => api.get(`/runs/${id}`).then(r => r.data),
   create: (pid, data) => api.post(`/projects/${pid}/runs`, data).then(r => r.data),

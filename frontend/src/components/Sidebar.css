@@ -23,7 +23,7 @@
 
 /* ============ Header / Brand ============ */
 .sidebar-header {
-  padding: 20px 20px 18px;
+  padding: 24px 20px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   align-items: center;
@@ -42,7 +42,7 @@
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
   text-decoration: none;
 }
@@ -69,20 +69,19 @@
 .sidebar-logo-name {
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
   line-height: 1.2;
 }
 
 .sidebar-logo-accent {
-  font-weight: 300;
-  opacity: 0.65;
+  font-weight: 400;
+  opacity: 0.7;
   display: block;
-  font-size: 10px;
-  letter-spacing: 5.5px;
+  font-size: 11px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
-  margin-top: 4px;
 }
 
 /* ============ Collapse Button ============ */
@@ -286,7 +285,7 @@
   padding: 7px 16px;
   color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
   white-space: nowrap;
@@ -361,7 +360,7 @@
 
 .sidebar-suite-link {
   padding: 7px 12px;
-  font-size: 14px;
+  font-size: 15px;
   opacity: 1;
   margin-right: 12px;
   display: flex;
@@ -416,7 +415,7 @@
   margin-right: 12px;
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   transition: background var(--transition), color var(--transition);
@@ -455,15 +454,14 @@
 }
 
 .sidebar-run-date {
-  margin-left: 6px;
-  font-size: 11px;
+  margin-left: 6px;font-size: 12px;
   font-weight: 400;
   opacity: 0.6;
 }
 
 .sidebar-suite-item-count {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.08);
@@ -673,7 +671,6 @@
 }
 
 .sidebar-user {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -946,31 +943,4 @@
 
 @keyframes avatarSpin {
   to { transform: rotate(360deg); }
-}
-
-.sidebar-upload-error {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #d32f2f;
-  color: #fff;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  cursor: pointer;
-  z-index: 200;
-  animation: fadeIn 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.sidebar-upload-error::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #d32f2f;
 }

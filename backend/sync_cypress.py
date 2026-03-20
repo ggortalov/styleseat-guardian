@@ -20,6 +20,8 @@ from app.suite_utils import determine_cypress_path, cypress_path_to_name
 
 # Regex to extract TestRail ID prefix (e.g. "C5412853" from "C5412853 Validate Email...")
 TESTRAIL_ID_RE = re.compile(r'^(C\d+)\s')
+# Regex to strip one or more C-ID or CXXXX placeholder prefixes from display titles
+STRIP_CID_RE = re.compile(r'^(?:C(?:\d+|X+\d+)\s+)+')
 
 # Cypress paths to skip during sync (not relevant for test management)
 EXCLUDED_PATHS = {
@@ -77,7 +79,7 @@ def extract_title(match):
 def extract_tests(content):
     """Extract it() test titles from Cypress file content."""
     tests = [extract_title(m) for m in re.finditer(IT_PATTERN, content)]
-    return [t for t in tests if len(t) > 3]
+    return [t for t in tests if len(t) > 3 and not t.startswith('@')]
 
 
 def extract_describe(content):
@@ -114,6 +116,7 @@ def main():
 
         total_tests = 0
         total_new = 0
+        total_orphaned = 0
 
         for cypress_path, file_paths in sorted(suite_files.items()):
             suite_name = cypress_path_to_name(cypress_path)
@@ -128,24 +131,35 @@ def main():
                 db.session.flush()
                 print(f"  Created suite: {suite_name} ({cypress_path})")
 
-            # Cache existing sections and cases (index by title and TestRail ID)
+            # Cache existing sections and cases
+            # Primary key: (section_id, title_lower) — file-aware dedup
+            # Secondary key: title_lower → [list of cases] — fallback for TestRail ID migrations
             existing_sections = {s.name: s for s in Section.query.filter_by(suite_id=suite.id).all()}
             all_cases = TestCase.query.filter_by(suite_id=suite.id).all()
-            existing_cases = {c.title.lower(): c for c in all_cases}
+            existing_cases_by_section = {}  # (section_id, title_lower) → case
+            existing_cases_by_title = defaultdict(list)  # title_lower → [case, ...]
+            for c in all_cases:
+                existing_cases_by_section[(c.section_id, c.title.lower())] = c
+                existing_cases_by_title[c.title.lower()].append(c)
             existing_by_testrail_id = {}
             for c in all_cases:
                 m = TESTRAIL_ID_RE.match(c.title)
                 if m:
                     existing_by_testrail_id[m.group(1)] = c
 
+            # Track which case IDs were visited during this sync
+            visited_case_ids = set()
+
             suite_tests = 0
             suite_new = 0
+            files_fetched = 0
 
             for file_path in file_paths:
                 content = get_file_content(file_path)
                 if not content:
                     continue
 
+                files_fetched += 1
                 tests = extract_tests(content)
                 if not tests:
                     continue
@@ -177,17 +191,32 @@ def main():
                     title_lower = title.lower()
                     suite_tests += 1
 
-                    # Match by exact title first, then fall back to TestRail ID
-                    case = existing_cases.get(title_lower)
+                    # Match by exact title (raw or stripped) first, then fall back to TestRail ID
+                    display_title = STRIP_CID_RE.sub('', title)
+                    display_lower = display_title.lower()
+
+                    # Primary: match by (section_id, title) — section-aware dedup
+                    case = (existing_cases_by_section.get((section.id, title_lower)) or
+                            existing_cases_by_section.get((section.id, display_lower)))
+
                     if not case:
+                        # Secondary: try TestRail ID match (cross-section, for migrations only)
                         m = TESTRAIL_ID_RE.match(title)
                         if m:
                             case = existing_by_testrail_id.get(m.group(1))
+                            # Only use the TestRail match if it's in THIS section,
+                            # or if there's no same-titled case in another section
+                            # (i.e., it's a genuine migration, not a cross-file duplicate)
+                            if case and case.section_id != section.id:
+                                # Check if another section already owns a case with this title
+                                same_title_cases = existing_cases_by_title.get(display_lower, [])
+                                if any(c.section_id == section.id for c in same_title_cases):
+                                    case = None  # There's already one in this section
 
                     if case:
-                        # Update existing case (title may have changed)
-                        if case.title != title:
-                            case.title = title
+                        # Update existing case (strip C-ID prefix from stored title)
+                        if case.title != display_title:
+                            case.title = display_title
                         if case.preconditions != preconditions_text:
                             case.preconditions = preconditions_text
                         if case.section_id != section.id:
@@ -196,18 +225,46 @@ def main():
                         case = TestCase(
                             suite_id=suite.id,
                             section_id=section.id,
-                            title=title,
+                            title=display_title,
                             case_type='Regression',
                             priority='Medium',
                             preconditions=preconditions_text,
                             created_by=None
                         )
                         db.session.add(case)
-                        existing_cases[title_lower] = case
-                        testrail_m = TESTRAIL_ID_RE.match(title)
-                        if testrail_m:
-                            existing_by_testrail_id[testrail_m.group(1)] = case
+                        db.session.flush()
                         suite_new += 1
+
+                    visited_case_ids.add(case.id)
+
+                    # Index by (section, title) for dedup within this sync run
+                    existing_cases_by_section[(section.id, title_lower)] = case
+                    existing_cases_by_section[(section.id, display_lower)] = case
+                    existing_cases_by_title[display_lower].append(case)
+                    testrail_m = TESTRAIL_ID_RE.match(title)
+                    if testrail_m:
+                        existing_by_testrail_id[testrail_m.group(1)] = case
+
+            # Remove orphaned cases only if we successfully fetched most files
+            # (protects against API rate limits or network failures wiping the DB)
+            if files_fetched >= len(file_paths) * 0.5:
+                orphan_cases = [c for c in all_cases if c.id not in visited_case_ids]
+                if orphan_cases:
+                    for c in orphan_cases:
+                        db.session.delete(c)
+                    print(f"  Removed {len(orphan_cases)} orphaned case(s)")
+                    total_orphaned += len(orphan_cases)
+
+                # Remove empty sections (no remaining cases)
+                db.session.flush()
+                for section in Section.query.filter_by(suite_id=suite.id).all():
+                    if TestCase.query.filter_by(section_id=section.id).count() == 0:
+                        db.session.delete(section)
+                        print(f"  Removed empty section: {section.name}")
+            elif files_fetched < len(file_paths):
+                failed = len(file_paths) - files_fetched
+                print(f"  WARNING: {failed}/{len(file_paths)} file fetches failed — "
+                      f"skipping orphan cleanup for this suite")
 
             print(f"  Tests: {suite_tests}, New: {suite_new}")
             total_tests += suite_tests
@@ -220,6 +277,7 @@ def main():
         print(f"{'=' * 50}")
         print(f"Total tests found:  {total_tests}")
         print(f"New cases created:  {total_new}")
+        print(f"Orphans removed:    {total_orphaned}")
         print(f"Suites processed:   {len(suite_files)}")
 
 

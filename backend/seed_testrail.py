@@ -11,6 +11,7 @@ zero active test cases.
 """
 
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -20,10 +21,17 @@ from datetime import datetime, timezone
 # ---------------------------------------------------------------------------
 # TestRail connection
 # ---------------------------------------------------------------------------
-TESTRAIL_BASE = "https://styleseat.testrail.io/index.php?/api/v2"
-TESTRAIL_EMAIL = "ggortalov@styleseat.com"
-TESTRAIL_PASSWORD = "Nikolay2013@home"
-PROJECT_ID = 23
+TESTRAIL_BASE = os.environ.get('TESTRAIL_BASE_URL', 'https://styleseat.testrail.io/index.php?/api/v2')
+TESTRAIL_EMAIL = os.environ.get('TESTRAIL_EMAIL', '')
+TESTRAIL_PASSWORD = os.environ.get('TESTRAIL_PASSWORD', '')
+PROJECT_ID = int(os.environ.get('TESTRAIL_PROJECT_ID', '23'))
+
+if not TESTRAIL_EMAIL or not TESTRAIL_PASSWORD:
+    print("ERROR: TESTRAIL_EMAIL and TESTRAIL_PASSWORD environment variables are required.")
+    print("Set them with:")
+    print("  export TESTRAIL_EMAIL=your_email@styleseat.com")
+    print("  export TESTRAIL_PASSWORD=your_password")
+    sys.exit(1)
 
 AUTH_HEADER = "Basic " + base64.b64encode(
     f"{TESTRAIL_EMAIL}:{TESTRAIL_PASSWORD}".encode()
@@ -149,19 +157,12 @@ def main():
     with app.app_context():
         db.create_all()
 
-        # Ensure demo users exist
+        # Ensure a user exists to own the imported data
         user = User.query.filter_by(username="demo").first()
         if not user:
             user = User(username="demo", email="demo@styleseat.com")
             user.set_password("DemoStyleSeat22@")
             db.session.add(user)
-            db.session.flush()
-
-        gennady = User.query.filter_by(username="Gennady").first()
-        if not gennady:
-            gennady = User(username="Gennady", email="ggortalov@styleseat.com")
-            gennady.set_password("demo123")
-            db.session.add(gennady)
             db.session.flush()
 
         # Create or find the project

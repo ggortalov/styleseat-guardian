@@ -44,6 +44,36 @@ with app.app_context():
         for name, path in _BACKFILL.items():
             conn.execute("UPDATE suites SET cypress_path = ? WHERE name = ? AND cypress_path IS NULL", (path, name))
         conn.commit()
+    # Migrate test_runs.suite_id from NOT NULL to nullable
+    run_cols = conn.execute("PRAGMA table_info(test_runs)").fetchall()
+    suite_id_col = next((c for c in run_cols if c[1] == "suite_id"), None)
+    if suite_id_col and suite_id_col[3] == 1:  # notnull == 1 means NOT NULL
+        print("Migrating test_runs.suite_id to nullable...")
+        conn.execute("ALTER TABLE test_runs RENAME TO test_runs_old")
+        conn.execute("""
+            CREATE TABLE test_runs (
+                id INTEGER PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                suite_id INTEGER REFERENCES suites(id),
+                name VARCHAR(200) NOT NULL,
+                description TEXT,
+                created_by INTEGER REFERENCES users(id),
+                run_date DATETIME,
+                created_at DATETIME,
+                completed_at DATETIME,
+                is_completed BOOLEAN DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            INSERT INTO test_runs (id, project_id, suite_id, name, description,
+                                   created_by, run_date, created_at, completed_at, is_completed)
+            SELECT id, project_id, suite_id, name, description,
+                   created_by, run_date, created_at, completed_at, is_completed
+            FROM test_runs_old
+        """)
+        conn.execute("DROP TABLE test_runs_old")
+        conn.commit()
+        print("Migration complete.")
     conn.close()
 
 if __name__ == "__main__":

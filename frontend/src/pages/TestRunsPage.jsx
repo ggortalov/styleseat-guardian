@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -6,6 +6,7 @@ import runService from '../services/runService';
 import './DashboardPage.css';
 
 const STATUS_ORDER = ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'];
+const PAGE_SIZE = 30;
 
 function PassRate({ rate, compact }) {
   const color = rate >= 80 ? 'var(--status-passed)' : rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
@@ -26,7 +27,7 @@ function RunCard({ run }) {
     return (
       <Link to={`/runs/${run.id}`} className="run-card-v2 run-card-v2--compact">
         <div className="run-card-v2-body">
-          <span className="run-card-v2-name">{run.name?.split(' · ')[0] || run.suite_name}</span>
+          <span className="run-card-v2-name">{run.suite_name}</span>
           <span className="run-card-v2-date">
             {run.completed_at && new Date(run.completed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
           </span>
@@ -49,7 +50,7 @@ function RunCard({ run }) {
 
       <div className="run-card-v2-body">
         <div className="run-card-v2-header">
-          <Link to={`/runs/${run.id}`} className="run-card-v2-name">{run.name?.split(' · ')[0] || run.suite_name}</Link>
+          <Link to={`/runs/${run.id}`} className="run-card-v2-name">{run.suite_name}</Link>
         </div>
         <div className="run-card-v2-meta">
           {total} test{total !== 1 ? 's' : ''} &middot; {new Date(run.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
@@ -106,14 +107,30 @@ function RunCard({ run }) {
 
 export default function TestRunsPage() {
   const [runs, setRuns] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    runService.getAll()
-      .then((data) => setRuns(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))))
+  const fetchRuns = useCallback((offset = 0, append = false) => {
+    const setLoadState = append ? setLoadingMore : setLoading;
+    setLoadState(true);
+    runService.getAll({ limit: PAGE_SIZE, offset })
+      .then((data) => {
+        const items = data.items || [];
+        setRuns((prev) => append ? [...prev, ...items] : items);
+        setTotalCount(data.total || 0);
+      })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setLoadState(false));
   }, []);
+
+  useEffect(() => { fetchRuns(); }, [fetchRuns]);
+
+  const hasMore = runs.length < totalCount;
+
+  const handleLoadMore = () => {
+    fetchRuns(runs.length, true);
+  };
 
   const openRuns = runs.filter(r => !r.is_locked);
   const completedRuns = runs.filter(r => r.is_locked);
@@ -137,6 +154,9 @@ export default function TestRunsPage() {
         <div className="page-toolbar">
           <div>
             <h2 className="page-heading">Test Runs</h2>
+            <span className="text-muted" style={{ fontSize: 14 }}>
+              Showing {runs.length} of {totalCount} run{totalCount !== 1 ? 's' : ''}
+            </span>
           </div>
         </div>
 
@@ -180,6 +200,18 @@ export default function TestRunsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {hasMore && (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Loading...' : `Load More (${totalCount - runs.length} remaining)`}
+                </button>
               </div>
             )}
           </>

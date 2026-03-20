@@ -55,14 +55,28 @@
   white-space: pre-wrap;
 }
 
-.exec-text-content {
+.exec-html-content {
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+
+.exec-html-content ul,
+.exec-html-content ol {
   margin: 0;
-  font-family: inherit;
+  padding-left: 20px;
+}
+
+.exec-html-content li {
+  margin-bottom: 4px;
+}
+
+.exec-html-content p {
+  margin: 0 0 8px;
+}
+
+.exec-html-content p:last-child {
+  margin-bottom: 0;
 }
 
 .exec-panel h3 {

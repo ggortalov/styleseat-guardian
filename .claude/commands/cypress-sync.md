@@ -51,31 +51,57 @@ def get_file_content(path):
         return base64.b64decode(result.stdout.strip()).decode('utf-8', errors='ignore')
     return None
 
-# Full regex: handles it(), it.only(), it.skip(), itStage(), tag arrays, escaped quotes, template literals
-IT_PATTERN = r'\bit(?:Stage|\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
-
-def extract_it_title(match):
-    """Extract and unescape test title from regex match."""
-    title = (match.group(1) or match.group(2) or match.group(3) or '')
-    return title.replace("\\'", "'").replace('\\"', '"').strip()
-
-DESCRIBE_PATTERN = r'describe(?:\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?(?:"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'|`((?:[^`\\]|\\.)*)`)'
-
 def extract_tests(content, file_path):
     """Extract test titles from Cypress file content."""
-    tests = [extract_it_title(m) for m in re.finditer(IT_PATTERN, content)]
-    return [t for t in tests if len(t) > 3]
+    tests = []
+
+    # Match it() and it.only() calls - handle various patterns
+    # Pattern: it("title", ...) or it('title', ...) or it(`title`, ...)
+    it_pattern = r'it(?:\.only|\.skip)?\s*\(\s*["\'\`]([^"\'\`]+)["\'\`]'
+
+    for match in re.finditer(it_pattern, content):
+        title = match.group(1).strip()
+        if title and len(title) > 3:  # Skip very short titles
+            tests.append(title)
+
+    return tests
 
 def extract_describe(content):
-    """Extract first describe() block title for section naming."""
-    match = re.search(DESCRIBE_PATTERN, content)
+    """Extract describe block title."""
+    # Match describe(), describeLC(), etc.
+    pattern = r'(?:describe|describeLC)\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?["\'\`]([^"\'\`]+)["\'\`]'
+    match = re.search(pattern, content)
     if match:
-        return extract_it_title(match)
+        return match.group(1).strip()
     return None
 
 def determine_suite_path(file_path):
     """Determine which suite cypress_path a file belongs to."""
     return determine_cypress_path(file_path)
+
+def get_section_path(file_path):
+    """Extract section path from file path."""
+    # Remove cypress/e2e/ prefix and .cy.js suffix
+    path = file_path.replace('cypress/e2e/', '').replace('.cy.js', '')
+    parts = path.split('/')
+
+    # Skip the suite-level folder(s) and get remaining path
+    if parts[0] in ['p0', 'prod', 'preprod', 'events', 'abtest', 'communications']:
+        section_parts = parts[1:-1]  # Skip first (suite) and last (filename)
+    elif parts[0] == 'p1' and len(parts) > 2:
+        section_parts = parts[2:-1]  # Skip p1/subtype and filename
+    elif parts[0] == 'p3':
+        section_parts = parts[2:-1]
+    elif parts[0] == 'devices':
+        section_parts = parts[2:-1]
+    else:
+        section_parts = parts[1:-1]
+
+    # Get the file name without extension as leaf section
+    file_name = parts[-1]
+    if section_parts:
+        return '/'.join(section_parts) + '/' + file_name
+    return file_name
 
 app = create_app()
 with app.app_context():
@@ -129,28 +155,18 @@ with app.app_context():
             if not tests:
                 continue
 
-            # Use describe() title as section name, fall back to filename without extension
-            describe_title = extract_describe(content)
-            filename = file_path.split('/')[-1]  # e.g. proProfileSetupTest.cy.js
-            old_section_name = filename.replace('.cy.js', '')
-            section_name = describe_title if describe_title else old_section_name
+            # Determine section from file path
+            section_path = get_section_path(file_path)
+            section_name = section_path.split('/')[-1] if section_path else 'General'
 
-            # Rename existing section if it used the old filename-based name
-            if old_section_name in existing_sections and section_name != old_section_name:
-                section = existing_sections[old_section_name]
-                section.name = section_name
-                existing_sections[section_name] = section
-                del existing_sections[old_section_name]
-            elif section_name not in existing_sections:
+            # Find or create section
+            if section_name not in existing_sections:
                 section = Section(suite_id=suite.id, name=section_name, display_order=len(existing_sections))
                 db.session.add(section)
                 db.session.flush()
                 existing_sections[section_name] = section
             else:
                 section = existing_sections[section_name]
-
-            # Store just the filename (not full path) in preconditions
-            preconditions_text = f'File: {filename}'
 
             # Create/update test cases
             for title in tests:
@@ -164,19 +180,12 @@ with app.app_context():
                         title=title,
                         case_type='Regression',
                         priority='Medium',
-                        preconditions=preconditions_text,
+                        preconditions=f'File: {file_path}',
                         created_by=1
                     )
                     db.session.add(case)
                     existing_cases[title_lower] = case
                     suite_new += 1
-                else:
-                    # Update preconditions and section on existing cases
-                    case = existing_cases[title_lower]
-                    if case.preconditions != preconditions_text:
-                        case.preconditions = preconditions_text
-                    if case.section_id != section.id:
-                        case.section_id = section.id
 
         print(f"  Tests: {suite_tests}, New: {suite_new}")
         total_tests += suite_tests
@@ -209,9 +218,9 @@ After syncing, the `/circleci-import` command will automatically match results t
 
 - The Cypress repo structure maps to suites:
   - `cypress/e2e/p0/` → PO suite
-  - `cypress/e2e/p1/common/` → Common suite
-  - `cypress/e2e/p1/client/` → Client suite
-  - etc. (suite names are curated in the demo snapshot)
-- Section names are derived from the first `describe()` block title in each Cypress file (falls back to filename without extension if no describe found)
-- Test titles are extracted using the full IT_PATTERN regex: `it()`, `it.only()`, `it.skip()`, `itStage()`, tag arrays (`it([Tag.X], "title")`), escaped quotes, and template literals
-- The `preconditions` field stores the source filename (e.g. `File: proProfileSetupTest.cy.js`) for display in the UI section header
+  - `cypress/e2e/p1/common/` → P1 Common suite
+  - `cypress/e2e/p1/client/` → P1 Client suite
+  - etc.
+- Section names are derived from subfolder names within each suite folder
+- Test titles are extracted from `it()` and `it.only()` calls
+- The `preconditions` field stores the source file path for reference
