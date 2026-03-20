@@ -5,6 +5,11 @@ A TestRail-like test management web application with a React frontend and Flask 
 ## Quick Start
 
 ```bash
+# Launch full demo (reset DB, sync Cypress tests, start servers)
+npm run demo
+
+# Or start manually:
+
 # Backend (Terminal 1)
 cd backend
 source venv/bin/activate
@@ -16,11 +21,14 @@ cd frontend
 npm install             # First time only
 npm run dev             # Starts on http://localhost:5173
 
-# Build frontend for production
-cd frontend && npm run build
+# Sync test cases from Cypress repo (from project root)
+npm run sync
 
 # Import CircleCI test results (from project root)
 npm run import -- <circleci-workflow-url>
+
+# Build frontend for production
+cd frontend && npm run build
 ```
 
 **Demo credentials:** `demo` / `demo123` or `Gennady` / `demo123`
@@ -44,11 +52,13 @@ dashboard/
 │   │       └── dashboard.py    # Aggregated stats (global + per-project)
 │   ├── config.py               # SQLite URI, JWT secret, token expiry, upload settings
 │   ├── run.py                  # Entry point (port 5001, creates tables on start)
+│   ├── sync_cypress.py          # CLI script: sync test cases from Cypress repo into Guardian
 │   ├── import_circleci.py       # CLI script: import CircleCI workflow results into a test run
 │   ├── seed.py                 # Demo data: 2 projects, 3 suites, 30 cases, 3 runs
 │   ├── requirements.txt        # Flask, Flask-SQLAlchemy, Flask-CORS, Flask-JWT-Extended, Werkzeug
 │   ├── uploads/avatars/        # User avatar image storage (auto-created)
-│   └── app.db                  # SQLite database (auto-created)
+│   ├── app.db                  # SQLite database (auto-created)
+│   └── app.db.demo             # Demo snapshot (restored by npm run demo, includes synced Cypress data)
 │
 ├── frontend/           # React 19 SPA (Vite, port 5173)
 │   ├── public/
@@ -339,34 +349,28 @@ python seed.py      # Optional: populate demo data
 
 ## Launch Demo
 
-When the user asks to "start demo" or "launch demo", follow these steps:
+When the user asks to "start demo" or "launch demo", run:
 
-### Step 1: Kill existing servers and reset database
 ```bash
-lsof -ti:5001 -ti:5173 -ti:5174 | xargs kill -9 2>/dev/null || true
-cd backend
-rm -f app.db
-cp app.db.demo app.db    # Restore demo snapshot (curated Cypress test data)
+npm run demo
 ```
 
-### Step 2: Start both servers (background)
-```bash
-cd backend && source venv/bin/activate && python run.py &
-cd frontend && npm run dev &
-```
-
-### Step 3: Confirm servers are running
-Check that both servers started successfully.
+This script (`scripts/start-demo.sh`) performs:
+1. Kills existing servers on ports 5001/5173
+2. Restores `app.db` from `app.db.demo` snapshot
+3. Applies any schema migrations
+4. Starts backend and frontend servers
+5. Syncs latest test cases from Cypress repo via `sync_cypress.py`
 
 ### Expected demo data
 | Entity | Count | Notes |
 |--------|-------|-------|
 | Users | 2 | `demo` / `demo123` (demo@styleseat.com), `Gennady` / `demo123` (ggortalov@styleseat.com) |
 | Projects | 1 | Cypress Automation |
-| Suites | 13 | Curated from Cypress repo (ABTEST, API, Admin, Client, Common, Communications, Devices, Events, PO, PROD, Pre Prod, Pro, Search) |
-| Sections | 686 | Named from `describe()` blocks in Cypress files |
-| Test Cases | 2,608 | Extracted from Cypress `it()` blocks + manual Devices cases |
-| Test Runs | 0 | Use `/circleci-import` to import runs |
+| Suites | 13 | ABTEST, API, Admin, Client, Common, Communications, Devices, Events, PO, PROD, Pre Prod, Pro, Search |
+| Sections | ~669 | Named from `describe()` blocks in Cypress files |
+| Test Cases | ~2,527 | Extracted from Cypress `it()` blocks + manual Devices cases (count updates on sync) |
+| Test Runs | 0 | Use `npm run import -- <url>` to import runs from CircleCI |
 
 **Login:** `demo` / `demo123` or `Gennady` / `demo123`
 **URL:** http://localhost:5173
@@ -413,27 +417,27 @@ The system uses a two-source approach for test management:
 ### Source of Truth
 
 1. **Cypress Repo** (`styleseat/cypress`) → Test case definitions
-   - All test cases are synced from the Cypress repo
+   - All test cases are synced from the Cypress repo via `sync_cypress.py`
    - Test structure maps to suites: `cypress/e2e/p1/common/` → P1 Common
-   - Use `/cypress-sync` to pull latest test definitions
+   - Use `npm run sync` or `/cypress-sync` to pull latest test definitions
+   - Matches existing cases by TestRail ID (`C\d+` prefix) first, then exact title — prevents duplicates when titles change
+   - Excluded paths: `manual/`, `utility/`, `utility_lifecycle/`, `weekly/` (configured in `EXCLUDED_PATHS` in `sync_cypress.py`)
 
 2. **CircleCI** → Test results
    - Test run results are imported from CircleCI workflows
-   - Use `/circleci-import <workflow-url>` or `npm run import -- <workflow-url>` to import results
+   - Use `npm run import -- <workflow-url>` or `/circleci-import <workflow-url>` to import results
    - Automatically creates test cases for new tests not yet synced
 
 ### Workflow
 
 ```bash
-# 1. Start demo (restores curated demo snapshot)
-# This is handled by "start demo" command
+# 1. Start demo (restores demo snapshot + syncs Cypress tests + starts servers)
+npm run demo
 
 # 2. (Optional) Sync latest test cases from Cypress repo
-/cypress-sync
+npm run sync
 
-# 3. Import CircleCI results (either way works)
-/circleci-import https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
-# or from terminal:
+# 3. Import CircleCI results
 npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
 ```
 

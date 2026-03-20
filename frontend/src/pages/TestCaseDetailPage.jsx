@@ -5,11 +5,8 @@ import PriorityBadge from '../components/PriorityBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import caseService from '../services/caseService';
+import stripTestRailId from '../utils/stripTestRailId';
 import './TestCaseDetailPage.css';
-
-function formatId(id) {
-  return `C${String(id).padStart(7, '0')}`;
-}
 
 export default function TestCaseDetailPage() {
   const { caseId } = useParams();
@@ -47,12 +44,11 @@ export default function TestCaseDetailPage() {
         { label: 'Dashboard', path: '/' },
         ...(tc.project_name && tc.suite_name && tc.project_name !== tc.suite_name ? [{ label: tc.project_name, path: `/projects/${tc.project_id}` }] : []),
         ...(tc.suite_name && tc.project_id && tc.suite_id ? [{ label: tc.suite_name, path: `/projects/${tc.project_id}/suites/${tc.suite_id}` }] : []),
-        { label: formatId(tc.id) },
+        { label: stripTestRailId(tc.title) },
       ]} />
       <div className="page-content">
         <div className="case-detail">
           <div className="case-detail-top">
-            <div className="case-detail-id">{formatId(tc.id)}</div>
             <div className="case-detail-actions">
               {editPath && (
                 <button className="btn btn-secondary" onClick={() => navigate(editPath)}>Edit</button>
@@ -61,7 +57,7 @@ export default function TestCaseDetailPage() {
             </div>
           </div>
 
-          <h1 className="case-detail-title">{tc.title}</h1>
+          <h1 className="case-detail-title">{stripTestRailId(tc.title)}</h1>
 
           <div className="case-meta-grid">
             <div className="case-meta-item">
@@ -131,7 +127,7 @@ export default function TestCaseDetailPage() {
         onClose={() => setShowDelete(false)}
         onConfirm={handleDelete}
         title="Delete Test Case"
-        message={`"${tc.title}" will be permanently deleted. This cannot be undone.`}
+        message={`"${stripTestRailId(tc.title)}" will be permanently deleted. This cannot be undone.`}
         requireSafeguard
       />
     </div>

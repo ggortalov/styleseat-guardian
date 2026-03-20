@@ -71,6 +71,11 @@ for i in $(seq 1 15); do
   fi
   sleep 1
 done
+# 6. Sync test cases from Cypress repo
+echo "Syncing test cases from Cypress repo..."
+cd "$ROOT_DIR/backend"
+python sync_cypress.py
+
 echo ""
 echo "=== Demo Ready ==="
 echo "  URL:   http://localhost:5173"
