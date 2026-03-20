@@ -1,9 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
+import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import runService from '../services/runService';
 import { useAuth } from '../context/AuthContext';
+import stripTestRailId from '../utils/stripTestRailId';
 import './TestRunDetailPage.css';
 
 const STATUSES = ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'];
@@ -121,6 +123,7 @@ export default function TestRunDetailPage() {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedRowId, setCopiedRowId] = useState(null);
+  const [showDeleteRun, setShowDeleteRun] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -226,12 +229,11 @@ export default function TestRunDetailPage() {
 
   const copyResults = () => {
     const lines = filtered.map((r) => {
-      const testId = r.case_title.match(/^(C\d+)/)?.[1] || `C${String(r.case_id).padStart(7, '0')}`;
-      const title = r.case_title.replace(/^C\d+\s*/, '').trim();
+      const title = stripTestRailId(r.case_title);
       const file = r.source_file || r.section_name || '';
-      return `${testId}\t${file}\t${title}`;
+      return `${file}\t${title}`;
     });
-    const header = `Test ID\tFile\tTitle`;
+    const header = `File\tTitle`;
     const text = [header, ...lines].join('\n');
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -241,10 +243,9 @@ export default function TestRunDetailPage() {
 
   const copyRow = (r, e) => {
     e.stopPropagation();
-    const testId = r.case_title.match(/^(C\d+)/)?.[1] || `C${String(r.case_id).padStart(7, '0')}`;
-    const title = r.case_title.replace(/^C\d+\s*/, '').trim();
+    const title = stripTestRailId(r.case_title);
     const file = r.source_file || r.section_name || '';
-    const text = `${testId}\t${file}\t${title}`;
+    const text = `${file}\t${title}`;
     navigator.clipboard.writeText(text).then(() => {
       setCopiedRowId(r.id);
       setTimeout(() => setCopiedRowId(null), 1500);
@@ -273,6 +274,7 @@ export default function TestRunDetailPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
               Manage
             </button>
+            <button className="btn btn-danger" onClick={() => setShowDeleteRun(true)}>Delete</button>
             <button className="btn btn-secondary" onClick={() => navigate(`/projects/${run.project_id}`)}>Back to Project</button>
           </div>
         </div>
@@ -359,7 +361,7 @@ export default function TestRunDetailPage() {
                   {sec.describeTitle ? (
                     <span className="run-section-info">
                       <span className="run-section-name">{sec.describeTitle}</span>
-                      <span className="run-section-file">{sec.name}</span>
+                      <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
                     </span>
                   ) : (
                     <span className="run-section-name">{sec.name}</span>
@@ -389,11 +391,8 @@ export default function TestRunDetailPage() {
                         {selectionMode && (
                           <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                         )}
-                        <span className="run-case-id">
-                          {r.case_title.match(/^(C\d+)/) ? r.case_title.match(/^(C\d+)/)[1] : `C${String(r.case_id).padStart(7, '0')}`}
-                        </span>
                         <span className="run-case-title">
-                          {r.case_title.replace(/^C\d+\s*/, '')}
+                          {stripTestRailId(r.case_title)}
                         </span>
                         <span className="run-case-tested-by">
                           <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>
@@ -456,6 +455,19 @@ export default function TestRunDetailPage() {
           <button className="btn btn-secondary btn-sm bulk-status-clear" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showDeleteRun}
+        onClose={() => setShowDeleteRun(false)}
+        onConfirm={async () => {
+          await runService.delete(runId);
+          window.__refreshSidebarProjects?.();
+          navigate(`/projects/${run.project_id}`);
+        }}
+        title="Delete Test Run"
+        message={`"${run?.name}" (${results.length} result${results.length !== 1 ? 's' : ''}) will be permanently deleted.`}
+        requireSafeguard
+      />
     </div>
   );
 }

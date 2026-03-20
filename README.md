@@ -20,6 +20,41 @@ Guardian provides a centralized hub for organizing test suites, authoring test c
 
 <br/>
 
+## Quick Start
+
+```bash
+# Launch the full demo (resets DB, syncs Cypress tests, starts both servers)
+npm run demo
+
+# Login: demo / demo123  or  Gennady / demo123
+# URL:   http://localhost:5173
+```
+
+### Manual Setup
+
+```bash
+# Backend (Terminal 1)
+cd backend
+source venv/bin/activate
+python seed.py          # First time only: populate demo data
+python run.py           # Starts on http://localhost:5001
+
+# Frontend (Terminal 2)
+cd frontend
+npm install             # First time only
+npm run dev             # Starts on http://localhost:5173
+```
+
+## NPM Scripts
+
+Run from the project root:
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `npm run demo` | `bash scripts/start-demo.sh` | Reset DB, sync Cypress tests, start both servers |
+| `npm run sync` | `python sync_cypress.py` | Sync test cases from the Cypress repo |
+| `npm run import -- <url>` | `python import_circleci.py` | Import test results from a CircleCI workflow |
+
 ## Features
 
 <table>
@@ -40,18 +75,98 @@ Guardian provides a centralized hub for organizing test suites, authoring test c
     <td>Launch runs from suites, execute cases one by one with status tracking — <code>Passed</code> <code>Failed</code> <code>Blocked</code> <code>Retest</code> <code>Untested</code></td>
   </tr>
   <tr>
+    <td><strong>Cypress Repo Sync</strong></td>
+    <td>Automatically sync test definitions from the <code>styleseat/cypress</code> repo — suites, sections, and test cases extracted from <code>describe()</code> and <code>it()</code> blocks</td>
+  </tr>
+  <tr>
+    <td><strong>CircleCI Import</strong></td>
+    <td>Import test run results from CircleCI workflows with automatic test matching (exact, file-path fuzzy, and token overlap)</td>
+  </tr>
+  <tr>
     <td><strong>Dashboard & Charts</strong></td>
     <td>Global and per-project dashboards with doughnut charts for real-time quality visibility</td>
   </tr>
   <tr>
     <td><strong>Authentication</strong></td>
-    <td>JWT-based auth with registration, login, and avatar upload</td>
+    <td>JWT-based auth with registration, login, avatar upload, and <code>@styleseat.com</code> email restriction</td>
   </tr>
   <tr>
     <td><strong>Responsive Design</strong></td>
-    <td>Collapsible sidebar, mobile hamburger menu, DM Sans typography, animated UI</td>
+    <td>Collapsible sidebar, mobile hamburger menu, DM Sans typography, animated UI with 3-tier breakpoint system</td>
   </tr>
 </table>
+
+## Test Data Workflow
+
+Guardian uses a **two-source approach** for test management:
+
+```
+┌──────────────────┐         ┌──────────────────┐
+│   Cypress Repo   │         │    CircleCI      │
+│  (test definitions)│       │  (test results)  │
+└────────┬─────────┘         └────────┬─────────┘
+         │  npm run sync              │  npm run import -- <url>
+         ▼                            ▼
+┌─────────────────────────────────────────────────┐
+│              StyleSeat Guardian                  │
+│  Suites → Sections → Test Cases → Test Runs     │
+└─────────────────────────────────────────────────┘
+```
+
+### Sync from Cypress Repo
+
+```bash
+npm run sync
+```
+
+- Fetches all `.cy.js` files from `styleseat/cypress` via GitHub API
+- Extracts test titles from `it()`, `it.only()`, `it.skip()`, `itStage()`, and tag arrays
+- Section names derived from `describe()` block titles
+- Matches existing cases by TestRail ID (`C\d+` prefix) or exact title to avoid duplicates
+- Automatically creates new suites for new Cypress directories
+- Excluded paths: `manual/`, `utility/`, `utility_lifecycle/`, `weekly/`
+
+### Import from CircleCI
+
+```bash
+npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
+```
+
+- Fetches job artifacts and test reports from a CircleCI workflow
+- Three-tier matching: exact title → file-path + fuzzy → unmatched (CircleCI Only section)
+- Handles failed file loads (marks tests as Blocked) and failed jobs (marks as Untested)
+
+## Architecture
+
+```
+regression-guard/
+├── backend/                    # Flask REST API (Python 3.13, port 5001)
+│   ├── app/
+│   │   ├── __init__.py         # App factory
+│   │   ├── models.py           # 8 SQLAlchemy models
+│   │   ├── suite_utils.py      # Cypress path ↔ suite name mappings
+│   │   └── routes/             # 7 Blueprints (auth, projects, suites, sections, test_cases, test_runs, dashboard)
+│   ├── sync_cypress.py         # CLI: sync test cases from Cypress repo
+│   ├── import_circleci.py      # CLI: import results from CircleCI workflows
+│   ├── seed.py                 # Generate demo data from scratch
+│   ├── run.py                  # Entry point (port 5001)
+│   ├── app.db                  # SQLite database (auto-created)
+│   └── app.db.demo             # Demo snapshot (restored by npm run demo)
+│
+├── frontend/                   # React 19 SPA (Vite, port 5173)
+│   └── src/
+│       ├── pages/              # 8 page components
+│       ├── components/         # Shared UI (Sidebar, Header, Modal, StatusBadge, etc.)
+│       ├── services/           # Axios API service layer
+│       ├── context/            # Auth context (JWT + user state)
+│       └── styles/             # CSS variables and design tokens
+│
+├── scripts/
+│   └── start-demo.sh           # Demo launcher (reset DB + sync + start servers)
+│
+├── package.json                # NPM scripts: demo, sync, import
+└── CLAUDE.md                   # Detailed architecture docs for AI assistants
+```
 
 ## Tech Stack
 
@@ -76,7 +191,6 @@ Guardian provides a centralized hub for organizing test suites, authoring test c
       <img src="https://img.shields.io/badge/Flask-3.1-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask" />
       <img src="https://img.shields.io/badge/SQLAlchemy-3.1-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy" />
       <img src="https://img.shields.io/badge/JWT_Extended-4.7-000000?style=flat-square&logo=jsonwebtokens&logoColor=white" alt="JWT" />
-      <img src="https://img.shields.io/badge/Flask_Limiter-3.8-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask-Limiter" />
     </td>
   </tr>
   <tr>
@@ -85,15 +199,21 @@ Guardian provides a centralized hub for organizing test suites, authoring test c
       <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
     </td>
   </tr>
-  <tr>
-    <td><strong>Testing</strong></td>
-    <td>
-      <img src="https://img.shields.io/badge/Vitest-4.0-6E9F18?style=flat-square&logo=vitest&logoColor=white" alt="Vitest" />
-      <img src="https://img.shields.io/badge/Testing_Library-16.3-E33332?style=flat-square&logo=testinglibrary&logoColor=white" alt="Testing Library" />
-      <img src="https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white" alt="pytest" />
-    </td>
-  </tr>
 </table>
+
+## Demo Credentials
+
+| User | Password | Email |
+|------|----------|-------|
+| `demo` | `demo123` | demo@styleseat.com |
+| `Gennady` | `demo123` | ggortalov@styleseat.com |
+
+## Ports
+
+| Service | Port |
+|---------|------|
+| Backend API | 5001 |
+| Frontend dev server | 5173 |
 
 ---
 

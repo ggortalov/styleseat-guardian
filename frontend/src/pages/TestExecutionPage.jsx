@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 import runService from '../services/runService';
+import stripTestRailId from '../utils/stripTestRailId';
 import './TestExecutionPage.css';
 
 const STATUSES = ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'];
@@ -159,7 +160,7 @@ export default function TestExecutionPage() {
 
         <div className="exec-layout">
           <div className="exec-case card">
-            <h3>C{tc.id} - {tc.title}</h3>
+            <h3>{stripTestRailId(tc.title)}</h3>
             <div className="exec-meta">
               <span>Section: {tc.section_name}</span>
               <span>Priority: {tc.priority}</span>
