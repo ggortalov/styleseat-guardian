@@ -18,6 +18,9 @@ npm run dev             # Starts on http://localhost:5173
 
 # Build frontend for production
 cd frontend && npm run build
+
+# Import CircleCI test results (from project root)
+npm run import -- <circleci-workflow-url>
 ```
 
 **Demo credentials:** `demo` / `demo123` or `Gennady` / `demo123`
@@ -41,6 +44,7 @@ dashboard/
 │   │       └── dashboard.py    # Aggregated stats (global + per-project)
 │   ├── config.py               # SQLite URI, JWT secret, token expiry, upload settings
 │   ├── run.py                  # Entry point (port 5001, creates tables on start)
+│   ├── import_circleci.py       # CLI script: import CircleCI workflow results into a test run
 │   ├── seed.py                 # Demo data: 2 projects, 3 suites, 30 cases, 3 runs
 │   ├── requirements.txt        # Flask, Flask-SQLAlchemy, Flask-CORS, Flask-JWT-Extended, Werkzeug
 │   ├── uploads/avatars/        # User avatar image storage (auto-created)
@@ -415,7 +419,7 @@ The system uses a two-source approach for test management:
 
 2. **CircleCI** → Test results
    - Test run results are imported from CircleCI workflows
-   - Use `/circleci-import <workflow-url>` to import results
+   - Use `/circleci-import <workflow-url>` or `npm run import -- <workflow-url>` to import results
    - Automatically creates test cases for new tests not yet synced
 
 ### Workflow
@@ -427,8 +431,10 @@ The system uses a two-source approach for test management:
 # 2. (Optional) Sync latest test cases from Cypress repo
 /cypress-sync
 
-# 3. Import CircleCI results
+# 3. Import CircleCI results (either way works)
 /circleci-import https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
+# or from terminal:
+npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
 ```
 
 ### Suite Mapping
