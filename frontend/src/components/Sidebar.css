@@ -285,7 +285,7 @@
   padding: 7px 16px;
   color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
   white-space: nowrap;
@@ -360,7 +360,7 @@
 
 .sidebar-suite-link {
   padding: 7px 12px;
-  font-size: 14px;
+  font-size: 15px;
   opacity: 1;
   margin-right: 12px;
   display: flex;
@@ -415,7 +415,7 @@
   margin-right: 12px;
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   transition: background var(--transition), color var(--transition);
@@ -454,15 +454,14 @@
 }
 
 .sidebar-run-date {
-  margin-left: 6px;
-  font-size: 11px;
+  margin-left: 6px;font-size: 12px;
   font-weight: 400;
   opacity: 0.6;
 }
 
 .sidebar-suite-item-count {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.08);
