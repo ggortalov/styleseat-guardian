@@ -36,6 +36,9 @@ WORKFLOW_VARIANTS = {
     'p0_mobile': 'LC environment',
 }
 
+# Regex to strip one or more C-ID or CXXXX placeholder prefixes from display titles
+STRIP_CID_RE = re.compile(r'^(?:C(?:\d+|X+\d+)\s+)+')
+
 # Regex to extract test titles from Cypress files
 IT_PATTERN = (
     r'\bit(?:Stage|\.only|\.skip)?\s*\(\s*(?:\[[^\]]*\]\s*,\s*)?'
@@ -54,8 +57,8 @@ def extract_it_title(match):
 
 
 def normalize(title):
-    """Normalize title for matching: lowercase, strip whitespace."""
-    return title.strip().lower()
+    """Normalize title for matching: lowercase, strip whitespace, strip C-ID prefix."""
+    return STRIP_CID_RE.sub('', title.strip()).lower()
 
 
 def _tokenize(s):
@@ -111,7 +114,7 @@ def get_cypress_tests_for_workflow(workflow_name):
         if result.returncode == 0 and result.stdout.strip():
             content = base64.b64decode(result.stdout.strip()).decode('utf-8', errors='ignore')
             tests = [extract_it_title(m) for m in re.finditer(IT_PATTERN, content)]
-            tests = [t for t in tests if len(t) > 3]
+            tests = [STRIP_CID_RE.sub('', t) for t in tests if len(t) > 3 and not t.startswith('@')]
             describe_match = re.search(DESCRIBE_PATTERN, content)
             describe_title = extract_it_title(describe_match) if describe_match else None
             if tests:

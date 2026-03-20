@@ -5,10 +5,16 @@ A TestRail-like test management web application with a React frontend and Flask 
 ## Quick Start
 
 ```bash
+# Launch full demo (reset DB, sync Cypress tests, start servers)
+npm run demo
+
+# Or start manually:
+
 # Backend (Terminal 1)
 cd backend
 source venv/bin/activate
-python seed.py          # First time only: populate demo data
+python seed.py          # First time only: create demo user + project
+python sync_cypress.py  # Sync test cases from Cypress repo
 python run.py           # Starts on http://localhost:5001
 
 # Frontend (Terminal 2)
@@ -16,14 +22,17 @@ cd frontend
 npm install             # First time only
 npm run dev             # Starts on http://localhost:5173
 
-# Build frontend for production
-cd frontend && npm run build
+# Sync test cases from Cypress repo (from project root)
+npm run sync
 
 # Import CircleCI test results (from project root)
 npm run import -- <circleci-workflow-url>
+
+# Build frontend for production
+cd frontend && npm run build
 ```
 
-**Demo credentials:** `demo` / `demo123`
+**Demo credentials:** `demo` / `Demo1234`
 
 ## Architecture
 
@@ -44,8 +53,9 @@ dashboard/
 │   │       └── dashboard.py    # Aggregated stats (global + per-project)
 │   ├── config.py               # SQLite URI, JWT secret, token expiry, upload settings
 │   ├── run.py                  # Entry point (port 5001, creates tables on start)
+│   ├── sync_cypress.py          # CLI script: sync test cases from Cypress repo into Guardian
 │   ├── import_circleci.py       # CLI script: import CircleCI workflow results into a test run
-│   ├── seed.py                 # Demo data: 2 projects, 3 suites, 30 cases, 3 runs
+│   ├── seed.py                 # Bootstrap: creates demo user + Cypress Automation project
 │   ├── requirements.txt        # Flask, Flask-SQLAlchemy, Flask-CORS, Flask-JWT-Extended, Werkzeug
 │   ├── uploads/avatars/        # User avatar image storage (auto-created)
 │   └── app.db                  # SQLite database (auto-created)
@@ -120,7 +130,7 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 | POST | `/api/auth/register` | Register user `{username, email, password}` → `{id, username, token}` |
 | POST | `/api/auth/login` | Login `{username, password}` → `{id, username, token}` |
 | GET | `/api/auth/me` | Get current user info |
-| POST | `/api/auth/avatar` | Upload avatar image (multipart/form-data, JPEG/PNG, max 2MB) |
+| POST | `/api/auth/avatar` | Upload avatar image (multipart/form-data, max 5MB, magic-byte validated) |
 | GET | `/api/auth/avatars/:filename` | Serve uploaded avatar image file |
 
 ### Projects (`/api`)
@@ -205,7 +215,8 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 - **Cascade deletes** configured on SQLAlchemy relationships (`cascade="all, delete-orphan"`)
 - **Section tree** returned as a flat list — frontend reconstructs the tree using `parent_id`
 - **Test case steps** stored as JSON text in the `steps` column, accessed via `steps_list` property
-- **Avatar upload** accepts JPEG/PNG (max 2MB), stores files in `uploads/avatars/` with user ID prefix, served via `send_from_directory`
+- **Avatar upload** accepts JPEG, PNG, GIF, WebP, BMP, HEIC, AVIF, TIFF (max 5MB), validated by both file extension and magic bytes, stored in `uploads/avatars/` with UUID filename, served via `send_from_directory`
+- **Email domain restriction** — only `@styleseat.com` emails can register or log in. Enforced at both registration (`is_allowed_email_domain()`) and login (post-authentication domain check). Uses OWASP-compliant generic error messages: registration returns "Unable to create account. Please contact your administrator." for both bad domain and duplicate user (same 403 status); login returns "Invalid username or password" for all failures. Constant `ALLOWED_EMAIL_DOMAIN` in `routes/auth.py`
 - **Suite path derivation** in `app/suite_utils.py` — single source of truth replacing all hardcoded SUITE_MAP dictionaries. Three functions: `cypress_path_to_name()` (path→display name), `workflow_name_to_cypress_path()` (CircleCI job name→path), `determine_cypress_path()` (file path→suite path). Both `/cypress-sync` and `/circleci-import` import from this module. Suites are matched by `cypress_path` column, not by name
 
 ### Frontend
@@ -328,8 +339,9 @@ The app uses a **3-tier responsive breakpoint system**. Every new page or compon
 ```bash
 cd backend
 rm app.db
-python run.py       # Creates empty tables
-python seed.py      # Optional: populate demo data
+python seed.py          # Creates demo user + project
+python sync_cypress.py  # Re-sync test cases from Cypress repo
+python run.py           # Start server
 ```
 
 **Add a new frontend service:**
@@ -338,37 +350,31 @@ python seed.py      # Optional: populate demo data
 
 ## Launch Demo
 
-When the user asks to "start demo" or "launch demo", follow these steps:
+When the user asks to "start demo" or "launch demo", run:
 
-### Step 1: Kill existing servers and reset database
 ```bash
-lsof -ti:5001 -ti:5173 -ti:5174 | xargs kill -9 2>/dev/null || true
-cd backend
-rm -f app.db
-source venv/bin/activate
-python seed_testrail.py   # Creates demo user + imports TestRail suites/cases
+npm run demo
 ```
 
-### Step 2: Start both servers (background)
-```bash
-cd backend && source venv/bin/activate && python run.py &
-cd frontend && npm run dev &
-```
+This script (`scripts/start-demo.sh`) performs:
+1. Kills existing servers on ports 5001/5173
+2. Seeds a fresh database via `seed.py` (creates demo user + Cypress Automation project)
+3. Starts backend and frontend servers
+4. Syncs test cases from Cypress repo in the background via `sync_cypress.py`
 
-### Step 3: Confirm servers are running
-Check that both servers started successfully.
+The app is usable immediately after step 3. Test cases populate progressively as the background sync processes each suite.
 
-### Expected demo data
+### Expected data after sync
 | Entity | Count | Notes |
 |--------|-------|-------|
-| Users | 2 | `demo` / `demo123`, `Gennady` / `demo123` |
+| Users | 1 | `demo` / `Demo1234` (demo@styleseat.com) |
 | Projects | 1 | Cypress Automation |
-| Suites | 14 | Imported from TestRail |
-| Sections | 821 | Nested sections per suite |
-| Test Cases | 2,422 | Real test case titles from TestRail |
-| Test Runs | 0 | Use `/circleci-import` to import runs |
+| Suites | ~12 | Auto-created from Cypress repo folder structure |
+| Sections | ~500+ | Named from `describe()` blocks in Cypress files |
+| Test Cases | ~2,500 | Extracted from Cypress `it()` blocks (count varies with repo) |
+| Test Runs | 0 | Use `npm run import -- <url>` to import runs from CircleCI |
 
-**Login:** `demo` / `demo123`
+**Login:** `demo` / `Demo1234`
 **URL:** http://localhost:5173
 
 ## Dependencies
@@ -394,8 +400,16 @@ Check that both servers started successfully.
 
 ## Upload Configuration
 - **Avatar storage**: `backend/uploads/avatars/` (auto-created on app start)
-- **Max file size**: 2MB (`MAX_CONTENT_LENGTH` in `config.py`)
-- **Allowed formats**: JPEG, PNG
+- **Max file size**: 5MB (`MAX_CONTENT_LENGTH` in `config.py`)
+- **Allowed formats**: JPEG, PNG, GIF, WebP, BMP, HEIC, HEIF, AVIF, TIFF
+- **Validation**: Dual-layer — file extension check + magic byte header verification (rejects renamed non-image files)
+- **Filename pattern**: `{uuid}.{ext}` (non-predictable UUIDs to prevent enumeration)
+
+## Access Control
+- **Email domain restriction**: Only `@styleseat.com` email addresses can register or log in
+- **Registration enforcement**: `is_allowed_email_domain()` check combined with duplicate-user check under a single generic 403 response — "Unable to create account. Please contact your administrator." — to prevent both domain discovery and user enumeration (OWASP Authentication Cheat Sheet compliant)
+- **Login enforcement**: Post-authentication domain check returns the same "Invalid username or password" 401 as a wrong password — indistinguishable to an attacker
+- **Configuration**: `ALLOWED_EMAIL_DOMAIN` constant in `backend/app/routes/auth.py`
 - **Filename pattern**: `{user_id}_{secure_filename}` to avoid collisions
 
 ## Test Data Workflow
@@ -405,27 +419,30 @@ The system uses a two-source approach for test management:
 ### Source of Truth
 
 1. **Cypress Repo** (`styleseat/cypress`) → Test case definitions
-   - All test cases are synced from the Cypress repo
+   - All test cases are synced from the Cypress repo via `sync_cypress.py`
    - Test structure maps to suites: `cypress/e2e/p1/common/` → P1 Common
-   - Use `/cypress-sync` to pull latest test definitions
+   - Use `npm run sync` or `/cypress-sync` to pull latest test definitions
+   - Matches existing cases by TestRail ID (`C\d+` prefix) first, then exact title — prevents duplicates when titles change
+   - Strips all leading C-ID prefixes (e.g., `C423016 C423079 Title` → `Title`) from stored titles
+   - Removes orphaned test cases (deleted from repo) and empty sections on each sync
+   - Safety guard: orphan cleanup skipped if >50% of file fetches fail (protects against API rate limits)
+   - Excluded paths: `manual/`, `utility/`, `utility_lifecycle/`, `weekly/` (configured in `EXCLUDED_PATHS` in `sync_cypress.py`)
 
 2. **CircleCI** → Test results
    - Test run results are imported from CircleCI workflows
-   - Use `/circleci-import <workflow-url>` or `npm run import -- <workflow-url>` to import results
+   - Use `npm run import -- <workflow-url>` or `/circleci-import <workflow-url>` to import results
    - Automatically creates test cases for new tests not yet synced
 
 ### Workflow
 
 ```bash
-# 1. Start demo (seeds TestRail data for baseline)
-# This is handled by "start demo" command
+# 1. Start demo (seeds DB + starts servers + syncs Cypress tests in background)
+npm run demo
 
-# 2. Sync test cases from Cypress repo
-/cypress-sync
+# 2. (Optional) Manually sync latest test cases from Cypress repo
+npm run sync
 
-# 3. Import CircleCI results (either way works)
-/circleci-import https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
-# or from terminal:
+# 3. Import CircleCI results
 npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
 ```
 
@@ -433,22 +450,21 @@ npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/..
 
 Suite names are auto-derived from `cypress_path` by `backend/app/suite_utils.py`. The `cypress_path` column on the `Suite` model is the single source of truth — no hardcoded dictionaries. Both `/cypress-sync` and `/circleci-import` use `suite_utils` to derive paths and look up suites.
 
-| Cypress Path (`cypress_path` column) | Auto-derived Suite Name |
+| Cypress Path (`cypress_path` column) | Demo Suite Name |
 |---------------------------------------|------------------------|
+| `cypress/e2e/abTest/` | ABTEST |
+| `cypress/e2e/p1/api/` | API |
+| `cypress/e2e/p3/` | Admin |
+| `cypress/e2e/p1/client/` | Client |
+| `cypress/e2e/p1/common/` | Common |
+| `cypress/e2e/communications/` | Communications |
+| `cypress/e2e/events/` | Events |
+| `cypress/e2e/devices/p1/` | Devices |
 | `cypress/e2e/p0/` | PO |
-| `cypress/e2e/p1/api/` | P1 API |
-| `cypress/e2e/p1/client/` | P1 Client |
-| `cypress/e2e/p1/common/` | P1 Common |
-| `cypress/e2e/p1/pro/` | P1 Pro |
-| `cypress/e2e/p1/search/` | P1 Search |
-| `cypress/e2e/p3/` | P3 - Admin |
 | `cypress/e2e/prod/` | PROD |
 | `cypress/e2e/preprod/` | Pre Prod |
-| `cypress/e2e/devices/p0/` | P0 Devices |
-| `cypress/e2e/devices/p1/` | P1 Devices |
-| `cypress/e2e/abtest/` | AB Test |
-| `cypress/e2e/communications/` | Communications |
-| `cypress/e2e/events/` | Events Mobile |
+| `cypress/e2e/p1/pro/` | Pro |
+| `cypress/e2e/p1/search/` | Search |
 
 New suites are auto-created when a new Cypress folder or CircleCI workflow is encountered — no code changes needed.
 
@@ -462,9 +478,19 @@ New suites are auto-created when a new Cypress folder or CircleCI workflow is en
 
 The fuzzy match report shows each match with its score so you can audit false positives.
 
+Test title extraction supports: `it()`, `it.only()`, `it.skip()`, `itStage()` (staging-only wrapper), tag arrays (`it([Tag.X], "title")`), escaped quotes, and template literals.
+
 ### Handling Failed File Loads
 
 When a Cypress test file fails to load (syntax error, import error, etc.):
 1. CircleCI reports a synthetic "An uncaught error was detected outside of a test" failure
 2. The `/circleci-import` detects this and marks all tests from that file as "Blocked"
 3. The error message from CircleCI is attached to each blocked result
+
+### Handling Failed CircleCI Jobs
+
+When a CircleCI job fails entirely (crash, timeout, infrastructure failure) and produces no `report.json`:
+1. The `/circleci-import` detects jobs with status `failed`/`error`/`infrastructure_fail`/`timedout` that have no report artifact
+2. A warning is printed listing the failed jobs and count (e.g., "2/4 job(s) failed without results")
+3. Cypress tests that would have run in those jobs appear as "Untested" with an error message noting the job failures
+4. The test run description in the database includes the failed job names for visibility in the UI
