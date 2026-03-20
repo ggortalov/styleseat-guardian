@@ -550,3 +550,63 @@ When a CircleCI job fails entirely (crash, timeout, infrastructure failure) and 
 2. A warning is printed listing the failed jobs and count (e.g., "2/4 job(s) failed without results")
 3. Cypress tests that would have run in those jobs appear as "Untested" with an error message noting the job failures
 4. The test run description in the database includes the failed job names for visibility in the UI
+
+## Troubleshooting
+
+### Servers & Connectivity
+
+**Cannot log in / "Network Error" in browser:**
+The backend is not running. Check with `lsof -i :5001`. Start it: `cd backend && source venv/bin/activate && python run.py`. If you ran `npm run demo` and closed the terminal, both servers were killed — re-run `npm run demo` or start each server individually.
+
+**Port 5001 already in use:**
+macOS AirTunes uses 5000; Guardian uses 5001 to avoid that. If 5001 is taken: `lsof -ti:5001 | xargs kill -9` then restart.
+
+**Port 5173 already in use:**
+Vite auto-increments to 5174+. CORS only allows 5173/5174. Free the port: `lsof -ti:5173 | xargs kill -9` then `cd frontend && npm run dev`.
+
+**401 on every API call after backend restart:**
+If `JWT_SECRET_KEY` is not set in `backend/.env`, a new random key is generated on each startup, invalidating all existing tokens. Fix: set a fixed `JWT_SECRET_KEY` in `backend/.env`, or just log in again.
+
+### Setup & Dependencies
+
+**`venv/bin/activate: No such file`:** Create the venv first: `cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`.
+
+**`ModuleNotFoundError: No module named 'flask'`:** Activate the venv and install: `cd backend && source venv/bin/activate && pip install -r requirements.txt`.
+
+**`npm ERR! Missing script: "dev"`:** Run `cd frontend && npm install` first.
+
+### `npm run import` (CircleCI Import)
+
+**`Usage: python import_circleci.py <workflow-ref>`:** No argument was passed. Use `npm run import -- <url-or-id>` (note the `--` separator required by npm).
+
+**`TypeError: 'run_date' is an invalid keyword argument for TestRun`:** Known bug — `import_circleci.py` line 415 used `run_date` but the model column is `created_at`. Fix: change `run_date=wf_date` to `created_at=wf_date`.
+
+**`CIRCLECI_API_TOKEN not set`:** Copy `.env.example` to `.env` and fill in your CircleCI personal API token: `cp backend/.env.example backend/.env`.
+
+**`Could not extract workflow ID`:** The script accepts three formats: a full CircleCI workflow URL, a `<pipeline>/workflows/<uuid>` path, or a bare workflow UUID.
+
+**Import fails with DB errors:** The backend must be running (or at least the DB must be accessible). The import script uses Flask's app context to write to SQLite.
+
+### `npm run sync` (Cypress Sync)
+
+**`gh: command not found`:** Install GitHub CLI: `brew install gh`.
+
+**`gh: Not logged in` / 401:** Authenticate: `gh auth login`. Needs `repo` scope for `styleseat/cypress`. Verify: `gh auth status`.
+
+**`'Cypress Automation' project not found`:** Database not seeded. Run `python seed.py` first, or use `npm run demo` which seeds automatically.
+
+**Sync runs but no test cases appear:** Check that `gh` has access to `styleseat/cypress`: `gh api repos/styleseat/cypress --jq .name`. If this fails, re-authenticate with the correct org scope.
+
+### Database
+
+**Reset completely:** `cd backend && rm -f app.db && source venv/bin/activate && python seed.py`. Then optionally `python sync_cypress.py` to re-populate test cases.
+
+**Missing columns after schema change:** `db.create_all()` does NOT add columns to existing tables. Delete `app.db` and re-seed, or apply `ALTER TABLE` manually. Known lightweight migrations are handled in `run.py` on startup (e.g., `updated_by`, `cypress_path`, `suite_id` nullable).
+
+### Authentication
+
+**"Invalid username or password":** Check credentials (`demo` / `Demo1234`). This message is also returned when the account email is not `@styleseat.com` (by design — OWASP-compliant generic errors).
+
+**Token expired:** JWT tokens last 24 hours (`JWT_ACCESS_TOKEN_EXPIRES` in `config.py`). Log out and log in again.
+
+**"Unable to create account":** Registration requires a `@styleseat.com` email. The same error is shown for duplicate usernames (intentional — prevents user enumeration)
