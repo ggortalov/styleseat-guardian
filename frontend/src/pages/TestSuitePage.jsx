@@ -9,6 +9,7 @@ import sectionService from '../services/sectionService';
 import caseService from '../services/caseService';
 import projectService from '../services/projectService';
 import { playConfirmation } from '../services/soundService';
+import stripTestRailId from '../utils/stripTestRailId';
 import './TestSuitePage.css';
 
 function extractFileName(preconditions) {
@@ -57,7 +58,7 @@ function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selection
             <span className={nameClass}>{sec.name}</span>
             <span className="category-header-count">{totalCases}</span>
           </div>
-          {sectionFileName && <span className="category-header-filepath">{sectionFileName}</span>}
+          {sectionFileName && <span className="category-header-filepath" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sectionFileName); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sectionFileName}</span>}
           {sec.description && <span className="category-header-desc">{sec.description}</span>}
         </div>
         <div className="category-header-actions">
@@ -97,8 +98,7 @@ function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selection
             {group.cases.length > 0 ? group.cases.map((c) => (
               <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
                 {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
-                <span className="case-row-title">{c.title}</span>
+                <span className="case-row-title">{stripTestRailId(c.title)}</span>
                 <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
                 <span className="case-row-meta">{c.author_name || ''}</span>
               </div>
@@ -410,8 +410,7 @@ export default function TestSuitePage() {
                   {filterCases.length > 0 ? filterCases.map((c) => (
                     <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
                       {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                      <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
-                      <span className="case-row-title">{c.title}</span>
+                      <span className="case-row-title">{stripTestRailId(c.title)}</span>
                       <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
                       <span className="case-row-meta">{c.author_name || ''}</span>
                     </div>
@@ -495,8 +494,7 @@ export default function TestSuitePage() {
                         {grouped.uncategorized.map((c) => (
                           <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
                             {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                            <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
-                            <span className="case-row-title">{c.title}</span>
+                            <span className="case-row-title">{stripTestRailId(c.title)}</span>
                             <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
                             <span className="case-row-meta">{c.author_name || ''}</span>
                           </div>

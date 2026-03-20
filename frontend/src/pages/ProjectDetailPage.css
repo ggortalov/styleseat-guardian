@@ -207,3 +207,28 @@
 .suite-card-chevron:hover {
   color: var(--sidebar-bg);
 }
+
+/* Run delete icon button */
+.row-action-cell {
+  width: 40px;
+  text-align: center;
+}
+
+.btn-icon-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-icon-delete:hover {
+  background: var(--status-failed-bg);
+  color: var(--status-failed);
+}

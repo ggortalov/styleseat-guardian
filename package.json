@@ -6,7 +6,7 @@
   "scripts": {
     "demo": "bash scripts/start-demo.sh",
     "import": "cd backend && source venv/bin/activate && python import_circleci.py",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "sync": "cd backend && source venv/bin/activate && python sync_cypress.py"
   },
   "keywords": [],
   "author": "",

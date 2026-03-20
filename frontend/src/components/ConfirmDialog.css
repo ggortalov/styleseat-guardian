@@ -95,7 +95,7 @@
   font-family: var(--font-sans);
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--status-failed);
   outline: none;
   box-sizing: border-box;
   text-align: center;
@@ -104,8 +104,8 @@
 }
 
 .confirm-safeguard-input:focus {
-  border-color: var(--sidebar-bg);
-  box-shadow: 0 0 0 3px rgba(26, 58, 42, 0.1);
+  border-color: var(--status-failed);
+  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.1);
 }
 
 .confirm-safeguard-input::placeholder {
