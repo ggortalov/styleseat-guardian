@@ -60,53 +60,179 @@
   color: var(--text-primary);
 }
 
-.overview-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
 @media (max-width: 1024px) {
   .tab {
     padding: 10px 14px;
     font-size: 13px;
   }
-
-  .overview-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
-@media (max-width: 768px) {
-  .overview-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.summary-list {
+/* ── Overview Tab ── */
+.ov-overview {
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
-.summary-row {
+/* Section 1: Stat Tiles */
+.ov-stats {
+  animation: slideUp 0.3s ease both;
+}
+
+.ov-tiles {
   display: flex;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-light);
-  font-size: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.summary-row:last-child {
-  border-bottom: none;
+.ov-stat-tile {
+  flex: 1;
+  min-width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 10px;
+  background: #fff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  cursor: default;
+  font-family: inherit;
 }
 
-.summary-row span:first-child {
-  color: var(--text-secondary);
-}
-
-.summary-row span:last-child {
-  font-weight: 600;
+.ov-stat-tile-count {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
   color: var(--text-primary);
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-stat-tile-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Suite Health Grid */
+.ov-suites {
+  animation: slideUp 0.3s ease both;
+  animation-delay: 0.05s;
+}
+
+.ov-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ov-suites-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.ov-suite-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+
+.ov-suite-card:hover {
+  border-color: var(--border);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.ov-suite-card-header {
+  display: flex;
+  align-items: center;
+}
+
+.ov-suite-card-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sidebar-bg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-suite-card-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color var(--transition);
+}
+
+.ov-suite-card:hover .ov-suite-card-chevron {
+  color: var(--sidebar-bg);
+}
+
+.ov-suite-card-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.ov-suite-card-bar {
+  display: flex;
+  height: 6px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--border-light);
+  width: 100%;
+  margin-top: 2px;
+}
+
+.ov-suite-card-bar > div {
+  height: 100%;
+}
+
+/* ── Responsive: 1024px ── */
+@media (max-width: 1024px) {
+  .ov-tiles {
+    gap: 8px;
+  }
+
+  .ov-stat-tile {
+    min-width: 70px;
+    padding: 10px 6px;
+  }
+
+  .ov-suites-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Responsive: 768px ── */
+@media (max-width: 768px) {
+  .ov-stat-tile {
+    min-width: 60px;
+  }
+
+  .ov-suites-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ov-suite-card {
+    padding: 12px;
+  }
 }
 
 /* Suite card list */

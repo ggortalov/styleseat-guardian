@@ -1,9 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
+import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import runService from '../services/runService';
 import { useAuth } from '../context/AuthContext';
+import stripTestRailId from '../utils/stripTestRailId';
 import './TestRunDetailPage.css';
 
 const STATUSES = ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'];
@@ -96,6 +98,25 @@ function groupBySection(results) {
   return groups;
 }
 
+/* ── Group results by suite, then by section (for combined runs) ── */
+function groupBySuiteThenSection(results) {
+  const suiteGroups = [];
+  const suiteMap = {};
+  for (const r of results) {
+    const suiteKey = r.suite_name || 'Unknown';
+    if (!suiteMap[suiteKey]) {
+      suiteMap[suiteKey] = { name: suiteKey, results: [] };
+      suiteGroups.push(suiteMap[suiteKey]);
+    }
+    suiteMap[suiteKey].results.push(r);
+  }
+  // Within each suite, group by section
+  return suiteGroups.map((sg) => ({
+    ...sg,
+    sections: groupBySection(sg.results),
+  }));
+}
+
 /* ── Main page ── */
 export default function TestRunDetailPage() {
   const { runId } = useParams();
@@ -121,6 +142,7 @@ export default function TestRunDetailPage() {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedRowId, setCopiedRowId] = useState(null);
+  const [showDeleteRun, setShowDeleteRun] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -220,18 +242,21 @@ export default function TestRunDetailPage() {
 
   const stats = computeStats(results);
   const filtered = filter === 'All' ? results : results.filter((r) => r.status === filter);
+  const isCombinedRun = run?.suite_name === 'All Suites' || !run?.suite_id;
   const sections = useMemo(() => groupBySection(filtered), [filtered]);
+  const suiteGroups = useMemo(() => isCombinedRun ? groupBySuiteThenSection(filtered) : null, [filtered, isCombinedRun]);
+  const [collapsedSuites, setCollapsedSuites] = useState({});
+  const toggleSuite = (name) => setCollapsedSuites((prev) => ({ ...prev, [name]: !prev[name] }));
 
   const toggleSection = (name) => setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
 
   const copyResults = () => {
     const lines = filtered.map((r) => {
-      const testId = r.case_title.match(/^(C\d+)/)?.[1] || `C${String(r.case_id).padStart(7, '0')}`;
-      const title = r.case_title.replace(/^C\d+\s*/, '').trim();
+      const title = stripTestRailId(r.case_title);
       const file = r.source_file || r.section_name || '';
-      return `${testId}\t${file}\t${title}`;
+      return `${file}\t${title}`;
     });
-    const header = `Test ID\tFile\tTitle`;
+    const header = `File\tTitle`;
     const text = [header, ...lines].join('\n');
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -241,10 +266,9 @@ export default function TestRunDetailPage() {
 
   const copyRow = (r, e) => {
     e.stopPropagation();
-    const testId = r.case_title.match(/^(C\d+)/)?.[1] || `C${String(r.case_id).padStart(7, '0')}`;
-    const title = r.case_title.replace(/^C\d+\s*/, '').trim();
+    const title = stripTestRailId(r.case_title);
     const file = r.source_file || r.section_name || '';
-    const text = `${testId}\t${file}\t${title}`;
+    const text = `${file}\t${title}`;
     navigator.clipboard.writeText(text).then(() => {
       setCopiedRowId(r.id);
       setTimeout(() => setCopiedRowId(null), 1500);
@@ -260,12 +284,12 @@ export default function TestRunDetailPage() {
       <Header breadcrumbs={[
         { label: 'Dashboard', path: '/' },
         ...(run?.project_name ? [{ label: run.project_name, path: `/projects/${run.project_id}` }] : []),
-        { label: formatRunDate(run?.created_at) || run?.name },
+        { label: formatRunDate(run?.run_date || run?.created_at) || run?.name },
       ]} />
       <div className="page-content">
         <div className="page-toolbar">
           <div>
-            <h2 className="page-heading">{run?.suite_name} &middot; {formatRunDate(run?.created_at)}</h2>
+            <h2 className="page-heading">{run?.name?.split(' · ')[0] || run?.suite_name} &middot; {formatRunDate(run?.run_date || run?.created_at)}</h2>
             <p className="page-description">{run?.name} &middot; {run?.is_completed ? 'Completed' : 'Active'}</p>
           </div>
           <div className="toolbar-actions">
@@ -273,6 +297,7 @@ export default function TestRunDetailPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
               Manage
             </button>
+            <button className="btn btn-danger" onClick={() => setShowDeleteRun(true)}>Delete</button>
             <button className="btn btn-secondary" onClick={() => navigate(`/projects/${run.project_id}`)}>Back to Project</button>
           </div>
         </div>
@@ -341,90 +366,158 @@ export default function TestRunDetailPage() {
           )}
         </div>
 
-        {sections.length > 0 ? (
+        {(isCombinedRun ? (suiteGroups && suiteGroups.length > 0) : sections.length > 0) ? (
           <div className="run-section-tree">
-            {sections.map((sec) => (
-              <div key={sec.name} className="run-section-group">
-                <div
-                  className="run-section-header"
-                  onClick={(e) => {
-                    // Only toggle if user clicked the chevron, count badge, or empty header area — not the selectable text
-                    const tag = e.target.closest('.run-section-name, .run-section-file, .run-section-info');
-                    if (!tag) toggleSection(sec.name);
-                  }}
-                >
-                  <svg className={`run-section-chevron ${collapsed[sec.name] ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                  {sec.describeTitle ? (
-                    <span className="run-section-info">
-                      <span className="run-section-name">{sec.describeTitle}</span>
-                      <span className="run-section-file">{sec.name}</span>
-                    </span>
-                  ) : (
-                    <span className="run-section-name">{sec.name}</span>
-                  )}
-                  <span className="run-section-count">{sec.results.length}</span>
-                </div>
-                {!collapsed[sec.name] && (
-                  <div className="run-section-cases">
-                    {selectionMode && sec.results.length > 0 && (
-                      <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
-                        <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
-                        <span className="run-select-all-label">Select All</span>
-                      </div>
-                    )}
-                    {sec.results.map((r) => (
-                      <div
-                        key={r.id}
-                        id={`result-${r.id}`}
-                        className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
-                        onClick={() => {
-                          if (!selectionMode) {
-                            sessionStorage.setItem('runPageScroll', window.scrollY.toString());
-                            navigate(`/runs/${runId}/execute/${r.id}`);
-                          }
-                        }}
-                      >
-                        {selectionMode && (
-                          <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
-                        )}
-                        <span className="run-case-id">C{String(r.case_id).padStart(7, '0')}</span>
-                        <span className="run-case-title">{r.case_title}</span>
-                        <span className="run-case-tested-by">
-                          <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>
-                            {r.tested_by_name || 'Automation'}
-                          </span>
-                        </span>
-                        <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
-                          <StatusDropdown
-                            status={r.status}
-                            onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)}
-                            locked={r.is_locked}
-                          />
-                        </span>
-                        <button
-                          className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`}
-                          onClick={(e) => copyRow(r, e)}
-                          title="Copy test ID, file, and title"
-                        >
-                          {copiedRowId === r.id ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    ))}
+            {isCombinedRun ? (
+              /* Two-level: Suite > Section > Results */
+              suiteGroups.map((sg) => (
+                <div key={sg.name} className="run-suite-group">
+                  <div className="run-suite-header" onClick={() => toggleSuite(sg.name)}>
+                    <svg className={`run-section-chevron ${collapsedSuites[sg.name] ? '' : 'open'}`} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    <span className="run-suite-name">{sg.name}</span>
+                    <span className="run-section-count">{sg.results.length}</span>
                   </div>
-                )}
-              </div>
-            ))}
+                  {!collapsedSuites[sg.name] && (
+                    <div className="run-suite-sections">
+                      {sg.sections.map((sec) => (
+                        <div key={`${sg.name}-${sec.name}`} className="run-section-group">
+                          <div
+                            className="run-section-header"
+                            onClick={(e) => {
+                              const tag = e.target.closest('.run-section-name, .run-section-file, .run-section-info');
+                              if (!tag) toggleSection(`${sg.name}/${sec.name}`);
+                            }}
+                          >
+                            <svg className={`run-section-chevron ${collapsed[`${sg.name}/${sec.name}`] ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                            {sec.describeTitle ? (
+                              <span className="run-section-info">
+                                <span className="run-section-name">{sec.describeTitle}</span>
+                                <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
+                              </span>
+                            ) : (
+                              <span className="run-section-name">{sec.name}</span>
+                            )}
+                            <span className="run-section-count">{sec.results.length}</span>
+                          </div>
+                          {!collapsed[`${sg.name}/${sec.name}`] && (
+                            <div className="run-section-cases">
+                              {selectionMode && sec.results.length > 0 && (
+                                <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
+                                  <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
+                                  <span className="run-select-all-label">Select All</span>
+                                </div>
+                              )}
+                              {sec.results.map((r) => (
+                                <div
+                                  key={r.id}
+                                  id={`result-${r.id}`}
+                                  className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
+                                  onClick={() => {
+                                    if (!selectionMode) {
+                                      sessionStorage.setItem('runPageScroll', window.scrollY.toString());
+                                      navigate(`/runs/${runId}/execute/${r.id}`);
+                                    }
+                                  }}
+                                >
+                                  {selectionMode && (
+                                    <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
+                                  )}
+                                  <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
+                                  <span className="run-case-tested-by">
+                                    <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>{r.tested_by_name || 'Automation'}</span>
+                                  </span>
+                                  <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
+                                    <StatusDropdown status={r.status} onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)} locked={r.is_locked} />
+                                  </span>
+                                  <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test ID, file, and title">
+                                    {copiedRowId === r.id ? (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                                    ) : (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                                    )}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              /* Single-level: Section > Results (existing behavior) */
+              sections.map((sec) => (
+                <div key={sec.name} className="run-section-group">
+                  <div
+                    className="run-section-header"
+                    onClick={(e) => {
+                      const tag = e.target.closest('.run-section-name, .run-section-file, .run-section-info');
+                      if (!tag) toggleSection(sec.name);
+                    }}
+                  >
+                    <svg className={`run-section-chevron ${collapsed[sec.name] ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    {sec.describeTitle ? (
+                      <span className="run-section-info">
+                        <span className="run-section-name">{sec.describeTitle}</span>
+                        <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
+                      </span>
+                    ) : (
+                      <span className="run-section-name">{sec.name}</span>
+                    )}
+                    <span className="run-section-count">{sec.results.length}</span>
+                  </div>
+                  {!collapsed[sec.name] && (
+                    <div className="run-section-cases">
+                      {selectionMode && sec.results.length > 0 && (
+                        <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
+                          <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
+                          <span className="run-select-all-label">Select All</span>
+                        </div>
+                      )}
+                      {sec.results.map((r) => (
+                        <div
+                          key={r.id}
+                          id={`result-${r.id}`}
+                          className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
+                          onClick={() => {
+                            if (!selectionMode) {
+                              sessionStorage.setItem('runPageScroll', window.scrollY.toString());
+                              navigate(`/runs/${runId}/execute/${r.id}`);
+                            }
+                          }}
+                        >
+                          {selectionMode && (
+                            <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
+                          )}
+                          <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
+                          <span className="run-case-tested-by">
+                            <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>{r.tested_by_name || 'Automation'}</span>
+                          </span>
+                          <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
+                            <StatusDropdown status={r.status} onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)} locked={r.is_locked} />
+                          </span>
+                          <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test ID, file, and title">
+                            {copiedRowId === r.id ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         ) : (
           <div className="run-results-panel">
@@ -452,6 +545,19 @@ export default function TestRunDetailPage() {
           <button className="btn btn-secondary btn-sm bulk-status-clear" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showDeleteRun}
+        onClose={() => setShowDeleteRun(false)}
+        onConfirm={async () => {
+          await runService.delete(runId);
+          window.__refreshSidebarProjects?.();
+          navigate(`/projects/${run.project_id}`);
+        }}
+        title="Delete Test Run"
+        message={`"${run?.name}" (${results.length} result${results.length !== 1 ? 's' : ''}) will be permanently deleted.`}
+        requireSafeguard
+      />
     </div>
   );
 }

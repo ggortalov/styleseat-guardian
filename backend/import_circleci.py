@@ -8,6 +8,7 @@ Example:
     python import_circleci.py https://app.circleci.com/pipelines/github/styleseat/cypress/61253/workflows/e2d6bec1-40e3-4813-9721-9d31a106977a
 """
 import sys
+import os
 import re
 import json
 import base64
@@ -15,6 +16,11 @@ import subprocess
 import requests
 from datetime import datetime, timezone
 from collections import Counter
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent / '.env')
 
 from app import create_app, db
 from app.models import (
@@ -22,8 +28,13 @@ from app.models import (
 )
 from app.suite_utils import workflow_name_to_cypress_path, cypress_path_to_name
 
-TOKEN = 'REDACTED_CIRCLECI_TOKEN'
-PROJECT_SLUG = 'gh/styleseat/cypress'
+TOKEN = os.environ.get('CIRCLECI_API_TOKEN')
+if not TOKEN:
+    print("ERROR: CIRCLECI_API_TOKEN environment variable is not set.")
+    print("Set it with: export CIRCLECI_API_TOKEN=your_token_here")
+    sys.exit(1)
+
+PROJECT_SLUG = os.environ.get('CIRCLECI_PROJECT_SLUG', 'gh/styleseat/cypress')
 BASE_URL = 'https://circleci.com/api/v2'
 
 HEADERS = {'Circle-Token': TOKEN, 'Content-Type': 'application/json'}
@@ -239,7 +250,7 @@ def import_workflow(workflow_id):
         wf_date = datetime.now(timezone.utc)
     run_date_str = wf_date.strftime('%a, %b %d, %Y')
 
-    # Step 4: Per-suite processing
+    # Step 4: Create single combined run and process all suites
     app = create_app()
     with app.app_context():
         project = Project.query.filter_by(name='Cypress Automation').first()
@@ -247,7 +258,31 @@ def import_workflow(workflow_id):
             print("ERROR: Project 'Cypress Automation' not found.")
             sys.exit(1)
 
+        # Duplicate detection at workflow level
+        existing_run = TestRun.query.filter(
+            TestRun.project_id == project.id,
+            TestRun.description.contains(workflow_id[:8])
+        ).first()
+        if existing_run:
+            print(f"WARNING: Workflow {workflow_id[:8]} already imported as run "
+                  f"'{existing_run.name}' (ID: {existing_run.id}). Aborting.")
+            return
+
+        # Create single combined run (suite_id=None)
+        run_name = f'Workflow \u00b7 {run_date_str}'
+        run_desc = f'Imported from CircleCI workflow {workflow_id[:8]}'
+        run = TestRun(
+            project_id=project.id, suite_id=None, name=run_name,
+            description=run_desc, run_date=wf_date
+        )
+        db.session.add(run)
+        db.session.flush()
+
+        print(f"\nCreated combined run: {run.name} (ID: {run.id})")
+
+        grand_totals = {'Passed': 0, 'Failed': 0, 'Blocked': 0, 'Untested': 0}
         suite_reports = []
+        all_failed_jobs = []
 
         for wf_name, wf_jobs in suite_jobs.items():
             wf_job_numbers = [j.get('job_number') for j in wf_jobs]
@@ -304,6 +339,7 @@ def import_workflow(workflow_id):
                   f"States: {dict(Counter(t['state'] for t in suite_ci_tests))}")
 
             if suite_failed_jobs:
+                all_failed_jobs.extend(suite_failed_jobs)
                 print(f"\nWARNING: {len(suite_failed_jobs)}/{len(wf_job_numbers)} "
                       f"job(s) failed without producing test results:")
                 for fj in suite_failed_jobs:
@@ -351,40 +387,10 @@ def import_workflow(workflow_id):
 
             print(f"\nSuite: {suite.name} (ID: {suite.id})")
 
-            # Duplicate detection
-            existing_run = TestRun.query.filter(
-                TestRun.suite_id == suite.id,
-                TestRun.description.contains(workflow_id[:8])
-            ).first()
-            if existing_run:
-                print(f"WARNING: Workflow {workflow_id[:8]} already imported as run "
-                      f"'{existing_run.name}' (ID: {existing_run.id}). Skipping this suite.")
-                continue
-
             existing_cases = {
                 normalize(c.title): c
                 for c in TestCase.query.filter_by(suite_id=suite.id).all()
             }
-
-            # Determine run name
-            variant_label = WORKFLOW_VARIANTS.get(wf_name.lower())
-            if variant_label:
-                run_name = f'{suite_name} ({variant_label}) \u00b7 {run_date_str}'
-            else:
-                run_name = f'{suite_name} \u00b7 {run_date_str}'
-
-            run_desc = f'Imported from CircleCI workflow {workflow_id[:8]}'
-            if suite_failed_jobs:
-                failed_names = ', '.join(fj['name'] for fj in suite_failed_jobs)
-                run_desc += (f'\nWARNING: {len(suite_failed_jobs)}/{len(wf_job_numbers)} '
-                             f'job(s) failed without results: {failed_names}')
-
-            run = TestRun(
-                project_id=project.id, suite_id=suite.id, name=run_name,
-                description=run_desc, run_date=wf_date
-            )
-            db.session.add(run)
-            db.session.flush()
 
             results_created = {'Passed': 0, 'Failed': 0, 'Blocked': 0, 'Untested': 0}
             blocked_tests, untested_tests, failed_tests = [], [], []
@@ -567,11 +573,9 @@ def import_workflow(workflow_id):
                     ))
                     results_created[status] += 1
 
-            db.session.commit()
-
             # Per-suite report
             total = sum(results_created.values())
-            print(f"\n  Run: {run.name}")
+            print(f"\n  Suite: {suite.name}")
             print(f"  Passed:   {results_created['Passed']}")
             print(f"  Failed:   {results_created['Failed']}")
             print(f"  Blocked:  {results_created['Blocked']}")
@@ -609,8 +613,10 @@ def import_workflow(workflow_id):
                 for t in unmatched_ci:
                     print(f"    - [{t['state']}] {t['title'][:80]}")
 
+            for status_key, count in results_created.items():
+                grand_totals[status_key] += count
+
             suite_reports.append({
-                'run_name': run.name,
                 'suite_name': suite.name,
                 'results': dict(results_created),
                 'total': total,
@@ -618,28 +624,33 @@ def import_workflow(workflow_id):
                 'job_count': len(wf_job_numbers),
             })
 
-        # Final Report (all suites)
+        # Update run description with failed job info
+        if all_failed_jobs:
+            failed_names = ', '.join(fj['name'] for fj in all_failed_jobs)
+            run.description += (f'\nWARNING: {len(all_failed_jobs)} '
+                                f'job(s) failed without results: {failed_names}')
+
+        db.session.commit()
+
+        # Final Report
         print(f"\n{'=' * 60}")
-        print(f"IMPORT COMPLETE - {len(suite_reports)} suite(s)")
+        print(f"IMPORT COMPLETE - 1 combined run with {len(suite_reports)} suite(s)")
+        print(f"Run: {run.name} (ID: {run.id})")
         print(f"{'=' * 60}")
 
-        grand_totals = {'Passed': 0, 'Failed': 0, 'Blocked': 0, 'Untested': 0}
         for sr in suite_reports:
-            for status, count in sr['results'].items():
-                grand_totals[status] = grand_totals.get(status, 0) + count
             has_failed = sr['failed_jobs']
             flag = ' WARNING' if has_failed else ''
-            print(f"  {sr['run_name']}: {sr['total']} results "
+            print(f"  {sr['suite_name']}: {sr['total']} results "
                   f"(P:{sr['results']['Passed']} F:{sr['results']['Failed']} "
                   f"B:{sr['results']['Blocked']} U:{sr['results']['Untested']}){flag}")
 
         grand_total = sum(grand_totals.values())
-        if len(suite_reports) > 1:
-            print(f"\n  Grand total: {grand_total}")
-            print(f"    Passed:   {grand_totals['Passed']}")
-            print(f"    Failed:   {grand_totals['Failed']}")
-            print(f"    Blocked:  {grand_totals['Blocked']}")
-            print(f"    Untested: {grand_totals['Untested']}")
+        print(f"\n  Grand total: {grand_total}")
+        print(f"    Passed:   {grand_totals['Passed']}")
+        print(f"    Failed:   {grand_totals['Failed']}")
+        print(f"    Blocked:  {grand_totals['Blocked']}")
+        print(f"    Untested: {grand_totals['Untested']}")
 
 
 def main():

@@ -48,12 +48,21 @@ def get_run_completed_at(run_id):
 @runs_bp.route("/runs", methods=["GET"])
 @jwt_required()
 def list_all_runs():
-    runs = TestRun.query.order_by(TestRun.created_at.desc()).all()
+    limit = request.args.get("limit", 30, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    total_count = TestRun.query.count()
+    runs = (
+        TestRun.query
+        .order_by(TestRun.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     result = []
     for run in runs:
         d = run.to_dict()
         d["project_name"] = run.project.name if run.project else None
-        d["suite_name"] = run.suite.name if run.suite else None
+        d["suite_name"] = run.suite.name if run.suite else "All Suites"
         counts = dict(
             db.session.query(TestResult.status, func.count(TestResult.id))
             .filter_by(run_id=run.id)
@@ -75,7 +84,7 @@ def list_all_runs():
             completed_at = get_run_completed_at(run.id)
             d["completed_at"] = completed_at.isoformat() if completed_at else None
         result.append(d)
-    return jsonify(result), 200
+    return jsonify({"items": result, "total": total_count, "limit": limit, "offset": offset}), 200
 
 
 @runs_bp.route("/projects/<int:project_id>/runs", methods=["GET"])
@@ -86,7 +95,7 @@ def list_runs(project_id):
     result = []
     for run in runs:
         d = run.to_dict()
-        d["suite_name"] = run.suite.name if run.suite else None
+        d["suite_name"] = run.suite.name if run.suite else "All Suites"
         counts = dict(
             db.session.query(TestResult.status, func.count(TestResult.id))
             .filter_by(run_id=run.id)
@@ -152,7 +161,7 @@ def create_run(project_id):
 def get_run(run_id):
     run = TestRun.query.get_or_404(run_id)
     d = run.to_dict()
-    d["suite_name"] = run.suite.name if run.suite else None
+    d["suite_name"] = run.suite.name if run.suite else "All Suites"
     project = Project.query.get(run.project_id) if run.project_id else None
     d["project_name"] = project.name if project else None
 
@@ -215,6 +224,12 @@ def list_results(run_id):
     if tester_ids:
         users = User.query.filter(User.id.in_(tester_ids)).all()
         tester_map = {u.id: u.username for u in users}
+    # Batch-fetch suite names for all suite_ids referenced by test cases
+    suite_ids = {r.test_case.suite_id for r in results if r.test_case and r.test_case.suite_id}
+    suite_map = {}
+    if suite_ids:
+        suites = Suite.query.filter(Suite.id.in_(suite_ids)).all()
+        suite_map = {s.id: s.name for s in suites}
     out = []
     for r in results:
         d = r.to_dict()
@@ -223,6 +238,7 @@ def list_results(run_id):
         if r.test_case:
             d["case_title"] = r.test_case.title
             d["priority"] = r.test_case.priority
+            d["suite_name"] = suite_map.get(r.test_case.suite_id, "Unknown")
             # Extract source file and describe title from preconditions if present
             preconditions = r.test_case.preconditions or ""
             source_file = None
