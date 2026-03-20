@@ -17,8 +17,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 14px 10px;
+  justify-content: center;
+  gap: 4px;
+  padding: 20px 10px;
   background: #fff;
   border: 1.5px solid var(--border-light);
   border-radius: var(--radius-md);
@@ -78,7 +79,7 @@
 }
 
 .stat-tile-count {
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 800;
   line-height: 1;
   color: var(--tile-color, var(--text-primary));
@@ -87,11 +88,11 @@
 }
 
 .stat-tile-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .stat-tile-pct {
@@ -264,10 +265,10 @@
 
 /* ── Suite-level grouping (combined runs) ── */
 .run-suite-group {
-  border: 1.5px solid var(--sidebar-bg);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   background: var(--bg-white);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .run-suite-header {
@@ -275,7 +276,7 @@
   align-items: center;
   gap: 10px;
   padding: 16px 18px;
-  background: var(--primary-light);
+  background: var(--bg-subtle);
   border-bottom: 1px solid var(--border-light);
   cursor: pointer;
   transition: background var(--transition);
@@ -324,7 +325,6 @@
 
 /* ── Case rows inside sections ── */
 .run-section-cases {
-  border-top: 1px solid var(--border-light);
 }
 
 .run-case-row {
@@ -359,7 +359,7 @@
 .run-case-title {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
   overflow: hidden;
@@ -441,9 +441,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 3px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-full);
 }
 
@@ -481,8 +481,8 @@
   gap: 5px;
   border: none;
   border-radius: var(--radius-full);
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 5px 14px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;

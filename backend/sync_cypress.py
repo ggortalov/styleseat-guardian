@@ -131,10 +131,16 @@ def main():
                 db.session.flush()
                 print(f"  Created suite: {suite_name} ({cypress_path})")
 
-            # Cache existing sections and cases (index by title and TestRail ID)
+            # Cache existing sections and cases
+            # Primary key: (section_id, title_lower) — file-aware dedup
+            # Secondary key: title_lower → [list of cases] — fallback for TestRail ID migrations
             existing_sections = {s.name: s for s in Section.query.filter_by(suite_id=suite.id).all()}
             all_cases = TestCase.query.filter_by(suite_id=suite.id).all()
-            existing_cases = {c.title.lower(): c for c in all_cases}
+            existing_cases_by_section = {}  # (section_id, title_lower) → case
+            existing_cases_by_title = defaultdict(list)  # title_lower → [case, ...]
+            for c in all_cases:
+                existing_cases_by_section[(c.section_id, c.title.lower())] = c
+                existing_cases_by_title[c.title.lower()].append(c)
             existing_by_testrail_id = {}
             for c in all_cases:
                 m = TESTRAIL_ID_RE.match(c.title)
@@ -188,11 +194,24 @@ def main():
                     # Match by exact title (raw or stripped) first, then fall back to TestRail ID
                     display_title = STRIP_CID_RE.sub('', title)
                     display_lower = display_title.lower()
-                    case = existing_cases.get(title_lower) or existing_cases.get(display_lower)
+
+                    # Primary: match by (section_id, title) — section-aware dedup
+                    case = (existing_cases_by_section.get((section.id, title_lower)) or
+                            existing_cases_by_section.get((section.id, display_lower)))
+
                     if not case:
+                        # Secondary: try TestRail ID match (cross-section, for migrations only)
                         m = TESTRAIL_ID_RE.match(title)
                         if m:
                             case = existing_by_testrail_id.get(m.group(1))
+                            # Only use the TestRail match if it's in THIS section,
+                            # or if there's no same-titled case in another section
+                            # (i.e., it's a genuine migration, not a cross-file duplicate)
+                            if case and case.section_id != section.id:
+                                # Check if another section already owns a case with this title
+                                same_title_cases = existing_cases_by_title.get(display_lower, [])
+                                if any(c.section_id == section.id for c in same_title_cases):
+                                    case = None  # There's already one in this section
 
                     if case:
                         # Update existing case (strip C-ID prefix from stored title)
@@ -218,9 +237,10 @@ def main():
 
                     visited_case_ids.add(case.id)
 
-                    # Index by both raw and stripped titles for dedup
-                    existing_cases[title_lower] = case
-                    existing_cases[display_lower] = case
+                    # Index by (section, title) for dedup within this sync run
+                    existing_cases_by_section[(section.id, title_lower)] = case
+                    existing_cases_by_section[(section.id, display_lower)] = case
+                    existing_cases_by_title[display_lower].append(case)
                     testrail_m = TESTRAIL_ID_RE.match(title)
                     if testrail_m:
                         existing_by_testrail_id[testrail_m.group(1)] = case
