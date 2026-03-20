@@ -9,15 +9,6 @@
   margin-bottom: 8px;
 }
 
-.case-detail-id {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
 .case-detail-actions {
   display: flex;
   gap: 10px;
