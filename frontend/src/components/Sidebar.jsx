@@ -123,7 +123,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" />
           {!collapsed && (
             <div className="sidebar-logo-wordmark">
-              <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Regression Guard</span></span>
+              <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Guardian</span></span>
             </div>
           )}
         </div>

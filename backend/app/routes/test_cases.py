@@ -31,7 +31,7 @@ def list_cases_by_suite(suite_id):
             user = User.query.get(author_id)
             d["author_name"] = user.username if user else None
         else:
-            d["author_name"] = None
+            d["author_name"] = "Automation"
         result.append(d)
     return jsonify(result), 200
 
@@ -115,9 +115,9 @@ def get_case(case_id):
     author_id = case.updated_by or case.created_by
     if author_id:
         user = User.query.get(author_id)
-        result["author_name"] = user.username if user else None
+        result["author_name"] = user.username if user else "Automation"
     else:
-        result["author_name"] = None
+        result["author_name"] = "Automation"
     return jsonify(result), 200
 
 

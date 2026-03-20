@@ -26,7 +26,7 @@ Guardian provides a centralized hub for organizing test suites, authoring test c
 # Launch the full demo (resets DB, syncs Cypress tests, starts both servers)
 npm run demo
 
-# Login: demo / demo123  or  Gennady / demo123
+# Login: demo / Demo1234
 # URL:   http://localhost:5173
 ```
 
@@ -205,8 +205,7 @@ regression-guard/
 
 | User | Password | Email |
 |------|----------|-------|
-| `demo` | `demo123` | demo@styleseat.com |
-| `Gennady` | `demo123` | ggortalov@styleseat.com |
+| `demo` | `Demo1234` | demo@styleseat.com |
 
 ## Ports
 
