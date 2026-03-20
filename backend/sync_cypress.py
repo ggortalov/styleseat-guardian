@@ -200,7 +200,7 @@ def main():
                             case_type='Regression',
                             priority='Medium',
                             preconditions=preconditions_text,
-                            created_by=1
+                            created_by=None
                         )
                         db.session.add(case)
                         existing_cases[title_lower] = case

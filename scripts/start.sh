@@ -3,21 +3,16 @@ set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "=== StyleSeat Guardian Demo ==="
+echo "=== StyleSeat Guardian ==="
 
 # 1. Kill existing servers
 echo "Stopping existing servers..."
 lsof -ti:5001 -ti:5173 -ti:5174 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# 2. Reset database from demo snapshot
-echo "Resetting database from demo snapshot..."
-cd "$ROOT_DIR/backend"
-rm -f app.db
-cp app.db.demo app.db
-
-# 2b. Auto-migrate: ensure demo snapshot schema matches current models
+# 2. Auto-migrate: ensure current schema matches models
 echo "Checking schema migrations..."
+cd "$ROOT_DIR/backend"
 python3 -c "
 import sqlite3, sys
 conn = sqlite3.connect('app.db')
@@ -63,7 +58,7 @@ cd "$ROOT_DIR/frontend"
 npm run dev &
 FRONTEND_PID=$!
 
-# 5. Wait for servers to be ready
+# 5. Wait for backend to be ready
 echo "Waiting for servers..."
 for i in $(seq 1 15); do
   if curl -s http://localhost:5001/api/auth/login > /dev/null 2>&1; then
@@ -71,13 +66,14 @@ for i in $(seq 1 15); do
   fi
   sleep 1
 done
+
 # 6. Sync test cases from Cypress repo
 echo "Syncing test cases from Cypress repo..."
 cd "$ROOT_DIR/backend"
 python sync_cypress.py
 
 echo ""
-echo "=== Demo Ready ==="
+echo "=== Guardian Ready ==="
 echo "  URL:   http://localhost:5173"
 echo "  Login: demo / Demo1234"
 echo ""

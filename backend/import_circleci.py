@@ -416,7 +416,7 @@ def import_workflow(workflow_id):
                             suite_id=suite.id, section_id=section.id,
                             title=title, case_type='Regression',
                             priority='Medium',
-                            preconditions=preconditions_text, created_by=1
+                            preconditions=preconditions_text, created_by=None
                         )
                         db.session.add(case)
                         db.session.flush()
@@ -487,14 +487,14 @@ def import_workflow(workflow_id):
                         error_message=error_msg, artifacts=artifacts_json,
                         tested_at=(datetime.now(timezone.utc)
                                    if status != 'Untested' else None),
-                        tested_by=1 if status != 'Untested' else None
+                        tested_by=None
                     )
                     db.session.add(result)
                     db.session.flush()
                     db.session.add(ResultHistory(
                         result_id=result.id, status=status,
                         error_message=error_msg, artifacts=artifacts_json,
-                        changed_by=1
+                        changed_by=None
                     ))
                     results_created[status] += 1
 
@@ -528,7 +528,7 @@ def import_workflow(workflow_id):
                             title=title, case_type='Regression',
                             priority='Medium',
                             preconditions='Source: CircleCI (no Cypress match)',
-                            created_by=1
+                            created_by=None
                         )
                         db.session.add(case)
                         db.session.flush()
@@ -553,14 +553,14 @@ def import_workflow(workflow_id):
                     result = TestResult(
                         run_id=run.id, case_id=case.id, status=status,
                         error_message=error_msg, artifacts=artifacts_json,
-                        tested_at=datetime.now(timezone.utc), tested_by=1
+                        tested_at=datetime.now(timezone.utc), tested_by=None
                     )
                     db.session.add(result)
                     db.session.flush()
                     db.session.add(ResultHistory(
                         result_id=result.id, status=status,
                         error_message=error_msg, artifacts=artifacts_json,
-                        changed_by=1
+                        changed_by=None
                     ))
                     results_created[status] += 1
 

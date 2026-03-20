@@ -31,7 +31,7 @@ npm run import -- <circleci-workflow-url>
 cd frontend && npm run build
 ```
 
-**Demo credentials:** `demo` / `demo123` or `Gennady` / `demo123`
+**Demo credentials:** `demo` / `Demo1234`
 
 ## Architecture
 
@@ -365,14 +365,14 @@ This script (`scripts/start-demo.sh`) performs:
 ### Expected demo data
 | Entity | Count | Notes |
 |--------|-------|-------|
-| Users | 2 | `demo` / `demo123` (demo@styleseat.com), `Gennady` / `demo123` (ggortalov@styleseat.com) |
+| Users | 1 | `demo` / `Demo1234` (demo@styleseat.com) |
 | Projects | 1 | Cypress Automation |
 | Suites | 13 | ABTEST, API, Admin, Client, Common, Communications, Devices, Events, PO, PROD, Pre Prod, Pro, Search |
 | Sections | ~669 | Named from `describe()` blocks in Cypress files |
 | Test Cases | ~2,527 | Extracted from Cypress `it()` blocks + manual Devices cases (count updates on sync) |
 | Test Runs | 0 | Use `npm run import -- <url>` to import runs from CircleCI |
 
-**Login:** `demo` / `demo123` or `Gennady` / `demo123`
+**Login:** `demo` / `Demo1234`
 **URL:** http://localhost:5173
 
 ## Dependencies

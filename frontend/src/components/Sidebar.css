@@ -23,7 +23,7 @@
 
 /* ============ Header / Brand ============ */
 .sidebar-header {
-  padding: 24px 20px 20px;
+  padding: 20px 20px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   align-items: center;
@@ -42,7 +42,7 @@
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   text-decoration: none;
 }
@@ -69,19 +69,20 @@
 .sidebar-logo-name {
   color: #fff;
   font-family: var(--font-sans);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.3px;
   line-height: 1.2;
 }
 
 .sidebar-logo-accent {
-  font-weight: 400;
-  opacity: 0.7;
+  font-weight: 300;
+  opacity: 0.65;
   display: block;
-  font-size: 11px;
-  letter-spacing: 1.2px;
+  font-size: 10px;
+  letter-spacing: 5.5px;
   text-transform: uppercase;
+  margin-top: 4px;
 }
 
 /* ============ Collapse Button ============ */
