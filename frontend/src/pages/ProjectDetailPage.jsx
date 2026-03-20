@@ -1,19 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
-import Modal from '../components/Modal';
-import ConfirmDialog from '../components/ConfirmDialog';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
 import projectService from '../services/projectService';
 import suiteService from '../services/suiteService';
 import runService from '../services/runService';
-import { getStatusChartData } from '../constants/statusColors';
-import { Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import dashboardService from '../services/dashboardService';
+import { STATUS_ORDER } from '../constants/statusColors';
 import './ProjectDetailPage.css';
-
-ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
@@ -21,45 +16,25 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState(null);
   const [suites, setSuites] = useState([]);
   const [runs, setRuns] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('suites');
-
-  // Suite modal
-  const [showSuiteModal, setShowSuiteModal] = useState(false);
-  const [editSuite, setEditSuite] = useState(null);
-  const [suiteName, setSuiteName] = useState('');
-  const [suiteDesc, setSuiteDesc] = useState('');
-
-  // Run modal
-  const [showRunModal, setShowRunModal] = useState(false);
-  const [runName, setRunName] = useState('');
-  const [runDesc, setRunDesc] = useState('');
-  const [runSuiteId, setRunSuiteId] = useState('');
-
-  // Edit project
-  const [showEditProject, setShowEditProject] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-
-  // Delete confirm
-  const [showDelete, setShowDelete] = useState(false);
-  const [deleteSuite, setDeleteSuite] = useState(null);
-  const [deleteRun, setDeleteRun] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') || 'suites';
+  const setTab = (t) => setSearchParams(t === 'suites' ? {} : { tab: t }, { replace: true });
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [p, s, r, st] = await Promise.all([
+      const [p, s, r, dash] = await Promise.all([
         projectService.getById(projectId),
         suiteService.getByProject(projectId),
         runService.getByProject(projectId),
-        projectService.getStats(projectId),
+        dashboardService.getByProject(projectId),
       ]);
       setProject(p);
       setSuites(s);
       setRuns(r.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
-      setStats(st);
+      setDashboardData(dash);
     } catch {
       navigate('/');
     } finally {
@@ -69,84 +44,16 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { fetchAll(); }, [projectId]);
 
-  const handleSaveSuite = async (e) => {
-    e.preventDefault();
-    if (editSuite) {
-      await suiteService.update(editSuite.id, { name: suiteName, description: suiteDesc });
-    } else {
-      await suiteService.create(projectId, { name: suiteName, description: suiteDesc });
-    }
-    setShowSuiteModal(false);
-    setSuiteName('');
-    setSuiteDesc('');
-    setEditSuite(null);
-    fetchAll();
-  };
-
-  const handleDeleteSuite = async () => {
-    if (deleteSuite) {
-      await suiteService.delete(deleteSuite.id);
-      setDeleteSuite(null);
-      fetchAll();
-      if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
-    }
-  };
-
-  const handleDeleteRun = async () => {
-    if (deleteRun) {
-      await runService.delete(deleteRun.id);
-      setDeleteRun(null);
-      fetchAll();
-      window.__refreshSidebarProjects?.();
-    }
-  };
-
-  const handleCreateRun = async (e) => {
-    e.preventDefault();
-    await runService.create(projectId, { name: runName, description: runDesc, suite_id: parseInt(runSuiteId) });
-    setShowRunModal(false);
-    setRunName('');
-    setRunDesc('');
-    setRunSuiteId('');
-    fetchAll();
-  };
-
-  const handleEditProject = async (e) => {
-    e.preventDefault();
-    await projectService.update(projectId, { name: editName, description: editDesc });
-    setShowEditProject(false);
-    fetchAll();
-    if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
-  };
-
-  const handleDeleteProject = async () => {
-    await projectService.delete(projectId);
-    if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
-    navigate('/');
-  };
-
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }, { label: 'Loading...' }]} /><LoadingSpinner /></>;
-
-  const chartData = stats ? getStatusChartData(stats) : null;
-
-  const total = stats ? stats.Passed + stats.Failed + stats.Blocked + stats.Retest + stats.Untested : 0;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard' }]} /><LoadingSpinner /></>;
 
   return (
     <div>
-      <Header breadcrumbs={[{ label: 'Dashboard', path: '/' }, { label: project?.name }]} />
+      <Header breadcrumbs={[{ label: project?.name }]} />
       <div className="page-content">
         <div className="page-toolbar">
           <div>
             <h2 className="page-heading">{project?.name}</h2>
             {project?.description && <p className="page-description">{project.description}</p>}
-          </div>
-          <div className="toolbar-actions">
-            <button className="btn btn-secondary" onClick={() => {
-              setEditName(project.name);
-              setEditDesc(project.description || '');
-              setShowEditProject(true);
-            }}>Edit</button>
-            <button className="btn btn-danger" onClick={() => setShowDelete(true)}>Delete</button>
           </div>
         </div>
 
@@ -164,19 +71,11 @@ export default function ProjectDetailPage() {
 
         {tab === 'suites' && (() => {
           const activeRunsBySuite = {};
-          runs.filter(r => !r.is_completed).forEach(r => {
+          runs.filter(r => !r.is_completed && r.suite_id).forEach(r => {
             activeRunsBySuite[r.suite_id] = (activeRunsBySuite[r.suite_id] || 0) + 1;
           });
           return (
             <div>
-              <div className="card-toolbar">
-                <button className="btn btn-primary" onClick={() => {
-                  setEditSuite(null);
-                  setSuiteName('');
-                  setSuiteDesc('');
-                  setShowSuiteModal(true);
-                }}>+ New Suite</button>
-              </div>
               {suites.length > 0 ? (
                 <div className="suite-list">
                   {suites.map((s) => {
@@ -190,33 +89,6 @@ export default function ProjectDetailPage() {
                         </div>
                         <div className="suite-card-body">
                           <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-name">{s.name}</Link>
-                          <div className="suite-card-links">
-                            <a href="#" onClick={(e) => {
-                              e.preventDefault();
-                              setRunName('');
-                              setRunDesc('');
-                              setRunSuiteId(String(s.id));
-                              setShowRunModal(true);
-                            }}>Run Test</a>
-                            <span className="suite-card-separator">|</span>
-                            <a href="#" onClick={(e) => {
-                              e.preventDefault();
-                              setTab('runs');
-                            }}>Test Runs</a>
-                            <span className="suite-card-separator">|</span>
-                            <a href="#" onClick={(e) => {
-                              e.preventDefault();
-                              setEditSuite(s);
-                              setSuiteName(s.name);
-                              setSuiteDesc(s.description || '');
-                              setShowSuiteModal(true);
-                            }}>Edit</a>
-                            <span className="suite-card-separator">|</span>
-                            <a href="#" className="text-danger" onClick={(e) => {
-                              e.preventDefault();
-                              setDeleteSuite(s);
-                            }}>Delete</a>
-                          </div>
                           <div className="suite-card-summary">
                             Has {s.section_count || 0} section{(s.section_count || 0) !== 1 ? 's' : ''} with {s.case_count || 0} test case{(s.case_count || 0) !== 1 ? 's' : ''}.{' '}
                             {activeCount > 0
@@ -234,7 +106,7 @@ export default function ProjectDetailPage() {
                   })}
                 </div>
               ) : (
-                <p className="empty-message">No test suites yet. Create one to organize your test cases.</p>
+                <p className="empty-message">No test suites yet.</p>
               )}
             </div>
           );
@@ -242,18 +114,10 @@ export default function ProjectDetailPage() {
 
         {tab === 'runs' && (
           <div className="card">
-            <div className="card-toolbar">
-              <button className="btn btn-primary" onClick={() => {
-                setRunName('');
-                setRunDesc('');
-                setRunSuiteId(suites.length > 0 ? String(suites[0].id) : '');
-                setShowRunModal(true);
-              }} disabled={suites.length === 0}>+ New Run</button>
-            </div>
             {runs.length > 0 ? (
               <table className="data-table">
                 <thead>
-                  <tr><th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th>Created</th><th></th></tr>
+                  <tr><th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th>Created</th></tr>
                 </thead>
                 <tbody>
                   {runs.map((r) => (
@@ -272,144 +136,108 @@ export default function ProjectDetailPage() {
                         <span className="mini-bar-label">{r.stats.pass_rate}%</span>
                       </td>
                       <td className="text-muted">{new Date(r.created_at).toLocaleDateString()}</td>
-                      <td className="row-action-cell" onClick={(e) => e.stopPropagation()}>
-                        <button className="btn-icon-delete" onClick={() => setDeleteRun(r)} title="Delete run">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                          </svg>
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p className="empty-message">No test runs yet. Create a suite with test cases first, then start a run.</p>
+              <p className="empty-message">No test runs yet.</p>
             )}
           </div>
         )}
 
-        {tab === 'overview' && (
-          <div className="overview-grid">
-            <div className="card">
-              <h3>Test Results Distribution</h3>
-              {total > 0 ? (
-                <div className="chart-container" style={{ maxWidth: 240, margin: '0 auto' }}>
-                  <Doughnut data={chartData} options={{ plugins: { legend: { position: 'bottom' } }, cutout: '60%' }} />
+        {tab === 'overview' && (() => {
+          const totalCases = suites.reduce((sum, s) => sum + (s.case_count || 0), 0);
+          const totalSections = suites.reduce((sum, s) => sum + (s.section_count || 0), 0);
+
+          // Build suite stats from dashboard runs for mini-bars
+          const dashRuns = dashboardData?.runs || [];
+          const suiteStatsMap = {};
+          dashRuns.forEach((r) => {
+            const sid = r.suite_id;
+            if (!suiteStatsMap[sid]) {
+              suiteStatsMap[sid] = { Passed: 0, Failed: 0, Blocked: 0, Retest: 0, Untested: 0, total: 0 };
+            }
+            STATUS_ORDER.forEach((s) => {
+              suiteStatsMap[sid][s] += (r.stats?.[s] || 0);
+            });
+            suiteStatsMap[sid].total += (r.stats?.total || 0);
+          });
+
+          return (
+            <div className="ov-overview">
+              {/* Project Summary Tiles */}
+              <div className="ov-stats">
+                <div className="ov-tiles">
+                  <div className="ov-stat-tile">
+                    <span className="ov-stat-tile-count">{totalCases}</span>
+                    <span className="ov-stat-tile-label">Test Cases</span>
+                  </div>
+                  <div className="ov-stat-tile">
+                    <span className="ov-stat-tile-count">{suites.length}</span>
+                    <span className="ov-stat-tile-label">Suites</span>
+                  </div>
+                  <div className="ov-stat-tile">
+                    <span className="ov-stat-tile-count">{runs.length}</span>
+                    <span className="ov-stat-tile-label">Test Runs</span>
+                  </div>
+                  <div className="ov-stat-tile">
+                    <span className="ov-stat-tile-count">{totalSections}</span>
+                    <span className="ov-stat-tile-label">Sections</span>
+                  </div>
                 </div>
-              ) : (
-                <p className="empty-message">No test results yet</p>
-              )}
-            </div>
-            <div className="card">
-              <h3>Summary</h3>
-              <div className="summary-list">
-                <div className="summary-row"><span>Suites</span><span>{suites.length}</span></div>
-                <div className="summary-row"><span>Test Cases</span><span>{project?.case_count || 0}</span></div>
-                <div className="summary-row"><span>Test Runs</span><span>{runs.length}</span></div>
-                <div className="summary-row"><span>Passed</span><span style={{ color: 'var(--status-passed)' }}>{stats?.Passed || 0}</span></div>
-                <div className="summary-row"><span>Failed</span><span style={{ color: 'var(--status-failed)' }}>{stats?.Failed || 0}</span></div>
-                <div className="summary-row"><span>Blocked</span><span style={{ color: 'var(--status-blocked)' }}>{stats?.Blocked || 0}</span></div>
+              </div>
+
+              {/* Suite Health Grid */}
+              <div className="ov-suites">
+                <h3 className="ov-section-title">Suite Health</h3>
+                {suites.length > 0 ? (
+                  <div className="ov-suites-grid">
+                    {suites.map((s) => {
+                      const ss = suiteStatsMap[s.id] || { total: 0 };
+                      return (
+                        <Link
+                          key={s.id}
+                          to={`/projects/${projectId}/suites/${s.id}`}
+                          className="ov-suite-card"
+                        >
+                          <div className="ov-suite-card-header">
+                            <span className="ov-suite-card-name">{s.name}</span>
+                            <svg className="ov-suite-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                          </div>
+                          <span className="ov-suite-card-meta">
+                            {s.case_count || 0} cases &middot; {s.section_count || 0} sections
+                          </span>
+                          {ss.total > 0 && (
+                            <div className="ov-suite-card-bar">
+                              {STATUS_ORDER.map((st) =>
+                                ss[st] > 0 ? (
+                                  <div
+                                    key={st}
+                                    style={{
+                                      width: `${(ss[st] / ss.total) * 100}%`,
+                                      backgroundColor: `var(--status-${st.toLowerCase()})`,
+                                    }}
+                                    title={`${st}: ${ss[st]}`}
+                                  />
+                                ) : null
+                              )}
+                            </div>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="empty-message">No suites yet</p>
+                )}
               </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Suite Modal */}
-      <Modal isOpen={showSuiteModal} onClose={() => setShowSuiteModal(false)} title={editSuite ? 'Edit Suite' : 'Create Suite'}>
-        <form onSubmit={handleSaveSuite} className="modal-form">
-          <div className="form-group">
-            <label>Suite Name</label>
-            <input type="text" value={suiteName} onChange={(e) => setSuiteName(e.target.value)} required autoFocus placeholder="Enter suite name" />
-          </div>
-          <div className="form-group">
-            <label>Description</label>
-            <textarea value={suiteDesc} onChange={(e) => setSuiteDesc(e.target.value)} rows={3} placeholder="Optional description" />
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setShowSuiteModal(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">{editSuite ? 'Save' : 'Create'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Run Modal */}
-      <Modal isOpen={showRunModal} onClose={() => setShowRunModal(false)} title="Create Test Run">
-        <form onSubmit={handleCreateRun} className="modal-form">
-          <div className="form-group">
-            <label>Run Name</label>
-            <input type="text" value={runName} onChange={(e) => setRunName(e.target.value)} required autoFocus placeholder="e.g. Sprint 1 Regression" />
-          </div>
-          <div className="form-group">
-            <label>Suite</label>
-            <select value={runSuiteId} onChange={(e) => setRunSuiteId(e.target.value)} required>
-              {suites.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.case_count} cases)</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Description</label>
-            <textarea value={runDesc} onChange={(e) => setRunDesc(e.target.value)} rows={3} placeholder="Optional description" />
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Create Run</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Edit Project Modal */}
-      <Modal isOpen={showEditProject} onClose={() => setShowEditProject(false)} title="Edit Project">
-        <form onSubmit={handleEditProject} className="modal-form">
-          <div className="form-group">
-            <label>Project Name</label>
-            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} required autoFocus />
-          </div>
-          <div className="form-group">
-            <label>Description</label>
-            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={3} />
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setShowEditProject(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Save</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Delete project */}
-      <ConfirmDialog
-        isOpen={showDelete}
-        onClose={() => setShowDelete(false)}
-        onConfirm={handleDeleteProject}
-        title="Delete Project"
-        message={(() => {
-          const parts = [];
-          if (suites.length > 0) parts.push(`${suites.length} suite${suites.length !== 1 ? 's' : ''}`);
-          if (project?.case_count > 0) parts.push(`${project.case_count} test case${project.case_count !== 1 ? 's' : ''}`);
-          if (runs.length > 0) parts.push(`${runs.length} test run${runs.length !== 1 ? 's' : ''}`);
-          return `"${project?.name}"${parts.length ? ` (${parts.join(', ')})` : ''} will be permanently deleted.`;
+          );
         })()}
-        requireSafeguard
-      />
-
-      {/* Delete suite */}
-      <ConfirmDialog
-        isOpen={!!deleteSuite}
-        onClose={() => setDeleteSuite(null)}
-        onConfirm={handleDeleteSuite}
-        title="Delete Suite"
-        message={`"${deleteSuite?.name}"${deleteSuite?.case_count > 0 ? ` (${deleteSuite.case_count} test case${deleteSuite.case_count !== 1 ? 's' : ''})` : ''} will be permanently deleted.`}
-      />
-
-      {/* Delete run */}
-      <ConfirmDialog
-        isOpen={!!deleteRun}
-        onClose={() => setDeleteRun(null)}
-        onConfirm={handleDeleteRun}
-        title="Delete Test Run"
-        message={`"${deleteRun?.name}" (${deleteRun?.stats?.total || 0} result${(deleteRun?.stats?.total || 0) !== 1 ? 's' : ''}) will be permanently deleted.`}
-        requireSafeguard
-      />
+      </div>
     </div>
   );
 }

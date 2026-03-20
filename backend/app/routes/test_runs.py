@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timezone, timedelta
 
 from flask import Blueprint, request, jsonify
@@ -17,9 +16,10 @@ def is_result_locked(result):
     """Check if a result is locked (tested more than LOCK_HOURS ago)."""
     if not result.tested_at:
         return False
-    lock_threshold = datetime.now(timezone.utc) - timedelta(hours=LOCK_HOURS)
-    # Ensure both sides are comparable (handle naive datetimes from DB)
-    tested_at = result.tested_at.replace(tzinfo=timezone.utc) if not result.tested_at.tzinfo else result.tested_at
+    # Use naive datetime for comparison (database stores naive datetimes)
+    lock_threshold = datetime.utcnow() - timedelta(hours=LOCK_HOURS)
+    # Handle both naive and aware datetimes
+    tested_at = result.tested_at.replace(tzinfo=None) if result.tested_at.tzinfo else result.tested_at
     return tested_at < lock_threshold
 
 
@@ -29,11 +29,11 @@ def is_run_locked(run_id):
     if not results:
         return False
     # Run is locked only if ALL results are locked (all tested > 24h ago)
-    lock_threshold = datetime.now(timezone.utc) - timedelta(hours=LOCK_HOURS)
+    lock_threshold = datetime.utcnow() - timedelta(hours=LOCK_HOURS)
     for r in results:
         if not r.tested_at:
             return False  # Untested result means run is still open
-        tested_at = r.tested_at.replace(tzinfo=timezone.utc) if not r.tested_at.tzinfo else r.tested_at
+        tested_at = r.tested_at.replace(tzinfo=None) if r.tested_at.tzinfo else r.tested_at
         if tested_at >= lock_threshold:
             return False  # Result tested within 24h means run is still open
     return True
@@ -48,12 +48,21 @@ def get_run_completed_at(run_id):
 @runs_bp.route("/runs", methods=["GET"])
 @jwt_required()
 def list_all_runs():
-    runs = TestRun.query.order_by(TestRun.created_at.desc()).all()
+    limit = request.args.get("limit", 30, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    total_count = TestRun.query.count()
+    runs = (
+        TestRun.query
+        .order_by(TestRun.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     result = []
     for run in runs:
         d = run.to_dict()
         d["project_name"] = run.project.name if run.project else None
-        d["suite_name"] = run.suite.name if run.suite else None
+        d["suite_name"] = run.suite.name if run.suite else "All Suites"
         counts = dict(
             db.session.query(TestResult.status, func.count(TestResult.id))
             .filter_by(run_id=run.id)
@@ -75,7 +84,7 @@ def list_all_runs():
             completed_at = get_run_completed_at(run.id)
             d["completed_at"] = completed_at.isoformat() if completed_at else None
         result.append(d)
-    return jsonify(result), 200
+    return jsonify({"items": result, "total": total_count, "limit": limit, "offset": offset}), 200
 
 
 @runs_bp.route("/projects/<int:project_id>/runs", methods=["GET"])
@@ -86,7 +95,7 @@ def list_runs(project_id):
     result = []
     for run in runs:
         d = run.to_dict()
-        d["suite_name"] = run.suite.name if run.suite else None
+        d["suite_name"] = run.suite.name if run.suite else "All Suites"
         counts = dict(
             db.session.query(TestResult.status, func.count(TestResult.id))
             .filter_by(run_id=run.id)
@@ -152,7 +161,7 @@ def create_run(project_id):
 def get_run(run_id):
     run = TestRun.query.get_or_404(run_id)
     d = run.to_dict()
-    d["suite_name"] = run.suite.name if run.suite else None
+    d["suite_name"] = run.suite.name if run.suite else "All Suites"
     project = Project.query.get(run.project_id) if run.project_id else None
     d["project_name"] = project.name if project else None
 
@@ -215,6 +224,12 @@ def list_results(run_id):
     if tester_ids:
         users = User.query.filter(User.id.in_(tester_ids)).all()
         tester_map = {u.id: u.username for u in users}
+    # Batch-fetch suite names for all suite_ids referenced by test cases
+    suite_ids = {r.test_case.suite_id for r in results if r.test_case and r.test_case.suite_id}
+    suite_map = {}
+    if suite_ids:
+        suites = Suite.query.filter(Suite.id.in_(suite_ids)).all()
+        suite_map = {s.id: s.name for s in suites}
     out = []
     for r in results:
         d = r.to_dict()
@@ -223,6 +238,7 @@ def list_results(run_id):
         if r.test_case:
             d["case_title"] = r.test_case.title
             d["priority"] = r.test_case.priority
+            d["suite_name"] = suite_map.get(r.test_case.suite_id, "Unknown")
             # Extract source file and describe title from preconditions if present
             preconditions = r.test_case.preconditions or ""
             source_file = None
@@ -276,6 +292,7 @@ def update_result(result_id):
     if "error_message" in data:
         result.error_message = data["error_message"]
     if "artifacts" in data:
+        import json
         result.artifacts = json.dumps(data["artifacts"]) if isinstance(data["artifacts"], list) else data["artifacts"]
     if "circleci_job_id" in data:
         result.circleci_job_id = data["circleci_job_id"]
@@ -284,6 +301,7 @@ def update_result(result_id):
     result.tested_at = datetime.now(timezone.utc)
 
     # Record history
+    import json
     history = ResultHistory(
         result_id=result.id,
         status=result.status,
@@ -362,6 +380,7 @@ def fetch_circleci_for_result(result_id):
     circleci_data = circleci_service.fetch_failure_data(job_number)
 
     # Update result
+    import json
     result.circleci_job_id = str(job_number)
     if circleci_data.get("error_message"):
         result.error_message = circleci_data["error_message"]

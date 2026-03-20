@@ -4,6 +4,34 @@ A TestRail-like test management web application with a React frontend and Flask 
 
 ## Quick Start
 
+### 1. Environment Setup (first time only)
+
+```bash
+# Copy the environment template
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` and fill in your credentials:
+
+| Variable | Required | How to get it |
+|----------|:--------:|---------------|
+| `CIRCLECI_API_TOKEN` | **Yes** (for imports) | [CircleCI → User Settings → Personal API Tokens](https://app.circleci.com/settings/user/tokens) |
+| `CIRCLECI_PROJECT_SLUG` | No | Defaults to `gh/styleseat/cypress` |
+| `JWT_SECRET_KEY` | No | Auto-generated if not set |
+
+The `.env` file is gitignored and auto-loaded by `python-dotenv` — no need to `export` variables manually.
+
+### 2. GitHub CLI Authentication
+
+The Cypress sync script uses the GitHub CLI (`gh`). Authenticate once:
+
+```bash
+gh auth login
+gh auth status   # Verify: needs 'repo' scope for styleseat/cypress
+```
+
+### 3. Run
+
 ```bash
 # Launch full demo (reset DB, sync Cypress tests, start servers)
 npm run demo
@@ -13,7 +41,8 @@ npm run demo
 # Backend (Terminal 1)
 cd backend
 source venv/bin/activate
-python seed.py          # First time only: populate demo data
+python seed.py          # First time only: create demo user + project
+python sync_cypress.py  # Sync test cases from Cypress repo
 python run.py           # Starts on http://localhost:5001
 
 # Frontend (Terminal 2)
@@ -54,11 +83,12 @@ dashboard/
 │   ├── run.py                  # Entry point (port 5001, creates tables on start)
 │   ├── sync_cypress.py          # CLI script: sync test cases from Cypress repo into Guardian
 │   ├── import_circleci.py       # CLI script: import CircleCI workflow results into a test run
-│   ├── seed.py                 # Demo data: 2 projects, 3 suites, 30 cases, 3 runs
+│   ├── seed.py                 # Bootstrap: creates demo user + Cypress Automation project
 │   ├── requirements.txt        # Flask, Flask-SQLAlchemy, Flask-CORS, Flask-JWT-Extended, Werkzeug
+│   ├── .env.example            # Template for environment variables (copy to .env)
+│   ├── .env                    # Local environment variables (gitignored, auto-loaded by python-dotenv)
 │   ├── uploads/avatars/        # User avatar image storage (auto-created)
-│   ├── app.db                  # SQLite database (auto-created)
-│   └── app.db.demo             # Demo snapshot (restored by npm run demo, includes synced Cypress data)
+│   └── app.db                  # SQLite database (auto-created)
 │
 ├── frontend/           # React 19 SPA (Vite, port 5173)
 │   ├── public/
@@ -339,8 +369,9 @@ The app uses a **3-tier responsive breakpoint system**. Every new page or compon
 ```bash
 cd backend
 rm app.db
-python run.py       # Creates empty tables
-python seed.py      # Optional: populate demo data
+python seed.py          # Creates demo user + project
+python sync_cypress.py  # Re-sync test cases from Cypress repo
+python run.py           # Start server
 ```
 
 **Add a new frontend service:**
@@ -357,19 +388,20 @@ npm run demo
 
 This script (`scripts/start-demo.sh`) performs:
 1. Kills existing servers on ports 5001/5173
-2. Restores `app.db` from `app.db.demo` snapshot
-3. Applies any schema migrations
-4. Starts backend and frontend servers
-5. Syncs latest test cases from Cypress repo via `sync_cypress.py`
+2. Seeds a fresh database via `seed.py` (creates demo user + Cypress Automation project)
+3. Starts backend and frontend servers
+4. Syncs test cases from Cypress repo in the background via `sync_cypress.py`
 
-### Expected demo data
+The app is usable immediately after step 3. Test cases populate progressively as the background sync processes each suite.
+
+### Expected data after sync
 | Entity | Count | Notes |
 |--------|-------|-------|
 | Users | 1 | `demo` / `Demo1234` (demo@styleseat.com) |
 | Projects | 1 | Cypress Automation |
-| Suites | 13 | ABTEST, API, Admin, Client, Common, Communications, Devices, Events, PO, PROD, Pre Prod, Pro, Search |
-| Sections | ~669 | Named from `describe()` blocks in Cypress files |
-| Test Cases | ~2,527 | Extracted from Cypress `it()` blocks + manual Devices cases (count updates on sync) |
+| Suites | ~12 | Auto-created from Cypress repo folder structure |
+| Sections | ~500+ | Named from `describe()` blocks in Cypress files |
+| Test Cases | ~2,500 | Extracted from Cypress `it()` blocks (count varies with repo) |
 | Test Runs | 0 | Use `npm run import -- <url>` to import runs from CircleCI |
 
 **Login:** `demo` / `Demo1234`
@@ -383,6 +415,7 @@ This script (`scripts/start-demo.sh`) performs:
 - Flask-CORS 5.0.0
 - Flask-JWT-Extended 4.7.1
 - Werkzeug 3.1.3
+- python-dotenv 1.2.2 — auto-loads `backend/.env` into environment variables
 
 ### Node (frontend/package.json)
 - react 19.2, react-dom 19.2
@@ -390,6 +423,25 @@ This script (`scripts/start-demo.sh`) performs:
 - axios 1.13
 - chart.js 4.5, react-chartjs-2 5.3
 - vite 7.3 (dev)
+
+## Environment Variables
+
+Environment variables are configured via `backend/.env` (auto-loaded by `python-dotenv`). Copy from `backend/.env.example` on first setup.
+
+| Variable | Used By | Required | Default | Description |
+|----------|---------|:--------:|---------|-------------|
+| `CIRCLECI_API_TOKEN` | `import_circleci.py` | **Yes** | — | CircleCI personal API token. Generate at [User Settings → Personal API Tokens](https://app.circleci.com/settings/user/tokens) |
+| `CIRCLECI_PROJECT_SLUG` | `import_circleci.py` | No | `gh/styleseat/cypress` | CircleCI project slug (`gh/org/repo` format) |
+| `JWT_SECRET_KEY` | `config.py` | No | Auto-generated | Secret key for JWT token signing |
+| `TESTRAIL_BASE_URL` | `seed_testrail.py` | No | — | Only needed for legacy TestRail seeding |
+| `TESTRAIL_EMAIL` | `seed_testrail.py` | No | — | Only needed for legacy TestRail seeding |
+| `TESTRAIL_PASSWORD` | `seed_testrail.py` | No | — | Only needed for legacy TestRail seeding |
+| `TESTRAIL_PROJECT_ID` | `seed_testrail.py` | No | — | Only needed for legacy TestRail seeding |
+| `RETENTION_DAYS` | `app` | No | `30` | Number of days to retain data |
+
+**How `.env` loading works:** `import_circleci.py` calls `load_dotenv(Path(__file__).parent / '.env')` before reading any environment variables. The `.env` file is gitignored so secrets are never committed.
+
+**Note:** `sync_cypress.py` does not use environment variables — it authenticates via the GitHub CLI (`gh auth login`).
 
 ## Port Configuration
 - Backend API: **5001** (macOS uses 5000 for AirTunes)
@@ -417,27 +469,36 @@ The system uses a two-source approach for test management:
 ### Source of Truth
 
 1. **Cypress Repo** (`styleseat/cypress`) → Test case definitions
+   - **Requires:** GitHub CLI authenticated (`gh auth login`) with access to `styleseat/cypress`
    - All test cases are synced from the Cypress repo via `sync_cypress.py`
    - Test structure maps to suites: `cypress/e2e/p1/common/` → P1 Common
    - Use `npm run sync` or `/cypress-sync` to pull latest test definitions
    - Matches existing cases by TestRail ID (`C\d+` prefix) first, then exact title — prevents duplicates when titles change
+   - Strips all leading C-ID prefixes (e.g., `C423016 C423079 Title` → `Title`) from stored titles
+   - Removes orphaned test cases (deleted from repo) and empty sections on each sync
+   - Safety guard: orphan cleanup skipped if >50% of file fetches fail (protects against API rate limits)
    - Excluded paths: `manual/`, `utility/`, `utility_lifecycle/`, `weekly/` (configured in `EXCLUDED_PATHS` in `sync_cypress.py`)
 
 2. **CircleCI** → Test results
+   - **Requires:** `CIRCLECI_API_TOKEN` in `backend/.env` (see [Environment Variables](#environment-variables))
    - Test run results are imported from CircleCI workflows
    - Use `npm run import -- <workflow-url>` or `/circleci-import <workflow-url>` to import results
    - Automatically creates test cases for new tests not yet synced
+   - Token is auto-loaded from `backend/.env` via `python-dotenv` — no manual `export` needed
 
 ### Workflow
 
 ```bash
-# 1. Start demo (restores demo snapshot + syncs Cypress tests + starts servers)
+# 0. First time: set up backend/.env with your CircleCI token (see Environment Variables section)
+cp backend/.env.example backend/.env   # then edit and fill in CIRCLECI_API_TOKEN
+
+# 1. Start demo (seeds DB + starts servers + syncs Cypress tests in background)
 npm run demo
 
-# 2. (Optional) Sync latest test cases from Cypress repo
+# 2. (Optional) Manually sync latest test cases from Cypress repo
 npm run sync
 
-# 3. Import CircleCI results
+# 3. Import CircleCI results (requires CIRCLECI_API_TOKEN in backend/.env)
 npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/.../workflows/...
 ```
 

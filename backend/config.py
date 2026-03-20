@@ -13,7 +13,7 @@ class Config:
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ["access"]
     UPLOAD_FOLDER = os.path.join(basedir, "uploads", "avatars")
-    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB
+    MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2MB
 
     # Rate limiting
     RATELIMIT_STORAGE_URI = "memory://"

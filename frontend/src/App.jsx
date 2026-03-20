@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import LoadingSpinner from './components/LoadingSpinner';
+import projectService from './services/projectService';
 
 // Auth pages — small, loaded eagerly for instant first paint
 import LoginPage from './pages/LoginPage';
@@ -90,6 +91,26 @@ function AppLayout({ children }) {
   );
 }
 
+function ProjectRedirect() {
+  const navigate = useNavigate();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    projectService.getAll()
+      .then((projects) => {
+        if (projects.length > 0) {
+          navigate(`/projects/${projects[0].id}`, { replace: true });
+        } else {
+          setChecked(true);
+        }
+      })
+      .catch(() => setChecked(true));
+  }, [navigate]);
+
+  if (!checked) return <LoadingSpinner />;
+  return <TestSuitesPage />;
+}
+
 function AppRoutes() {
   return (
     <AppLayout>
@@ -97,7 +118,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/" element={<ProtectedRoute><TestSuitesPage /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><ProjectRedirect /></ProtectedRoute>} />
           <Route path="/suites" element={<ProtectedRoute><TestSuitesPage /></ProtectedRoute>} />
           <Route path="/runs" element={<ProtectedRoute><TestRunsPage /></ProtectedRoute>} />
           <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />

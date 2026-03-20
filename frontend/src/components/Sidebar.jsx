@@ -44,12 +44,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   };
 
   const loadRuns = () => {
-    runService.getAll()
-      .then((allRuns) => setRuns(
-        allRuns
-          .filter(r => !r.is_locked)
-          .sort((a, b) => new Date(b.run_date || b.created_at) - new Date(a.run_date || a.created_at))
-      ))
+    runService.getAll({ limit: 10 })
+      .then((data) => {
+        const items = data.items || [];
+        setRuns(
+          items
+            .filter(r => !r.is_locked)
+            .sort((a, b) => new Date(b.run_date || b.created_at) - new Date(a.run_date || a.created_at))
+        );
+      })
       .catch(() => {});
   };
 
@@ -146,8 +149,22 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       </div>
 
       <nav className="sidebar-nav">
+        <NavLink
+          to={projects.length > 0 ? `/projects/${projects[0].id}` : '/'}
+          className={`sidebar-link ${location.pathname.match(/^\/projects\/\d+$/) ? 'active' : ''}`}
+          title="Overview"
+        >
+          <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span className="sidebar-label">Overview</span>
+        </NavLink>
+
         {collapsed && (
-          <NavLink to="/" className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/suites') || location.pathname.includes('/cases') ? 'active' : ''}`} title="Test Suites">
+          <NavLink to={projects.length > 0 ? `/projects/${projects[0].id}` : '/suites'} className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/suites') || location.pathname.includes('/cases') ? 'active' : ''}`} title="Test Suites">
             <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
@@ -170,7 +187,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
         )}
 
         <div className="sidebar-section">
-          <button className="sidebar-section-toggle" onClick={() => { navigate('/'); if (collapsed) return; setSuitesOpen(!suitesOpen); }} title="Test Suites" aria-expanded={suitesOpen && !collapsed}>
+          <button className="sidebar-section-toggle" onClick={() => { navigate(projects.length > 0 ? `/projects/${projects[0].id}` : '/suites'); if (collapsed) return; setSuitesOpen(!suitesOpen); }} title="Test Suites" aria-expanded={suitesOpen && !collapsed}>
             <svg className={`sidebar-icon sidebar-chevron ${suitesOpen && !collapsed ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
