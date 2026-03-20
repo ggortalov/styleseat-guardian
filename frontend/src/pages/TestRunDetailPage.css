@@ -262,6 +262,66 @@
   cursor: pointer;
 }
 
+/* ── Suite-level grouping (combined runs) ── */
+.run-suite-group {
+  border: 1.5px solid var(--sidebar-bg);
+  border-radius: var(--radius-lg);
+  background: var(--bg-white);
+  box-shadow: var(--shadow-md);
+}
+
+.run-suite-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.run-suite-header:hover {
+  background: #d9edd9;
+}
+
+.run-suite-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--sidebar-bg);
+  letter-spacing: -0.3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.run-suite-sections {
+  display: flex;
+  flex-direction: column;
+}
+
+.run-suite-sections .run-section-group {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.run-suite-sections .run-section-group:last-child {
+  border-bottom: none;
+}
+
+.run-suite-sections .run-section-header {
+  padding-left: 32px;
+}
+
+.run-suite-sections .run-case-row {
+  padding-left: 58px;
+}
+
+.run-suite-sections .run-select-all {
+  padding-left: 58px;
+}
+
 /* ── Case rows inside sections ── */
 .run-section-cases {
   border-top: 1px solid var(--border-light);
@@ -690,6 +750,22 @@
 
   .run-section-header {
     padding: 12px 14px;
+  }
+
+  .run-suite-header {
+    padding: 14px 14px;
+  }
+
+  .run-suite-sections .run-section-header {
+    padding-left: 24px;
+  }
+
+  .run-suite-sections .run-case-row {
+    padding-left: 40px;
+  }
+
+  .run-suite-sections .run-select-all {
+    padding-left: 40px;
   }
 
   .stat-tile {

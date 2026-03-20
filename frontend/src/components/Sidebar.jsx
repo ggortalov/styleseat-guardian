@@ -27,7 +27,9 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   const [suitesOpen, setSuitesOpen] = useState(false);
   const [runsOpen, setRunsOpen] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
+  const errorTimerRef = useRef(null);
 
   const API_BASE = 'http://localhost:5001';
 
@@ -42,12 +44,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   };
 
   const loadRuns = () => {
-    runService.getAll()
-      .then((allRuns) => setRuns(
-        allRuns
-          .filter(r => !r.is_locked)
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      ))
+    runService.getAll({ limit: 10 })
+      .then((data) => {
+        const items = data.items || [];
+        setRuns(
+          items
+            .filter(r => !r.is_locked)
+            .sort((a, b) => new Date(b.run_date || b.created_at) - new Date(a.run_date || a.created_at))
+        );
+      })
       .catch(() => {});
   };
 
@@ -83,15 +88,28 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
     fileInputRef.current?.click();
   };
 
+  const showUploadError = (msg) => {
+    clearTimeout(errorTimerRef.current);
+    setUploadError(msg);
+    errorTimerRef.current = setTimeout(() => setUploadError(''), 4000);
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setUploadError('');
+    if (file.size > 5 * 1024 * 1024) {
+      showUploadError('File too large (max 5 MB)');
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     try {
       const data = await authService.uploadAvatar(file);
       updateAvatar(data.avatar);
-    } catch {
-      // silently fail
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Upload failed. Please try again.';
+      showUploadError(msg);
     } finally {
       setUploading(false);
     }
@@ -108,7 +126,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" />
           {!collapsed && (
             <div className="sidebar-logo-wordmark">
-              <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Regression Guard</span></span>
+              <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Guardian</span></span>
             </div>
           )}
         </div>
@@ -131,8 +149,22 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       </div>
 
       <nav className="sidebar-nav">
+        <NavLink
+          to={projects.length > 0 ? `/projects/${projects[0].id}` : '/'}
+          className={`sidebar-link ${location.pathname.match(/^\/projects\/\d+$/) ? 'active' : ''}`}
+          title="Overview"
+        >
+          <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span className="sidebar-label">Overview</span>
+        </NavLink>
+
         {collapsed && (
-          <NavLink to="/" className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/suites') || location.pathname.includes('/cases') ? 'active' : ''}`} title="Test Suites">
+          <NavLink to={projects.length > 0 ? `/projects/${projects[0].id}` : '/suites'} className={({ isActive }) => `sidebar-link ${isActive || location.pathname.includes('/suites') || location.pathname.includes('/cases') ? 'active' : ''}`} title="Test Suites">
             <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
@@ -155,7 +187,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
         )}
 
         <div className="sidebar-section">
-          <button className="sidebar-section-toggle" onClick={() => { navigate('/'); if (collapsed) return; setSuitesOpen(!suitesOpen); }} title="Test Suites" aria-expanded={suitesOpen && !collapsed}>
+          <button className="sidebar-section-toggle" onClick={() => { navigate(projects.length > 0 ? `/projects/${projects[0].id}` : '/suites'); if (collapsed) return; setSuitesOpen(!suitesOpen); }} title="Test Suites" aria-expanded={suitesOpen && !collapsed}>
             <svg className={`sidebar-icon sidebar-chevron ${suitesOpen && !collapsed ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -208,8 +240,8 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
                     <polygon points="10 8 16 12 10 16 10 8" />
                   </svg>
                   <span className="sidebar-suite-item-name">
-                    {r.suite_name || r.name}
-                    {r.created_at && <span className="sidebar-run-date">{new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    {r.name?.split(' · ')[0] || r.suite_name || r.name}
+                    {(r.run_date || r.created_at) && <span className="sidebar-run-date">{new Date(r.run_date || r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                   </span>
                   <span className="sidebar-suite-item-count">{r.stats?.total || 0}</span>
                 </NavLink>
@@ -251,6 +283,11 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
             </div>
             {uploading && <div className="sidebar-avatar-spinner" />}
           </div>
+          {uploadError && (
+            <div className="sidebar-upload-error" onClick={() => setUploadError('')}>
+              {uploadError}
+            </div>
+          )}
           {!collapsed && (
             <span className="sidebar-username">{user?.username}</span>
           )}

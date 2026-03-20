@@ -59,6 +59,12 @@ desktop.ini
 .env.local
 .env.*.local
 
+# Sensitive data backups
+backend/db_backup.json
+backend/testrail_data.json
+**/secrets.*
+**/credentials.*
+
 # Uploads
 backend/uploads/avatars/
 

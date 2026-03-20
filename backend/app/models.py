@@ -165,7 +165,7 @@ class TestRun(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    suite_id = db.Column(db.Integer, db.ForeignKey("suites.id"), nullable=False)
+    suite_id = db.Column(db.Integer, db.ForeignKey("suites.id"), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
