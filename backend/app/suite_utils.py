@@ -47,9 +47,9 @@ def cypress_path_to_name(path: str) -> str:
 
     parts = rel.split('/')
 
-    # Single-segment paths: check overrides first
+    # Single-segment paths: check overrides first (case-insensitive)
     if len(parts) == 1:
-        override = _NAME_OVERRIDES.get(parts[0])
+        override = _NAME_OVERRIDES.get(parts[0].lower())
         if override:
             return override
         return parts[0].upper()
