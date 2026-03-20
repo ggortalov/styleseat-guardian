@@ -214,6 +214,92 @@ regression-guard/
 | Backend API | 5001 |
 | Frontend dev server | 5173 |
 
+## Troubleshooting
+
+### Cannot log in / "Network Error" on login
+
+The backend server is not running. The frontend needs the Flask API on port 5001.
+
+```bash
+# Check if backend is running
+lsof -i :5001
+
+# Start it manually
+cd backend
+source venv/bin/activate
+python run.py
+```
+
+If you used `npm run demo` and then closed the terminal, both servers were killed. Re-run `npm run demo` or start each server manually.
+
+### Port 5001 already in use
+
+On macOS, AirTunes/AirPlay Receiver uses port 5000 by default. Guardian uses 5001 to avoid this, but if port 5001 is occupied:
+
+```bash
+# Find and kill the process on port 5001
+lsof -ti:5001 | xargs kill -9
+
+# Then restart
+python run.py
+```
+
+### Port 5173 already in use
+
+Vite will auto-increment to 5174, 5175, etc. The CORS config only allows 5173 and 5174. If Vite picks a different port, either free 5173 or restart:
+
+```bash
+lsof -ti:5173 | xargs kill -9
+cd frontend && npm run dev
+```
+
+### `npm run demo` fails
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `venv/bin/activate: No such file` | Python venv not created | `cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt` |
+| `ModuleNotFoundError: No module named 'flask'` | Dependencies not installed | `cd backend && source venv/bin/activate && pip install -r requirements.txt` |
+| `npm ERR! Missing script: "dev"` | Frontend deps not installed | `cd frontend && npm install` |
+| Demo starts but no test cases appear | Cypress sync failed (no GitHub CLI auth) | Run `gh auth login` then `npm run sync` |
+
+### `npm run import` fails
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Usage: python import_circleci.py <workflow-ref>` | No workflow argument passed | Add `--` before the arg: `npm run import -- <workflow-url-or-id>` |
+| `TypeError: 'run_date' is an invalid keyword argument` | Outdated code | Pull latest — this was a known bug (fixed: `run_date` renamed to `created_at`) |
+| `CIRCLECI_API_TOKEN not set` | Missing env variable | Copy `backend/.env.example` to `backend/.env` and fill in your token |
+| `Could not extract workflow ID from: ...` | Bad URL format | Pass a full CircleCI workflow URL, a `<pipeline>/workflows/<uuid>` path, or a bare workflow UUID |
+| Backend not running | Import writes to DB via Flask | Start the backend first: `cd backend && source venv/bin/activate && python run.py` |
+
+### `npm run sync` fails
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `gh: command not found` | GitHub CLI not installed | Install via `brew install gh` |
+| `gh: Not logged in` / 401 error | GitHub CLI not authenticated | Run `gh auth login` (needs `repo` scope for `styleseat/cypress`) |
+| `'Cypress Automation' project not found` | Database not seeded | Run `python seed.py` first, or use `npm run demo` |
+
+### Database issues
+
+**Reset the database completely:**
+
+```bash
+cd backend
+rm -f app.db
+source venv/bin/activate
+python seed.py           # Recreates demo user + project
+python sync_cypress.py   # Re-syncs test cases (optional)
+```
+
+**"table already exists" or missing columns:** `db.create_all()` does not modify existing tables. If the schema changed, delete `app.db` and re-seed, or apply `ALTER TABLE` manually. The `run.py` startup includes lightweight migrations for known schema changes.
+
+### JWT / authentication errors
+
+- **Token expired:** Tokens last 24 hours. Log out and log in again.
+- **"Invalid username or password":** Verify credentials (`demo` / `Demo1234`). This message also appears if the account's email domain is not `@styleseat.com`.
+- **401 on every API call after restart:** If `JWT_SECRET_KEY` is not set in `.env`, a new key is generated on each restart, invalidating existing tokens. Either set a fixed key in `backend/.env` or log in again after restarting the backend.
+
 ---
 
 <div align="center">

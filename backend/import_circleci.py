@@ -412,7 +412,7 @@ def import_workflow(workflow_id):
         run_desc = f'Imported from CircleCI workflow {workflow_id[:8]}'
         run = TestRun(
             project_id=project.id, suite_id=None, name=run_name,
-            description=run_desc, run_date=wf_date
+            description=run_desc, created_at=wf_date
         )
         db.session.add(run)
         db.session.flush()
