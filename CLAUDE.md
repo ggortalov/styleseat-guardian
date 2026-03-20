@@ -4,10 +4,23 @@ A TestRail-like test management web application with a React frontend and Flask 
 
 ## Quick Start
 
-### 1. Environment Setup (first time only)
+### 1. Python Virtual Environment (first time only)
+
+Create and activate a virtual environment, then install backend dependencies:
 
 ```bash
-# Copy the environment template
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+> **Note:** All scripts (`npm run demo`, `npm run sync`, `npm run import`) assume the venv exists at `backend/venv/`. You only need to create it once — activate it whenever you work in the backend directly.
+
+### 2. Environment Variables (first time only)
+
+```bash
+# Copy the environment template (from project root)
 cp backend/.env.example backend/.env
 ```
 
@@ -21,7 +34,7 @@ Edit `backend/.env` and fill in your credentials:
 
 The `.env` file is gitignored and auto-loaded by `python-dotenv` — no need to `export` variables manually.
 
-### 2. GitHub CLI Authentication
+### 3. GitHub CLI Authentication
 
 The Cypress sync script uses the GitHub CLI (`gh`). Authenticate once:
 
@@ -30,7 +43,7 @@ gh auth login
 gh auth status   # Verify: needs 'repo' scope for styleseat/cypress
 ```
 
-### 3. Run
+### 4. Run
 
 ```bash
 # Launch full demo (reset DB, sync Cypress tests, start servers)

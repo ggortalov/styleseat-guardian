@@ -20,6 +20,58 @@ Guardian provides a centralized hub for organizing test suites, authoring test c
 
 <br/>
 
+## Prerequisites
+
+- **Python 3.13+**
+- **Node.js 18+**
+- **GitHub CLI** (`brew install gh`) — for syncing test cases from the Cypress repo
+- **CircleCI API token** — for importing test results (optional)
+
+## Setup (first time only)
+
+### 1. Python virtual environment
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cd ..
+```
+
+> All scripts (`npm run demo`, `npm run sync`, `npm run import`) assume the venv exists at `backend/venv/`.
+
+### 2. Frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 3. Environment variables
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` and fill in your credentials:
+
+| Variable | Required | Description |
+|----------|:--------:|-------------|
+| `CIRCLECI_API_TOKEN` | Yes (for imports) | [Get token](https://app.circleci.com/settings/user/tokens) |
+| `CIRCLECI_PROJECT_SLUG` | No | Defaults to `gh/styleseat/cypress` |
+| `JWT_SECRET_KEY` | No | Auto-generated if not set |
+
+The `.env` file is gitignored and auto-loaded by `python-dotenv`.
+
+### 4. GitHub CLI authentication
+
+```bash
+gh auth login
+gh auth status   # Verify: needs 'repo' scope for styleseat/cypress
+```
+
 ## Quick Start
 
 ```bash
@@ -30,7 +82,7 @@ npm run demo
 # URL:   http://localhost:5173
 ```
 
-### Manual Setup
+### Manual Start
 
 ```bash
 # Backend (Terminal 1)
@@ -41,7 +93,6 @@ python run.py           # Starts on http://localhost:5001
 
 # Frontend (Terminal 2)
 cd frontend
-npm install             # First time only
 npm run dev             # Starts on http://localhost:5173
 ```
 
