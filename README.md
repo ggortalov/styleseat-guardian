@@ -62,6 +62,7 @@ Edit `backend/.env` and fill in your credentials:
 | `CIRCLECI_API_TOKEN` | Yes (for imports) | [Get token](https://app.circleci.com/settings/user/tokens) |
 | `CIRCLECI_PROJECT_SLUG` | No | Defaults to `gh/styleseat/cypress` |
 | `JWT_SECRET_KEY` | No | Auto-generated if not set |
+| `RETENTION_DAYS` | No | Defaults to `30`. Days to retain completed test runs and expired tokens |
 
 The `.env` file is gitignored and auto-loaded by `python-dotenv`.
 
@@ -106,6 +107,22 @@ Run from the project root:
 | `npm run sync` | `python sync_cypress.py` | Sync test cases from the Cypress repo |
 | `npm run import -- <url>` | `python import_circleci.py` | Import test results from a CircleCI workflow |
 
+### Additional Commands
+
+```bash
+# Run backend tests
+cd backend && source venv/bin/activate && python -m pytest
+
+# Run frontend tests
+cd frontend && npm test
+
+# Backup database to JSON
+cd backend && source venv/bin/activate && python backup_db.py
+
+# Restore database from JSON
+cd backend && source venv/bin/activate && python restore_db.py backup.json
+```
+
 ## Features
 
 <table>
@@ -142,8 +159,24 @@ Run from the project root:
     <td>JWT-based auth with registration, login, avatar upload, and <code>@styleseat.com</code> email restriction</td>
   </tr>
   <tr>
+    <td><strong>Sync Baseline &amp; Change Detection</strong></td>
+    <td>Rolling baseline system that diffs each Cypress sync against the previous snapshot — surfaces truly new and removed test cases in the Overview tab</td>
+  </tr>
+  <tr>
+    <td><strong>Data Retention</strong></td>
+    <td>Automatic daily cleanup via APScheduler — purges old test runs, expired tokens, and orphaned history after configurable <code>RETENTION_DAYS</code></td>
+  </tr>
+  <tr>
+    <td><strong>Sound Notifications</strong></td>
+    <td>12 procedurally-generated notification sounds (Web Audio API) with volume/choice/enabled settings persisted in localStorage</td>
+  </tr>
+  <tr>
     <td><strong>Responsive Design</strong></td>
     <td>Collapsible sidebar, mobile hamburger menu, DM Sans typography, animated UI with 3-tier breakpoint system</td>
+  </tr>
+  <tr>
+    <td><strong>Backup &amp; Restore</strong></td>
+    <td>Export all database tables to JSON and restore from backup — useful for migrations and disaster recovery</td>
   </tr>
 </table>
 
@@ -171,10 +204,14 @@ npm run sync
 ```
 
 - Fetches all `.cy.js` files from `styleseat/cypress` via GitHub API
+- File content fetched via blob API (`/git/blobs/{sha}`) with 3 retries and backoff — reliable for all file sizes
 - Extracts test titles from `it()`, `it.only()`, `it.skip()`, `itStage()`, and tag arrays
 - Section names derived from `describe()` block titles
 - Matches existing cases by TestRail ID (`C\d+` prefix) or exact title to avoid duplicates
+- Strips leading C-ID prefixes from stored titles (e.g., `C423016 Title` → `Title`)
 - Automatically creates new suites for new Cypress directories
+- Removes orphaned test cases and empty sections (safety guard: skipped if >50% of file fetches fail)
+- **Rolling baseline**: each sync snapshots all case IDs into a `SyncBaseline` record, then diffs against the previous baseline to detect truly new/removed cases — shown in the Overview tab under "Sync Changes"
 - Excluded paths: `manual/`, `utility/`, `utility_lifecycle/`, `weekly/`
 
 ### Import from CircleCI
@@ -190,31 +227,36 @@ npm run import -- https://app.circleci.com/pipelines/github/styleseat/cypress/..
 ## Architecture
 
 ```
-regression-guard/
+guardian/
 ├── backend/                    # Flask REST API (Python 3.13, port 5001)
 │   ├── app/
 │   │   ├── __init__.py         # App factory
-│   │   ├── models.py           # 8 SQLAlchemy models
+│   │   ├── models.py           # 11 SQLAlchemy models
 │   │   ├── suite_utils.py      # Cypress path ↔ suite name mappings
+│   │   ├── retention.py        # Data retention (daily cleanup via APScheduler)
 │   │   └── routes/             # 7 Blueprints (auth, projects, suites, sections, test_cases, test_runs, dashboard)
 │   ├── sync_cypress.py         # CLI: sync test cases from Cypress repo
 │   ├── import_circleci.py      # CLI: import results from CircleCI workflows
 │   ├── seed.py                 # Generate demo data from scratch
 │   ├── run.py                  # Entry point (port 5001)
-│   ├── app.db                  # SQLite database (auto-created)
-│   └── app.db.demo             # Demo snapshot (restored by npm run demo)
+│   ├── backup_db.py            # Export all tables to JSON
+│   ├── restore_db.py           # Restore database from JSON backup
+│   ├── strip_testrail_ids.py   # One-time cleanup of TestRail ID prefixes
+│   ├── tests/                  # Pytest suite (8 test modules)
+│   └── app.db                  # SQLite database (auto-created, gitignored)
 │
 ├── frontend/                   # React 19 SPA (Vite, port 5173)
 │   └── src/
-│       ├── pages/              # 8 page components
-│       ├── components/         # Shared UI (Sidebar, Header, Modal, StatusBadge, etc.)
-│       ├── services/           # Axios API service layer
+│       ├── pages/              # 11 page components
+│       ├── components/         # 12 shared UI components (Sidebar, Header, Modal, etc.)
+│       ├── services/           # 9 Axios API services + soundService
 │       ├── context/            # Auth context (JWT + user state)
 │       └── styles/             # CSS variables and design tokens
 │
 ├── scripts/
 │   └── start-demo.sh           # Demo launcher (reset DB + sync + start servers)
 │
+├── AWS_DEPLOYMENT_GUIDE.md     # Full AWS deployment guide (EC2, RDS, S3, CloudFront)
 ├── package.json                # NPM scripts: demo, sync, import
 └── CLAUDE.md                   # Detailed architecture docs for AI assistants
 ```
@@ -242,6 +284,8 @@ regression-guard/
       <img src="https://img.shields.io/badge/Flask-3.1-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask" />
       <img src="https://img.shields.io/badge/SQLAlchemy-3.1-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy" />
       <img src="https://img.shields.io/badge/JWT_Extended-4.7-000000?style=flat-square&logo=jsonwebtokens&logoColor=white" alt="JWT" />
+      <img src="https://img.shields.io/badge/Flask--Limiter-3.8-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask-Limiter" />
+      <img src="https://img.shields.io/badge/APScheduler-3.10-2496ED?style=flat-square" alt="APScheduler" />
     </td>
   </tr>
   <tr>

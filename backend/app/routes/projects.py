@@ -33,7 +33,7 @@ def list_projects():
 @projects_bp.route("/projects", methods=["POST"])
 @jwt_required()
 def create_project():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     if not name:
         return jsonify({"error": "Project name is required"}), 400
@@ -67,7 +67,7 @@ def get_project(project_id):
 @jwt_required()
 def update_project(project_id):
     project = Project.query.get_or_404(project_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     if "name" in data:
         project.name = data["name"].strip()

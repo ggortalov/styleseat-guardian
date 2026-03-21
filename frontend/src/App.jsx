@@ -42,6 +42,43 @@ function AppLayout({ children }) {
   );
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Draggable sidebar width
+  const SIDEBAR_MIN = 200;
+  const SIDEBAR_MAX = 500;
+  const SIDEBAR_DEFAULT = 270;
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, parseInt(saved, 10))) : SIDEBAR_DEFAULT;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev) => {
+      const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, ev.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setSidebarWidth((w) => {
+        localStorage.setItem('sidebarWidth', String(w));
+        return w;
+      });
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
+
   const toggleSidebar = useCallback(() => {
     if (isMobile) {
       setMobileOpen((prev) => !prev);
@@ -63,6 +100,7 @@ function AppLayout({ children }) {
   if (!isAuthenticated) return children;
 
   const collapsed = isMobile ? false : sidebarCollapsed;
+  const effectiveWidth = collapsed ? undefined : sidebarWidth;
 
   return (
     <div className="app-layout">
@@ -83,8 +121,14 @@ function AppLayout({ children }) {
         onToggleCollapse={toggleSidebar}
         mobileOpen={mobileOpen}
         isMobile={isMobile}
+        width={effectiveWidth}
+        onResizeStart={handleResizeStart}
+        isResizing={isDragging}
       />
-      <main className={`app-main ${!isMobile && sidebarCollapsed ? 'app-main--collapsed' : ''} ${isMobile ? 'app-main--mobile' : ''}`}>
+      <main
+        className={`app-main ${!isMobile && sidebarCollapsed ? 'app-main--collapsed' : ''} ${isMobile ? 'app-main--mobile' : ''}`}
+        style={!isMobile && !collapsed ? { marginLeft: sidebarWidth, transition: isDragging ? 'none' : undefined } : undefined}
+      >
         {children}
       </main>
     </div>

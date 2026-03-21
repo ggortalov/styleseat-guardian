@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required
 from sqlalchemy import func
 
 from app import db
-from app.models import Project, Suite, Section, TestCase, TestRun, TestResult
+from app.models import Project, Suite, Section, TestCase, TestRun, TestResult, SyncLog
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -138,6 +138,21 @@ def project_dashboard(project_id):
         "runs": runs_data,
         "overall_stats": overall,
     }), 200
+
+
+@dashboard_bp.route("/sync-logs", methods=["GET"])
+@jwt_required()
+def get_sync_logs():
+    """Return recent sync logs, optionally filtered by project_id."""
+    from flask import request
+    project_id = request.args.get("project_id", type=int)
+    limit = min(request.args.get("limit", 20, type=int), 200)
+
+    query = SyncLog.query.order_by(SyncLog.created_at.desc())
+    if project_id:
+        query = query.filter_by(project_id=project_id)
+    logs = query.limit(limit).all()
+    return jsonify([log.to_dict() for log in logs]), 200
 
 
 @dashboard_bp.route("/retention/cleanup", methods=["POST"])
