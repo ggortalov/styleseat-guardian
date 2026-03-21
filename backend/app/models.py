@@ -132,11 +132,17 @@ class TestCase(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
-    results = db.relationship("TestResult", backref="test_case", cascade="all, delete-orphan", lazy=True)
+    results = db.relationship("TestResult", backref="test_case", passive_deletes=True, lazy=True)
 
     @property
     def steps_list(self):
-        return json.loads(self.steps) if self.steps else []
+        if not self.steps:
+            return []
+        try:
+            parsed = json.loads(self.steps)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
 
     @steps_list.setter
     def steps_list(self, value):
@@ -195,7 +201,7 @@ class TestResult(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     run_id = db.Column(db.Integer, db.ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False)
-    case_id = db.Column(db.Integer, db.ForeignKey("test_cases.id", ondelete="CASCADE"), nullable=False)
+    case_id = db.Column(db.Integer, db.ForeignKey("test_cases.id", ondelete="SET NULL"), nullable=True)
     status = db.Column(db.String(20), default="Untested")
     comment = db.Column(db.Text, nullable=True)
     defect_id = db.Column(db.String(100), nullable=True)
@@ -215,7 +221,7 @@ class TestResult(db.Model):
             return []
         try:
             return json.loads(self.artifacts)
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             return []
 
     def to_dict(self):
@@ -253,7 +259,7 @@ class ResultHistory(db.Model):
             return []
         try:
             return json.loads(self.artifacts)
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             return []
 
     def to_dict(self):
@@ -267,4 +273,60 @@ class ResultHistory(db.Model):
             "artifacts": self.artifacts_list,
             "changed_by": self.changed_by,
             "changed_at": self.changed_at.isoformat() if self.changed_at else None,
+        }
+
+
+class SyncBaseline(db.Model):
+    """Daily snapshot of all case IDs — used as the comparison baseline for sync diffs."""
+    __tablename__ = "sync_baselines"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    case_ids = db.Column(db.Text, nullable=False)  # JSON array of case IDs
+    case_titles = db.Column(db.Text, nullable=False)  # JSON dict: {case_id: "suite > section > title"}
+    case_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def get_case_ids(self):
+        return set(json.loads(self.case_ids)) if self.case_ids else set()
+
+    def get_case_titles(self):
+        return json.loads(self.case_titles) if self.case_titles else {}
+
+
+class SyncLog(db.Model):
+    """Records each Cypress sync or CircleCI import with summary details."""
+    __tablename__ = "sync_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sync_type = db.Column(db.String(50), nullable=False)  # 'cypress_sync' or 'circleci_import'
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    total_cases = db.Column(db.Integer, default=0)
+    new_cases = db.Column(db.Integer, default=0)
+    removed_cases = db.Column(db.Integer, default=0)
+    suites_processed = db.Column(db.Integer, default=0)
+    new_case_names = db.Column(db.Text, nullable=True)  # JSON array of new case titles
+    status = db.Column(db.String(20), default="success")  # 'success', 'partial', 'error'
+    error_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        new_names = []
+        if self.new_case_names:
+            try:
+                new_names = json.loads(self.new_case_names)
+            except Exception:
+                new_names = []
+        return {
+            "id": self.id,
+            "sync_type": self.sync_type,
+            "project_id": self.project_id,
+            "total_cases": self.total_cases,
+            "new_cases": self.new_cases,
+            "removed_cases": self.removed_cases,
+            "suites_processed": self.suites_processed,
+            "new_case_names": new_names,
+            "status": self.status,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

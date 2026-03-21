@@ -109,6 +109,54 @@
   opacity: 1;
 }
 
+/* ── Editable run heading ── */
+.run-heading-editable {
+  cursor: pointer;
+  transition: color var(--transition);
+}
+
+.run-heading-editable:hover {
+  color: var(--sidebar-bg);
+}
+
+.run-edit-icon {
+  display: inline;
+  margin-left: 8px;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity var(--transition);
+  color: var(--text-muted);
+}
+
+.run-heading-editable:hover .run-edit-icon {
+  opacity: 0.6;
+}
+
+.run-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.run-rename-input {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--bg-white);
+  border: 2px solid var(--sidebar-bg);
+  border-radius: var(--radius-md);
+  padding: 4px 12px;
+  outline: none;
+  width: 100%;
+  max-width: 500px;
+  letter-spacing: -0.3px;
+}
+
+.run-rename-input:focus {
+  box-shadow: 0 0 0 3px rgba(26, 58, 42, 0.15);
+}
+
 /* ── Results header ── */
 .panel-title {
   margin: 0;
@@ -242,12 +290,70 @@
 }
 
 .run-section-file {
+  display: inline-block;
+  align-self: flex-start;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   letter-spacing: 0;
   user-select: text;
-  cursor: text;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  transition: background var(--transition), color var(--transition);
+}
+
+.run-section-file:hover {
+  background: var(--primary-light);
+  color: var(--sidebar-bg);
+}
+
+.run-section-file:hover::after {
+  content: 'copy';
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--border-light);
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltipIn 0.15s ease forwards;
+}
+
+.run-section-file.copied {
+  background: var(--status-passed-bg);
+  color: var(--status-passed);
+  animation: copiedFlash 0.3s ease;
+}
+
+.run-section-file.copied::after {
+  content: '\2713  copied';
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--status-passed);
+  background: var(--status-passed-bg);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: copiedBadgeIn 0.25s ease forwards;
+}
+
+@keyframes copiedFlash {
+  0% { background: rgba(46, 125, 50, 0.25); }
+  100% { background: var(--status-passed-bg); }
+}
+
+@keyframes copiedBadgeIn {
+  0% { opacity: 0; transform: translateX(-4px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .run-section-count {
