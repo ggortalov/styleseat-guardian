@@ -9,7 +9,8 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(basedir, 'app.db')}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
-        "connect_args": {"timeout": 30},  # Wait up to 30s for DB lock to clear
+        "connect_args": {"timeout": 60},  # Wait up to 60s for DB lock to clear
+        "pool_pre_ping": True,            # Verify connections before checkout
     }
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)

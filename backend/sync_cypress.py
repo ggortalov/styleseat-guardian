@@ -274,6 +274,11 @@ def main():
                 print(f"  WARNING: {failed}/{len(file_entries)} file fetches failed — "
                       f"skipping orphan cleanup for this suite")
 
+            # Commit after each suite to release the DB write lock between suites.
+            # This prevents the backend (and import_circleci) from being blocked
+            # while the sync fetches files from GitHub.
+            db.session.commit()
+
             print(f"  Tests: {suite_tests}, New: {suite_new}")
             total_tests += suite_tests
             total_new += suite_new

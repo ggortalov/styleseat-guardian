@@ -1,8 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
+from sqlalchemy import func
 
 from app import db
 from app.models import Section, Suite, TestCase, Project
+from app.audit import log_action
+from app.routes import check_project_ownership
 
 sections_bp = Blueprint("sections", __name__)
 
@@ -12,10 +15,18 @@ sections_bp = Blueprint("sections", __name__)
 def list_sections(suite_id):
     Suite.query.get_or_404(suite_id)
     sections = Section.query.filter_by(suite_id=suite_id).order_by(Section.display_order).all()
+    section_ids = [s.id for s in sections]
+    # Batch case counts per section
+    case_counts = dict(
+        db.session.query(TestCase.section_id, func.count(TestCase.id))
+        .filter(TestCase.section_id.in_(section_ids))
+        .group_by(TestCase.section_id)
+        .all()
+    ) if section_ids else {}
     result = []
     for s in sections:
         d = s.to_dict()
-        d["case_count"] = TestCase.query.filter_by(section_id=s.id).count()
+        d["case_count"] = case_counts.get(s.id, 0)
         result.append(d)
     return jsonify(result), 200
 
@@ -29,10 +40,18 @@ def list_sections_by_project(project_id):
     if not suite_ids:
         return jsonify([]), 200
     sections = Section.query.filter(Section.suite_id.in_(suite_ids)).order_by(Section.display_order).all()
+    section_ids = [s.id for s in sections]
+    # Batch case counts per section
+    case_counts = dict(
+        db.session.query(TestCase.section_id, func.count(TestCase.id))
+        .filter(TestCase.section_id.in_(section_ids))
+        .group_by(TestCase.section_id)
+        .all()
+    ) if section_ids else {}
     result = []
     for s in sections:
         d = s.to_dict()
-        d["case_count"] = TestCase.query.filter_by(section_id=s.id).count()
+        d["case_count"] = case_counts.get(s.id, 0)
         result.append(d)
     return jsonify(result), 200
 
@@ -68,6 +87,12 @@ def create_section(suite_id):
 @jwt_required()
 def update_section(section_id):
     section = Section.query.get_or_404(section_id)
+    suite = Suite.query.get(section.suite_id)
+    project = Project.query.get(suite.project_id) if suite else None
+    if project:
+        denied = check_project_ownership(project)
+        if denied:
+            return denied
     data = request.get_json(silent=True) or {}
     if "name" in data:
         section.name = data["name"].strip()
@@ -92,6 +117,13 @@ def update_section(section_id):
 @jwt_required()
 def delete_section(section_id):
     section = Section.query.get_or_404(section_id)
+    suite = Suite.query.get(section.suite_id)
+    project = Project.query.get(suite.project_id) if suite else None
+    if project:
+        denied = check_project_ownership(project)
+        if denied:
+            return denied
+    log_action("DELETE", "section", section_id)
     db.session.delete(section)
     db.session.commit()
     return jsonify({"message": "Section deleted"}), 200

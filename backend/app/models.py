@@ -132,7 +132,7 @@ class TestCase(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
-    results = db.relationship("TestResult", backref="test_case", cascade="all, delete-orphan", lazy=True)
+    results = db.relationship("TestResult", backref="test_case", passive_deletes=True, lazy=True)
 
     @property
     def steps_list(self):
@@ -201,7 +201,7 @@ class TestResult(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     run_id = db.Column(db.Integer, db.ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False)
-    case_id = db.Column(db.Integer, db.ForeignKey("test_cases.id", ondelete="CASCADE"), nullable=False)
+    case_id = db.Column(db.Integer, db.ForeignKey("test_cases.id", ondelete="SET NULL"), nullable=True)
     status = db.Column(db.String(20), default="Untested")
     comment = db.Column(db.Text, nullable=True)
     defect_id = db.Column(db.String(100), nullable=True)

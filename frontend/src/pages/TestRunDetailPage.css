@@ -473,51 +473,6 @@
   white-space: nowrap;
 }
 
-.run-case-title--copyable {
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  padding: 1px 4px;
-  transition: background var(--transition), color var(--transition);
-}
-
-.run-case-title--copyable:hover {
-  background: var(--primary-light);
-  color: var(--sidebar-bg);
-}
-
-.run-case-title--copyable:hover::after {
-  content: 'copy';
-  margin-left: 6px;
-  padding: 1px 5px;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: var(--border-light);
-  border-radius: 4px;
-  pointer-events: none;
-  opacity: 0;
-  animation: tooltipIn 0.15s ease forwards;
-}
-
-.run-case-title--copyable.copied {
-  background: var(--status-passed-bg);
-  color: var(--status-passed);
-  animation: copiedFlash 0.3s ease;
-}
-
-.run-case-title--copyable.copied::after {
-  content: '\2713  copied';
-  margin-left: 6px;
-  padding: 1px 5px;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--status-passed);
-  background: var(--status-passed-bg);
-  border-radius: 4px;
-  pointer-events: none;
-  animation: copiedBadgeIn 0.25s ease forwards;
-}
-
 .run-case-file {
   flex-shrink: 0;
   max-width: 180px;

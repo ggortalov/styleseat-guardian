@@ -470,7 +470,7 @@ export default function TestRunDetailPage() {
                                   {selectionMode && (
                                     <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                                   )}
-                                  <span className="run-case-title run-case-title--copyable" onClick={(e) => { e.stopPropagation(); const text = stripTestRailId(r.case_title); navigator.clipboard.writeText(text); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{stripTestRailId(r.case_title)}</span>
+                                  <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
                                   <span className="run-case-tested-by">
                                     <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>{r.tested_by_name || 'Automation'}</span>
                                   </span>

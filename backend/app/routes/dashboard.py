@@ -1,8 +1,10 @@
 from flask import Blueprint, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app import db
+from app.audit import log_action
 from app.models import Project, Suite, Section, TestCase, TestRun, TestResult, SyncLog
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -13,36 +15,53 @@ dashboard_bp = Blueprint("dashboard", __name__)
 def global_dashboard():
     # Return a flat list of suites (no project grouping)
     suites = Suite.query.order_by(Suite.created_at.asc()).all()
-    result = []
+    suite_ids = [s.id for s in suites]
 
+    # Batch case counts per suite
+    case_counts = dict(
+        db.session.query(TestCase.suite_id, func.count(TestCase.id))
+        .filter(TestCase.suite_id.in_(suite_ids))
+        .group_by(TestCase.suite_id)
+        .all()
+    ) if suite_ids else {}
+
+    # Batch run counts per suite
+    run_counts = dict(
+        db.session.query(TestRun.suite_id, func.count(TestRun.id))
+        .filter(TestRun.suite_id.in_(suite_ids))
+        .group_by(TestRun.suite_id)
+        .all()
+    ) if suite_ids else {}
+
+    # Batch result stats per suite (via test_runs join)
+    suite_result_stats = {}
+    if suite_ids:
+        rows = (
+            db.session.query(TestRun.suite_id, TestResult.status, func.count(TestResult.id))
+            .join(TestResult, TestResult.run_id == TestRun.id)
+            .filter(TestRun.suite_id.in_(suite_ids))
+            .group_by(TestRun.suite_id, TestResult.status)
+            .all()
+        )
+        for sid, status, cnt in rows:
+            suite_result_stats.setdefault(sid, {})[status] = cnt
+
+    result = []
     for suite in suites:
         d = suite.to_dict()
         d["project_id"] = suite.project_id
-
-        section_ids = [sec.id for sec in Section.query.filter_by(suite_id=suite.id).all()]
-        d["case_count"] = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
-
-        # Runs for this suite
-        runs = TestRun.query.filter_by(suite_id=suite.id).all()
-        d["run_count"] = len(runs)
-        run_ids = [r.id for r in runs]
+        d["case_count"] = case_counts.get(suite.id, 0)
+        d["run_count"] = run_counts.get(suite.id, 0)
 
         stats = {"Passed": 0, "Failed": 0, "Blocked": 0, "Retest": 0, "Untested": 0}
-        if run_ids:
-            counts = dict(
-                db.session.query(TestResult.status, func.count(TestResult.id))
-                .filter(TestResult.run_id.in_(run_ids))
-                .group_by(TestResult.status)
-                .all()
-            )
-            for status in stats:
-                stats[status] = counts.get(status, 0)
+        suite_stats = suite_result_stats.get(suite.id, {})
+        for status in stats:
+            stats[status] = suite_stats.get(status, 0)
 
         d["stats"] = stats
         total = sum(stats.values())
         d["stats"]["total"] = total
         d["stats"]["pass_rate"] = round(stats["Passed"] / total * 100, 1) if total > 0 else 0
-
         result.append(d)
 
     # Global totals
@@ -59,19 +78,28 @@ def global_dashboard():
     global_stats["total"] = global_total
     global_stats["pass_rate"] = round(global_stats["Passed"] / global_total * 100, 1) if global_total > 0 else 0
 
-    # Recent runs (last 10)
-    recent_runs = TestRun.query.order_by(TestRun.created_at.desc()).limit(10).all()
+    # Recent runs (last 10) — eager-load project and suite
+    recent_runs = TestRun.query.options(
+        joinedload(TestRun.project), joinedload(TestRun.suite)
+    ).order_by(TestRun.created_at.desc()).limit(10).all()
+    recent_run_ids = [r.id for r in recent_runs]
+    # Batch result stats for recent runs
+    recent_stats = {}
+    if recent_run_ids:
+        rows = (
+            db.session.query(TestResult.run_id, TestResult.status, func.count(TestResult.id))
+            .filter(TestResult.run_id.in_(recent_run_ids))
+            .group_by(TestResult.run_id, TestResult.status)
+            .all()
+        )
+        for rid, status, cnt in rows:
+            recent_stats.setdefault(rid, {})[status] = cnt
     recent = []
     for run in recent_runs:
         rd = run.to_dict()
         rd["project_name"] = run.project.name if run.project else None
-        rd["suite_name"] = run.suite.name if run.suite else None
-        counts = dict(
-            db.session.query(TestResult.status, func.count(TestResult.id))
-            .filter_by(run_id=run.id)
-            .group_by(TestResult.status)
-            .all()
-        )
+        rd["suite_name"] = run.suite.name if run.suite else "All Suites"
+        counts = recent_stats.get(run.id, {})
         t = sum(counts.values())
         rd["pass_rate"] = round(counts.get("Passed", 0) / t * 100, 1) if t > 0 else 0
         rd["total_results"] = t
@@ -94,17 +122,31 @@ def global_dashboard():
 def project_dashboard(project_id):
     project = Project.query.get_or_404(project_id)
 
-    runs = TestRun.query.filter_by(project_id=project_id).order_by(TestRun.created_at.desc()).all()
+    runs = TestRun.query.filter_by(project_id=project_id).options(
+        joinedload(TestRun.suite)
+    ).order_by(TestRun.created_at.desc()).all()
+    run_ids = [r.id for r in runs]
+
+    # Batch result stats for all runs in one query
+    all_run_stats = {}
+    overall = {"Passed": 0, "Failed": 0, "Blocked": 0, "Retest": 0, "Untested": 0}
+    if run_ids:
+        rows = (
+            db.session.query(TestResult.run_id, TestResult.status, func.count(TestResult.id))
+            .filter(TestResult.run_id.in_(run_ids))
+            .group_by(TestResult.run_id, TestResult.status)
+            .all()
+        )
+        for rid, status, cnt in rows:
+            all_run_stats.setdefault(rid, {})[status] = cnt
+            if status in overall:
+                overall[status] += cnt
+
     runs_data = []
     for run in runs:
         rd = run.to_dict()
-        rd["suite_name"] = run.suite.name if run.suite else None
-        counts = dict(
-            db.session.query(TestResult.status, func.count(TestResult.id))
-            .filter_by(run_id=run.id)
-            .group_by(TestResult.status)
-            .all()
-        )
+        rd["suite_name"] = run.suite.name if run.suite else "All Suites"
+        counts = all_run_stats.get(run.id, {})
         rd["stats"] = {
             "Passed": counts.get("Passed", 0),
             "Failed": counts.get("Failed", 0),
@@ -116,19 +158,6 @@ def project_dashboard(project_id):
         rd["stats"]["total"] = total
         rd["stats"]["pass_rate"] = round(rd["stats"]["Passed"] / total * 100, 1) if total > 0 else 0
         runs_data.append(rd)
-
-    # Overall stats
-    run_ids = [r.id for r in runs]
-    overall = {"Passed": 0, "Failed": 0, "Blocked": 0, "Retest": 0, "Untested": 0}
-    if run_ids:
-        counts = dict(
-            db.session.query(TestResult.status, func.count(TestResult.id))
-            .filter(TestResult.run_id.in_(run_ids))
-            .group_by(TestResult.status)
-            .all()
-        )
-        for status in overall:
-            overall[status] = counts.get(status, 0)
     total = sum(overall.values())
     overall["total"] = total
     overall["pass_rate"] = round(overall["Passed"] / total * 100, 1) if total > 0 else 0
@@ -159,6 +188,12 @@ def get_sync_logs():
 @jwt_required()
 def manual_cleanup():
     """Manually trigger the 30-day retention cleanup."""
+    user_id = int(get_jwt_identity())
+    # Only users who created at least one project can trigger cleanup
+    has_projects = Project.query.filter_by(created_by=user_id).first()
+    if not has_projects:
+        return jsonify({"error": "Forbidden"}), 403
+    log_action("CLEANUP", "retention", "manual")
     from app.retention import run_full_cleanup
     summary = run_full_cleanup(current_app._get_current_object())
     return jsonify(summary), 200
