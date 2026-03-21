@@ -413,9 +413,8 @@ def import_workflow(workflow_id):
             pass  # Non-critical — skip branch label if pipeline fetch fails
 
     # Step 4: Create single combined run and process all suites
-    # All DB writes use flush() within a single transaction.  The only
-    # commit() is at the very end.  If anything fails, the except handler
-    # rolls back the entire transaction — no orphan empty runs.
+    # DB writes are committed per-suite to avoid holding a SQLite write lock
+    # for the entire duration of the import (which involves slow network I/O).
     app = create_app()
     with app.app_context():
       try:
@@ -455,7 +454,7 @@ def import_workflow(workflow_id):
             description=run_desc, created_at=wf_date
         )
         db.session.add(run)
-        db.session.flush()
+        db.session.commit()  # Commit run immediately to release DB lock during network I/O
 
         print(f"\nCreated combined run: {run.name} (ID: {run.id})")
 
@@ -658,6 +657,11 @@ def import_workflow(workflow_id):
 
                     # Primary: match by (section_id, title) — section-aware
                     case = existing_cases_by_section.get((section.id, norm))
+                    # Guard: if this case already has a result in this run
+                    # (e.g. same title in desktop + mobile spec files),
+                    # create a separate case for the variant
+                    if case and case.id in cases_with_results:
+                        case = None
                     if not case:
                         # Fallback: title-only match (for cases not yet synced to correct section)
                         case = existing_cases_by_title.get(norm)
@@ -915,6 +919,11 @@ def import_workflow(workflow_id):
             for status_key, count in results_created.items():
                 grand_totals[status_key] += count
 
+            # Commit after each suite to release the DB write lock between suites.
+            # This prevents the backend from being blocked while the import
+            # fetches data from CircleCI and GitHub APIs.
+            db.session.commit()
+
             suite_reports.append({
                 'suite_name': suite.name,
                 'results': dict(results_created),
@@ -976,7 +985,7 @@ def import_workflow(workflow_id):
       except Exception as e:
         db.session.rollback()
         print(f"\nERROR: Import failed — {e}")
-        print("All changes rolled back. No orphan run created.")
+        print("Current suite's changes rolled back. Previously committed suites are preserved.")
         raise
 
 

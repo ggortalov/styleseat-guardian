@@ -1,3 +1,4 @@
+import logging
 import os
 
 from flask import Flask, jsonify
@@ -21,6 +22,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=60000")  # Wait up to 60s for locks
         cursor.close()
 
 
@@ -106,6 +108,13 @@ def create_app():
 
     # Ensure avatar upload directory exists
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
+    # --- Audit logger ---
+    _audit = logging.getLogger("guardian.audit")
+    _audit.setLevel(logging.INFO)
+    _audit_handler = logging.StreamHandler()
+    _audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    _audit.addHandler(_audit_handler)
 
     # --- Scheduled retention cleanup ---
     from app.retention import run_full_cleanup

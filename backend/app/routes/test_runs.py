@@ -4,9 +4,12 @@ from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Project, User
+from app.audit import log_action
+from app.routes import check_project_ownership
 
 runs_bp = Blueprint("runs", __name__)
 
@@ -54,22 +57,30 @@ def list_all_runs():
     total_count = TestRun.query.count()
     runs = (
         TestRun.query
+        .options(joinedload(TestRun.project), joinedload(TestRun.suite))
         .order_by(TestRun.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
+    run_ids = [r.id for r in runs]
+    # Batch result stats for all runs
+    all_run_stats = {}
+    if run_ids:
+        rows = (
+            db.session.query(TestResult.run_id, TestResult.status, func.count(TestResult.id))
+            .filter(TestResult.run_id.in_(run_ids))
+            .group_by(TestResult.run_id, TestResult.status)
+            .all()
+        )
+        for rid, status, cnt in rows:
+            all_run_stats.setdefault(rid, {})[status] = cnt
     result = []
     for run in runs:
         d = run.to_dict()
         d["project_name"] = run.project.name if run.project else None
         d["suite_name"] = run.suite.name if run.suite else "All Suites"
-        counts = dict(
-            db.session.query(TestResult.status, func.count(TestResult.id))
-            .filter_by(run_id=run.id)
-            .group_by(TestResult.status)
-            .all()
-        )
+        counts = all_run_stats.get(run.id, {})
         d["stats"] = {
             "Passed": counts.get("Passed", 0),
             "Failed": counts.get("Failed", 0),
@@ -92,17 +103,26 @@ def list_all_runs():
 @jwt_required()
 def list_runs(project_id):
     Project.query.get_or_404(project_id)
-    runs = TestRun.query.filter_by(project_id=project_id).order_by(TestRun.created_at.desc()).all()
+    runs = TestRun.query.filter_by(project_id=project_id).options(
+        joinedload(TestRun.suite)
+    ).order_by(TestRun.created_at.desc()).all()
+    run_ids = [r.id for r in runs]
+    # Batch result stats for all runs
+    all_run_stats = {}
+    if run_ids:
+        rows = (
+            db.session.query(TestResult.run_id, TestResult.status, func.count(TestResult.id))
+            .filter(TestResult.run_id.in_(run_ids))
+            .group_by(TestResult.run_id, TestResult.status)
+            .all()
+        )
+        for rid, status, cnt in rows:
+            all_run_stats.setdefault(rid, {})[status] = cnt
     result = []
     for run in runs:
         d = run.to_dict()
         d["suite_name"] = run.suite.name if run.suite else "All Suites"
-        counts = dict(
-            db.session.query(TestResult.status, func.count(TestResult.id))
-            .filter_by(run_id=run.id)
-            .group_by(TestResult.status)
-            .all()
-        )
+        counts = all_run_stats.get(run.id, {})
         d["stats"] = {
             "Passed": counts.get("Passed", 0),
             "Failed": counts.get("Failed", 0),
@@ -190,6 +210,10 @@ def get_run(run_id):
 @jwt_required()
 def update_run(run_id):
     run = TestRun.query.get_or_404(run_id)
+    project = Project.query.get(run.project_id)
+    denied = check_project_ownership(project)
+    if denied:
+        return denied
     data = request.get_json(silent=True) or {}
 
     if "name" in data:
@@ -209,6 +233,11 @@ def update_run(run_id):
 @jwt_required()
 def delete_run(run_id):
     run = TestRun.query.get_or_404(run_id)
+    project = Project.query.get(run.project_id)
+    denied = check_project_ownership(project)
+    if denied:
+        return denied
+    log_action("DELETE", "test_run", run_id)
     db.session.delete(run)
     db.session.commit()
     return jsonify({"message": "Test run deleted"}), 200
@@ -218,7 +247,9 @@ def delete_run(run_id):
 @jwt_required()
 def list_results(run_id):
     TestRun.query.get_or_404(run_id)
-    results = TestResult.query.filter_by(run_id=run_id).all()
+    results = TestResult.query.filter_by(run_id=run_id).options(
+        joinedload(TestResult.test_case).joinedload(TestCase.section)
+    ).all()
     # Batch-fetch usernames for all tested_by IDs
     tester_ids = {r.tested_by for r in results if r.tested_by}
     tester_map = {}
@@ -255,6 +286,14 @@ def list_results(run_id):
             d["describe_title"] = describe_title
             # Group by file name when available, otherwise by section name
             d["section_name"] = source_file or (r.test_case.section.name if r.test_case.section else "Uncategorized")
+        else:
+            # Test case was deleted — preserve the result with fallback values
+            d["case_title"] = f"[Deleted case #{r.case_id}]" if r.case_id else "[Deleted case]"
+            d["priority"] = None
+            d["suite_name"] = "Unknown"
+            d["source_file"] = None
+            d["describe_title"] = None
+            d["section_name"] = "Deleted"
         out.append(d)
     return jsonify(out), 200
 
@@ -270,6 +309,12 @@ def get_result(result_id):
     if result.test_case:
         d["test_case"] = result.test_case.to_dict()
         d["test_case"]["section_name"] = result.test_case.section.name if result.test_case.section else None
+    else:
+        d["test_case"] = {
+            "id": result.case_id,
+            "title": f"[Deleted case #{result.case_id}]" if result.case_id else "[Deleted case]",
+            "section_name": "Deleted",
+        }
     return jsonify(d), 200
 
 
@@ -277,6 +322,12 @@ def get_result(result_id):
 @jwt_required()
 def update_result(result_id):
     result = TestResult.query.get_or_404(result_id)
+    run = TestRun.query.get(result.run_id)
+    if run:
+        project = Project.query.get(run.project_id)
+        denied = check_project_ownership(project)
+        if denied:
+            return denied
     data = request.get_json(silent=True) or {}
     user_id = int(get_jwt_identity())
 
@@ -365,6 +416,12 @@ def fetch_circleci_for_result(result_id):
     from app.services.circleci import circleci_service
 
     result = TestResult.query.get_or_404(result_id)
+    run = TestRun.query.get(result.run_id)
+    if run:
+        project = Project.query.get(run.project_id)
+        denied = check_project_ownership(project)
+        if denied:
+            return denied
     data = request.get_json(silent=True) or {}
     job_number = data.get("job_number") or result.circleci_job_id
 
