@@ -10,12 +10,13 @@ This script fetches all .cy.js files, extracts test titles, and syncs them into 
 import sys
 import re
 import json
+import time
 import base64
 import subprocess
 from collections import defaultdict
 
 from app import create_app, db
-from app.models import Suite, Section, TestCase, Project
+from app.models import Suite, Section, TestCase, Project, SyncLog, SyncBaseline
 from app.suite_utils import determine_cypress_path, cypress_path_to_name
 
 # Regex to extract TestRail ID prefix (e.g. "C5412853" from "C5412853 Validate Email...")
@@ -59,14 +60,18 @@ def get_repo_tree():
             if f['path'].startswith('cypress/e2e/') and f['path'].endswith('.cy.js')]
 
 
-def get_file_content(path):
-    """Fetch file content from GitHub."""
-    result = subprocess.run(
-        ['gh', 'api', f'repos/styleseat/cypress/contents/{path}', '--jq', '.content'],
-        capture_output=True, text=True
-    )
-    if result.returncode == 0:
-        return base64.b64decode(result.stdout.strip()).decode('utf-8', errors='ignore')
+def get_file_content(sha, path, retries=3):
+    """Fetch file content from GitHub using the blob API (reliable for all file sizes)."""
+    for attempt in range(retries):
+        result = subprocess.run(
+            ['gh', 'api', f'repos/styleseat/cypress/git/blobs/{sha}', '--jq', '.content'],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return base64.b64decode(result.stdout.strip()).decode('utf-8', errors='ignore')
+        if attempt < retries - 1:
+            time.sleep(1 * (attempt + 1))
+    print(f"  WARNING: Failed to fetch {path} after {retries} attempts")
     return None
 
 
@@ -93,6 +98,7 @@ def extract_describe(content):
 def main():
     app = create_app()
     with app.app_context():
+        db.create_all()  # Ensure new tables (e.g. sync_baselines) exist
         project = Project.query.filter_by(name='Cypress Automation').first()
         if not project:
             print("ERROR: 'Cypress Automation' project not found. Run 'npm run demo' first.")
@@ -110,17 +116,18 @@ def main():
             if cp in EXCLUDED_PATHS:
                 skipped += 1
                 continue
-            suite_files[cp].append(f['path'])
+            suite_files[cp].append((f['path'], f['sha']))
 
         print(f"Suites detected: {len(suite_files)} (skipped {skipped} files from excluded paths)")
 
         total_tests = 0
         total_new = 0
         total_orphaned = 0
+        new_case_names = []  # Track names of newly created cases
 
-        for cypress_path, file_paths in sorted(suite_files.items()):
+        for cypress_path, file_entries in sorted(suite_files.items()):
             suite_name = cypress_path_to_name(cypress_path)
-            print(f"\n=== {suite_name} ({len(file_paths)} files) ===")
+            print(f"\n=== {suite_name} ({len(file_entries)} files) ===")
 
             # Find or create suite
             suite = Suite.query.filter_by(project_id=project.id, cypress_path=cypress_path).first()
@@ -154,8 +161,8 @@ def main():
             suite_new = 0
             files_fetched = 0
 
-            for file_path in file_paths:
-                content = get_file_content(file_path)
+            for file_path, file_sha in file_entries:
+                content = get_file_content(file_sha, file_path)
                 if not content:
                     continue
 
@@ -234,6 +241,7 @@ def main():
                         db.session.add(case)
                         db.session.flush()
                         suite_new += 1
+                        new_case_names.append(f"{suite_name} > {section_name} > {display_title}")
 
                     visited_case_ids.add(case.id)
 
@@ -247,7 +255,7 @@ def main():
 
             # Remove orphaned cases only if we successfully fetched most files
             # (protects against API rate limits or network failures wiping the DB)
-            if files_fetched >= len(file_paths) * 0.5:
+            if files_fetched >= len(file_entries) * 0.5:
                 orphan_cases = [c for c in all_cases if c.id not in visited_case_ids]
                 if orphan_cases:
                     for c in orphan_cases:
@@ -261,24 +269,113 @@ def main():
                     if TestCase.query.filter_by(section_id=section.id).count() == 0:
                         db.session.delete(section)
                         print(f"  Removed empty section: {section.name}")
-            elif files_fetched < len(file_paths):
-                failed = len(file_paths) - files_fetched
-                print(f"  WARNING: {failed}/{len(file_paths)} file fetches failed — "
+            elif files_fetched < len(file_entries):
+                failed = len(file_entries) - files_fetched
+                print(f"  WARNING: {failed}/{len(file_entries)} file fetches failed — "
                       f"skipping orphan cleanup for this suite")
+
+            # Commit after each suite to release the DB write lock between suites.
+            # This prevents the backend (and import_circleci) from being blocked
+            # while the sync fetches files from GitHub.
+            db.session.commit()
 
             print(f"  Tests: {suite_tests}, New: {suite_new}")
             total_tests += suite_tests
             total_new += suite_new
 
+        # ── Baseline diffing ──
+        # Build current snapshot of all case IDs and titles
+        all_current_cases = (
+            db.session.query(TestCase.id, TestCase.title, Suite.name, Section.name)
+            .join(Suite, TestCase.suite_id == Suite.id)
+            .outerjoin(Section, TestCase.section_id == Section.id)
+            .filter(Suite.project_id == project.id)
+            .all()
+        )
+        current_case_ids = {c[0] for c in all_current_cases}
+        current_case_titles = {
+            str(c[0]): f"{c[2]} > {c[3] or 'Unknown'} > {c[1]}"
+            for c in all_current_cases
+        }
+
+        # Load previous baseline
+        prev_baseline = (
+            SyncBaseline.query
+            .filter_by(project_id=project.id)
+            .order_by(SyncBaseline.created_at.desc())
+            .first()
+        )
+
+        baseline_new_names = []
+        baseline_removed_names = []
+        baseline_new_count = 0
+        baseline_removed_count = 0
+
+        if prev_baseline:
+            prev_ids = prev_baseline.get_case_ids()
+            prev_titles = prev_baseline.get_case_titles()
+
+            added_ids = current_case_ids - prev_ids
+            removed_ids = prev_ids - current_case_ids
+
+            baseline_new_count = len(added_ids)
+            baseline_removed_count = len(removed_ids)
+
+            baseline_new_names = [
+                current_case_titles.get(str(cid), f"Case #{cid}")
+                for cid in sorted(added_ids)
+            ]
+            baseline_removed_names = [
+                prev_titles.get(str(cid), f"Case #{cid}")
+                for cid in sorted(removed_ids)
+            ]
+
+            print(f"\n--- Baseline diff (vs {prev_baseline.created_at.strftime('%Y-%m-%d %H:%M')}) ---")
+            print(f"  Previous baseline: {prev_baseline.case_count} cases")
+            print(f"  Current snapshot:  {len(current_case_ids)} cases")
+            print(f"  New since baseline:     +{baseline_new_count}")
+            print(f"  Removed since baseline: -{baseline_removed_count}")
+        else:
+            print("\n--- No previous baseline found — creating initial baseline ---")
+
+        # Save new baseline (snapshot for next comparison)
+        new_baseline = SyncBaseline(
+            project_id=project.id,
+            case_ids=json.dumps(sorted(current_case_ids)),
+            case_titles=json.dumps(current_case_titles),
+            case_count=len(current_case_ids),
+        )
+        db.session.add(new_baseline)
+
+        # Save sync log with baseline-aware counts
+        sync_log = SyncLog(
+            sync_type='cypress_sync',
+            project_id=project.id,
+            total_cases=len(current_case_ids),
+            new_cases=baseline_new_count,
+            removed_cases=baseline_removed_count,
+            suites_processed=len(suite_files),
+            new_case_names=json.dumps(baseline_new_names) if baseline_new_names else None,
+            status='success',
+        )
+        db.session.add(sync_log)
         db.session.commit()
 
         print(f"\n{'=' * 50}")
         print(f"CYPRESS SYNC COMPLETE")
         print(f"{'=' * 50}")
-        print(f"Total tests found:  {total_tests}")
-        print(f"New cases created:  {total_new}")
-        print(f"Orphans removed:    {total_orphaned}")
+        print(f"Total tests found:  {len(current_case_ids)}")
+        print(f"New since baseline: +{baseline_new_count}")
+        print(f"Removed since baseline: -{baseline_removed_count}")
         print(f"Suites processed:   {len(suite_files)}")
+        if baseline_new_names:
+            print(f"\nNew test cases (since baseline):")
+            for name in baseline_new_names:
+                print(f"  + {name}")
+        if baseline_removed_names:
+            print(f"\nRemoved test cases (since baseline):")
+            for name in baseline_removed_names:
+                print(f"  - {name}")
 
 
 if __name__ == '__main__':

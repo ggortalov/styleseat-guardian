@@ -74,7 +74,41 @@ with app.app_context():
         conn.execute("DROP TABLE test_runs_old")
         conn.commit()
         print("Migration complete.")
+    # Migrate test_results.case_id from NOT NULL CASCADE to nullable SET NULL
+    # so deleting a test case preserves the historical result
+    result_cols = conn.execute("PRAGMA table_info(test_results)").fetchall()
+    case_id_col = next((c for c in result_cols if c[1] == "case_id"), None)
+    if case_id_col and case_id_col[3] == 1:  # notnull == 1 means NOT NULL
+        print("Migrating test_results.case_id to nullable (SET NULL)...")
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.execute("ALTER TABLE test_results RENAME TO test_results_old")
+        conn.execute("""
+            CREATE TABLE test_results (
+                id INTEGER PRIMARY KEY,
+                run_id INTEGER NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+                case_id INTEGER REFERENCES test_cases(id) ON DELETE SET NULL,
+                status VARCHAR(20) DEFAULT 'Untested',
+                comment TEXT,
+                defect_id VARCHAR(100),
+                tested_by INTEGER REFERENCES users(id),
+                tested_at DATETIME,
+                error_message TEXT,
+                artifacts TEXT,
+                circleci_job_id VARCHAR(100)
+            )
+        """)
+        conn.execute("""
+            INSERT INTO test_results (id, run_id, case_id, status, comment, defect_id,
+                                      tested_by, tested_at, error_message, artifacts, circleci_job_id)
+            SELECT id, run_id, case_id, status, comment, defect_id,
+                   tested_by, tested_at, error_message, artifacts, circleci_job_id
+            FROM test_results_old
+        """)
+        conn.execute("DROP TABLE test_results_old")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.commit()
+        print("Migration complete.")
     conn.close()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true', port=5001)

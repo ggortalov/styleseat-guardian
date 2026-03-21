@@ -8,7 +8,7 @@ This module is the single source of truth for mapping between:
 
 # Special-case display names that can't be derived mechanically
 _NAME_OVERRIDES = {
-    'p0': 'PO',
+    'p0': 'P0',
     'p3': 'P3 - Admin',
     'events': 'Events Mobile',
     'preprod': 'Pre Prod',
@@ -69,13 +69,18 @@ def workflow_name_to_cypress_path(name: str) -> str:
     'cypress/e2e/p1/common/'
     >>> workflow_name_to_cypress_path('p0_devices')
     'cypress/e2e/devices/p0/'
+    >>> workflow_name_to_cypress_path('p0_mobile')
+    'cypress/e2e/p0/'
     """
+    import re
     key = name.lower().strip()
 
     # Check explicit overrides first
     if key in _WORKFLOW_PATH_OVERRIDES:
         folder = _WORKFLOW_PATH_OVERRIDES[key]
     else:
+        # Strip runner variant suffixes — these are execution configs, not directories
+        key = re.sub(r'[_](?:mobile|desktop|critical|rerun)$', '', key)
         # Convert underscores to slashes: p1_common → p1/common
         folder = key.replace('_', '/')
 

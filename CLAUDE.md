@@ -78,34 +78,52 @@ cd frontend && npm run build
 ## Architecture
 
 ```
-dashboard/
+guardian/
 ├── backend/            # Flask REST API (Python 3.13, port 5001)
 │   ├── app/
-│   │   ├── __init__.py         # App factory: Flask + SQLAlchemy + JWT + CORS init + uploads dir
-│   │   ├── models.py           # 8 SQLAlchemy models (all tables)
+│   │   ├── __init__.py         # App factory: Flask + SQLAlchemy + JWT + CORS + rate limiting + APScheduler
+│   │   ├── models.py           # 11 SQLAlchemy models (all tables)
+│   │   ├── retention.py        # Data retention cleanup: purge expired runs, tokens, history (scheduled daily)
 │   │   ├── suite_utils.py      # Shared suite derivation: cypress_path↔name↔workflow mappings
+│   │   ├── services/
+│   │   │   └── circleci.py     # CircleCI API wrapper (job details, artifacts, failure extraction)
+│   │   ├── utils/
+│   │   │   └── cypress_parser.py # Cypress test file parser utility
 │   │   └── routes/
-│   │       ├── auth.py         # Register, login, current user, avatar upload/serve (JWT)
+│   │       ├── auth.py         # Register, login, logout, current user, avatar upload/serve (JWT)
 │   │       ├── projects.py     # Project CRUD + stats
 │   │       ├── suites.py       # Test suite CRUD (scoped to project)
 │   │       ├── sections.py     # Section CRUD (scoped to suite, self-referential tree)
 │   │       ├── test_cases.py   # Test case CRUD (steps stored as JSON)
-│   │       ├── test_runs.py    # Run CRUD + result management + history
-│   │       └── dashboard.py    # Aggregated stats (global + per-project)
-│   ├── config.py               # SQLite URI, JWT secret, token expiry, upload settings
-│   ├── run.py                  # Entry point (port 5001, creates tables on start)
-│   ├── sync_cypress.py          # CLI script: sync test cases from Cypress repo into Guardian
-│   ├── import_circleci.py       # CLI script: import CircleCI workflow results into a test run
+│   │       ├── test_runs.py    # Run CRUD + result management + history + complete
+│   │       └── dashboard.py    # Aggregated stats + sync logs + retention endpoints
+│   ├── tests/                  # Pytest test suite
+│   │   ├── conftest.py         # Fixtures: app context, client, seeded database
+│   │   ├── test_auth.py        # Auth endpoints, password validation, email domain
+│   │   ├── test_projects.py    # Project CRUD
+│   │   ├── test_suites.py      # Suite CRUD
+│   │   ├── test_sections.py    # Section CRUD, hierarchical tree
+│   │   ├── test_cases.py       # Test case CRUD, steps JSON
+│   │   ├── test_runs.py        # Run creation, result updates, history
+│   │   ├── test_models.py      # Model serialization, relationships
+│   │   └── test_dashboard.py   # Dashboard stats
+│   ├── config.py               # SQLite URI, JWT secret, token expiry, upload, rate limiting, retention
+│   ├── run.py                  # Entry point (port 5001, creates tables, lightweight migrations)
+│   ├── sync_cypress.py         # CLI: sync test cases from Cypress repo (blob API, baseline diffing)
+│   ├── import_circleci.py      # CLI: import CircleCI workflow results into a test run
 │   ├── seed.py                 # Bootstrap: creates demo user + Cypress Automation project
-│   ├── requirements.txt        # Flask, Flask-SQLAlchemy, Flask-CORS, Flask-JWT-Extended, Werkzeug
+│   ├── backup_db.py            # Export app.db to JSON
+│   ├── restore_db.py           # Restore database from JSON backup
+│   ├── strip_testrail_ids.py   # Utility: remove C-ID prefixes from test case titles
+│   ├── requirements.txt        # Flask, SQLAlchemy, CORS, JWT, Limiter, APScheduler, dotenv
 │   ├── .env.example            # Template for environment variables (copy to .env)
 │   ├── .env                    # Local environment variables (gitignored, auto-loaded by python-dotenv)
 │   ├── uploads/avatars/        # User avatar image storage (auto-created)
-│   └── app.db                  # SQLite database (auto-created)
+│   └── app.db                  # SQLite database (auto-created, gitignored)
 │
-├── frontend/           # React 19 SPA (Vite, port 5173)
+├── frontend/           # React 19 SPA (Vite 7.3, port 5173)
 │   ├── public/
-│   │   └── logo.jpg            # Brand logo (lion with sunglasses), color-shifted via CSS filters
+│   │   └── logo.jpg            # Brand logo (lion with sunglasses)
 │   └── src/
 │       ├── main.jsx            # Entry: BrowserRouter + AuthProvider
 │       ├── App.jsx             # Route definitions + layout (collapsible sidebar + responsive main)
@@ -114,15 +132,20 @@ dashboard/
 │       │   └── variables.css   # CSS custom properties (colors, shadows, radii, typography, status/priority tints)
 │       ├── context/
 │       │   └── AuthContext.jsx  # Auth state: user, token, login(), logout(), updateAvatar(), isAuthenticated
+│       ├── constants/
+│       │   └── statusColors.js  # STATUS_COLORS, STATUS_ORDER, getStatusChartData()
+│       ├── utils/
+│       │   └── stripTestRailId.js # Regex utility to remove C-ID prefixes from test titles
 │       ├── services/
 │       │   ├── api.js           # Axios instance (baseURL: localhost:5001/api, JWT interceptor)
-│       │   ├── authService.js   # login(), register(), getMe(), uploadAvatar()
+│       │   ├── authService.js   # login(), register(), getMe(), logout(), uploadAvatar()
 │       │   ├── projectService.js
 │       │   ├── suiteService.js
 │       │   ├── sectionService.js
 │       │   ├── caseService.js
 │       │   ├── runService.js
-│       │   └── dashboardService.js
+│       │   ├── dashboardService.js  # Global/project dashboard + sync logs
+│       │   └── soundService.js      # Sound settings: 12 synthesized sounds, localStorage persistence
 │       ├── components/
 │       │   ├── Sidebar.jsx      # Collapsible sidebar with brand logo, project→suite tree nav, avatar upload, mobile hamburger
 │       │   ├── Header.jsx       # Breadcrumb header bar with mobile hamburger toggle
@@ -130,38 +153,52 @@ dashboard/
 │       │   ├── PriorityBadge.jsx # Tinted pill badges (colored text on light bg)
 │       │   ├── SectionTree.jsx  # Recursive tree built from flat section list
 │       │   ├── StatsCard.jsx    # Stat card with hover lift effect
+│       │   ├── ResizableTable.jsx # Table with resizable columns
+│       │   ├── CategoryList.jsx # Section/category list with edit/delete actions
 │       │   ├── Modal.jsx        # Generic modal with backdrop blur + scaleIn animation
 │       │   ├── ConfirmDialog.jsx # Delete confirmation dialog
 │       │   ├── LoadingSpinner.jsx # Branded spinner with loading text
 │       │   └── ProtectedRoute.jsx # Redirects to /login if not authenticated
+│       ├── test/
+│       │   └── setup.js         # Vitest test setup
 │       └── pages/
 │           ├── LoginPage.jsx         # Login form with brand logo lockup
 │           ├── RegisterPage.jsx      # Registration form with brand logo lockup
-│           ├── DashboardPage.jsx     # Project cards, global stats, doughnut chart, recent runs
-│           ├── ProjectDetailPage.jsx # Tabs: Suites / Test Runs / Overview with charts
+│           ├── DashboardPage.jsx     # Suite cards, global stats, doughnut chart, recent runs
+│           ├── ProjectDetailPage.jsx # Tabs: Suites / Test Runs / Overview + sync change reports
+│           ├── TestSuitesPage.jsx    # Suite list for a project
 │           ├── TestSuitePage.jsx     # Split: section tree (left) + test case table (right)
 │           ├── TestCaseFormPage.jsx  # Create/edit case with dynamic steps list
 │           ├── TestCaseDetailPage.jsx # Read-only case view with steps table
-│           ├── TestRunDetailPage.jsx # Summary bar, doughnut chart, filterable results table
+│           ├── TestRunsPage.jsx      # Test run list for a project
+│           ├── TestRunDetailPage.jsx # Summary bar, doughnut chart, filterable results, copy-to-clipboard
 │           └── TestExecutionPage.jsx # Execute test: case details + status selector + comment + prev/next nav
 │
-└── CLAUDE.md           # This file
+├── scripts/
+│   ├── start-demo.sh           # Demo launcher: reset DB, seed, start servers, background sync
+│   └── start.sh                # Alternative startup script
+├── AWS_DEPLOYMENT_GUIDE.md     # Full AWS deployment guide (EC2, RDS, S3, CloudFront, ALB)
+├── CLAUDE.md                   # This file
+└── package.json                # Root npm scripts: demo, sync, import
 ```
 
 ## Database Schema
 
-8 tables in SQLite (`backend/app.db`). All models are in `backend/app/models.py`.
+11 tables in SQLite (`backend/app.db`). All models are in `backend/app/models.py`.
 
 | Model | Table | Key Fields | Notes |
 |-------|-------|-----------|-------|
+| `TokenBlocklist` | `token_blocklist` | id, jti, created_at | Stores revoked JWT token JTIs for logout. Cleaned up after 7 days by retention job |
 | `User` | `users` | id, username, email, password_hash, avatar | `set_password()` / `check_password()` using werkzeug. `avatar` stores uploaded filename |
 | `Project` | `projects` | id, name, description, created_by (FK users) | Cascades delete to suites and runs |
 | `Suite` | `suites` | id, project_id (FK projects), name, cypress_path (nullable) | Cascades delete to sections. `cypress_path` stores the Cypress repo folder (e.g. `cypress/e2e/p1/common/`) as the canonical suite identifier |
 | `Section` | `sections` | id, suite_id (FK suites), parent_id (FK sections, nullable), name, display_order | Self-referential tree. `parent_id=NULL` = root. Frontend builds tree from flat list |
 | `TestCase` | `test_cases` | id, section_id (FK sections), title, case_type, priority, preconditions, steps (JSON text), expected_result | `steps` is a JSON string: `[{"action": "...", "expected": "..."}]`. Access via `steps_list` property |
-| `TestRun` | `test_runs` | id, project_id (FK projects), suite_id (FK suites), name, is_completed | Creating a run auto-inserts one `TestResult` per case in the suite |
-| `TestResult` | `test_results` | id, run_id (FK test_runs), case_id (FK test_cases), status, comment, defect_id, tested_by, tested_at | Status: Passed/Failed/Blocked/Retest/Untested |
-| `ResultHistory` | `result_history` | id, result_id (FK test_results), status, comment, defect_id, changed_by, changed_at | Appended on every result status update |
+| `TestRun` | `test_runs` | id, project_id (FK projects), suite_id (FK suites, nullable), name, is_completed | Creating a run auto-inserts one `TestResult` per case in the suite |
+| `TestResult` | `test_results` | id, run_id (FK test_runs), case_id (FK test_cases), status, comment, defect_id, error_message, artifacts (JSON), circleci_job_id | Status: Passed/Failed/Blocked/Retest/Untested. CircleCI fields for imported results |
+| `ResultHistory` | `result_history` | id, result_id (FK test_results), status, comment, defect_id, error_message, artifacts (JSON), changed_by, changed_at | Appended on every result status update |
+| `SyncBaseline` | `sync_baselines` | id, project_id (FK projects), case_ids (JSON), case_titles (JSON), case_count | Rolling snapshot of all case IDs for baseline diffing between syncs |
+| `SyncLog` | `sync_logs` | id, sync_type, project_id (FK projects), total_cases, new_cases, removed_cases, new_case_names (JSON) | Records each sync/import with baseline-aware diff counts |
 
 ## API Endpoints
 
@@ -170,10 +207,11 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 ### Auth (`/api/auth`)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/auth/register` | Register user `{username, email, password}` → `{id, username, token}` |
-| POST | `/api/auth/login` | Login `{username, password}` → `{id, username, token}` |
+| POST | `/api/auth/register` | Register user `{username, email, password}` → `{id, username, token}`. Rate-limited: 3/min |
+| POST | `/api/auth/login` | Login `{username, password}` → `{id, username, token}`. Rate-limited: 5/min |
 | GET | `/api/auth/me` | Get current user info |
-| POST | `/api/auth/avatar` | Upload avatar image (multipart/form-data, max 5MB, magic-byte validated) |
+| POST | `/api/auth/logout` | Revoke current JWT token (adds JTI to blocklist) |
+| POST | `/api/auth/avatar` | Upload avatar image (multipart/form-data, max 2MB, magic-byte validated) |
 | GET | `/api/auth/avatars/:filename` | Serve uploaded avatar image file |
 
 ### Projects (`/api`)
@@ -222,6 +260,7 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 | PUT | `/api/runs/:id` | Update run (mark completed, edit name) |
 | DELETE | `/api/runs/:id` | Delete run |
 | GET | `/api/runs/:id/results` | All results with case title, section, priority |
+| POST | `/api/runs/:rid/complete` | Mark run as completed |
 | GET | `/api/results/:id` | Single result with full test case details |
 | PUT | `/api/results/:id` | Update result `{status, comment?, defect_id?}` — also inserts history |
 | GET | `/api/results/:id/history` | Status change history for a result |
@@ -229,8 +268,11 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 ### Dashboard (`/api`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/dashboard` | Global: projects with stats, totals, global_stats, recent_runs |
+| GET | `/api/dashboard` | Global: suites with stats, totals, global_stats, recent_runs |
 | GET | `/api/projects/:pid/dashboard` | Project: all runs with stats, overall_stats |
+| GET | `/api/sync-logs` | Sync log history. Optional params: `project_id`, `limit` (default 20) |
+| POST | `/api/retention/cleanup` | Manually trigger data retention cleanup |
+| GET | `/api/retention/status` | Current retention config and counts of data that would be purged |
 
 ## Frontend Routes
 
@@ -250,17 +292,23 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 ## Key Patterns
 
 ### Backend
-- **App factory** in `app/__init__.py` — `create_app()` initializes Flask, SQLAlchemy, JWT, CORS, registers 7 Blueprints, creates uploads directory
+- **App factory** in `app/__init__.py` — `create_app()` initializes Flask, SQLAlchemy, JWT, CORS, rate limiting, APScheduler, registers 7 Blueprints, creates uploads directory, sets security headers
 - **All Blueprints** registered with `url_prefix="/api"` (except auth: `/api/auth`)
 - **Auth** via `@jwt_required()` decorator on every non-auth endpoint. Token identity is `str(user.id)`
+- **Token blocklist** — logout revokes JWT by storing JTI in `token_blocklist` table. `@jwt.token_in_blocklist_loader` checks on every request
+- **Rate limiting** — Flask-Limiter with in-memory storage: login 5/min, register 3/min
+- **Security headers** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`, `Referrer-Policy`, `Cache-Control: no-store`
 - **Serialization** via `to_dict()` methods on each model (no Marshmallow/Pydantic)
-- **SQLite foreign keys** enabled via `@sa_event.listens_for(Engine, "connect")` PRAGMA
+- **SQLite foreign keys** enabled via `@sa_event.listens_for(Engine, "connect")` PRAGMA + WAL journal mode
 - **Cascade deletes** configured on SQLAlchemy relationships (`cascade="all, delete-orphan"`)
 - **Section tree** returned as a flat list — frontend reconstructs the tree using `parent_id`
 - **Test case steps** stored as JSON text in the `steps` column, accessed via `steps_list` property
-- **Avatar upload** accepts JPEG, PNG, GIF, WebP, BMP, HEIC, AVIF, TIFF (max 5MB), validated by both file extension and magic bytes, stored in `uploads/avatars/` with UUID filename, served via `send_from_directory`
+- **Avatar upload** accepts JPEG, PNG, GIF, WebP, BMP, HEIC, AVIF, TIFF (max 2MB), validated by both file extension and magic bytes, stored in `uploads/avatars/` with UUID filename, served via `send_from_directory`
 - **Email domain restriction** — only `@styleseat.com` emails can register or log in. Enforced at both registration (`is_allowed_email_domain()`) and login (post-authentication domain check). Uses OWASP-compliant generic error messages: registration returns "Unable to create account. Please contact your administrator." for both bad domain and duplicate user (same 403 status); login returns "Invalid username or password" for all failures. Constant `ALLOWED_EMAIL_DOMAIN` in `routes/auth.py`
 - **Suite path derivation** in `app/suite_utils.py` — single source of truth replacing all hardcoded SUITE_MAP dictionaries. Three functions: `cypress_path_to_name()` (path→display name), `workflow_name_to_cypress_path()` (CircleCI job name→path), `determine_cypress_path()` (file path→suite path). Both `/cypress-sync` and `/circleci-import` import from this module. Suites are matched by `cypress_path` column, not by name
+- **Data retention** — `app/retention.py` runs daily at 2 AM via APScheduler: purges completed test runs older than `RETENTION_DAYS` (default 30), cleans expired token blocklist entries (7 days), removes orphaned result history. Manual trigger via `POST /api/retention/cleanup`
+- **Database backup/restore** — `backup_db.py` exports all tables to JSON; `restore_db.py` restores from JSON. Useful for migrations
+- **Tests** — Pytest suite in `backend/tests/` with 8 test modules covering auth, CRUD, models, and dashboard. Run with `cd backend && python -m pytest`
 
 ### Frontend
 - **Service layer**: Each entity has a service file (`services/*.js`) wrapping Axios calls
@@ -275,6 +323,9 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 - **Icons**: Inline SVG icons (no icon library). Sidebar uses SVG with `currentColor` stroke for theme-aware rendering
 - **Sort order**: Projects and suites are sorted by `created_at` ascending (oldest first)
 - **Charts**: `react-chartjs-2` Doughnut charts for test result distribution
+- **Sound service**: 12 procedurally-generated notification sounds (Web Audio API) with localStorage persistence for enabled/choice/volume settings
+- **Copy-to-clipboard**: File names and test case titles on TestRunDetailPage are clickable with inline "copy"/"copied" tooltips
+- **Tests**: Vitest + @testing-library/react. Run with `cd frontend && npm test`. Test files co-located as `*.test.jsx`/`*.test.js`
 
 ### Design System
 - **Brand logo**: Green lion icon (`public/logo.jpg`) displayed in sidebar header and auth pages; logo is natively green so no hue-shift filter needed; multi-layer box-shadow for depth
@@ -391,6 +442,26 @@ python run.py           # Start server
 1. Create `frontend/src/services/newService.js` following the pattern in existing services
 2. Import and use in page components
 
+**Run backend tests:**
+```bash
+cd backend && source venv/bin/activate && python -m pytest
+```
+
+**Run frontend tests:**
+```bash
+cd frontend && npm test
+```
+
+**Backup/restore database:**
+```bash
+cd backend && source venv/bin/activate
+python backup_db.py           # Exports to JSON
+python restore_db.py backup.json  # Restores from JSON
+```
+
+**AWS deployment:**
+See `AWS_DEPLOYMENT_GUIDE.md` in the project root for the full deployment guide covering EC2, RDS PostgreSQL, S3, CloudFront, ALB, security groups, and monitoring.
+
 ## Launch Demo
 
 When the user asks to "start demo" or "launch demo", run:
@@ -416,6 +487,8 @@ The app is usable immediately after step 3. Test cases populate progressively as
 | Sections | ~500+ | Named from `describe()` blocks in Cypress files |
 | Test Cases | ~2,500 | Extracted from Cypress `it()` blocks (count varies with repo) |
 | Test Runs | 0 | Use `npm run import -- <url>` to import runs from CircleCI |
+| Sync Baselines | 1 | Initial baseline created by first sync (snapshot of all case IDs) |
+| Sync Logs | 1 | First sync log with `new_cases=0` (no previous baseline to diff against) |
 
 **Login:** `demo` / `Demo1234`
 **URL:** http://localhost:5173
@@ -427,15 +500,18 @@ The app is usable immediately after step 3. Test cases populate progressively as
 - Flask-SQLAlchemy 3.1.1
 - Flask-CORS 5.0.0
 - Flask-JWT-Extended 4.7.1
+- Flask-Limiter 3.8.0 — rate limiting on auth endpoints
 - Werkzeug 3.1.3
 - python-dotenv 1.2.2 — auto-loads `backend/.env` into environment variables
+- APScheduler 3.10.4 — scheduled data retention cleanup (daily at 2 AM)
 
 ### Node (frontend/package.json)
-- react 19.2, react-dom 19.2
-- react-router-dom 7.13
-- axios 1.13
-- chart.js 4.5, react-chartjs-2 5.3
+- react 19.2.4, react-dom 19.2.4
+- react-router-dom 7.13.1
+- axios 1.13.6
+- chart.js 4.5.1, react-chartjs-2 5.3.1
 - vite 7.3 (dev)
+- vitest 4.0.18, @testing-library/react 16.3.2 (dev — test suite)
 
 ## Environment Variables
 
@@ -463,7 +539,7 @@ Environment variables are configured via `backend/.env` (auto-loaded by `python-
 
 ## Upload Configuration
 - **Avatar storage**: `backend/uploads/avatars/` (auto-created on app start)
-- **Max file size**: 5MB (`MAX_CONTENT_LENGTH` in `config.py`)
+- **Max file size**: 2MB (`MAX_CONTENT_LENGTH` in `config.py`)
 - **Allowed formats**: JPEG, PNG, GIF, WebP, BMP, HEIC, HEIF, AVIF, TIFF
 - **Validation**: Dual-layer — file extension check + magic byte header verification (rejects renamed non-image files)
 - **Filename pattern**: `{uuid}.{ext}` (non-predictable UUIDs to prevent enumeration)
@@ -473,7 +549,6 @@ Environment variables are configured via `backend/.env` (auto-loaded by `python-
 - **Registration enforcement**: `is_allowed_email_domain()` check combined with duplicate-user check under a single generic 403 response — "Unable to create account. Please contact your administrator." — to prevent both domain discovery and user enumeration (OWASP Authentication Cheat Sheet compliant)
 - **Login enforcement**: Post-authentication domain check returns the same "Invalid username or password" 401 as a wrong password — indistinguishable to an attacker
 - **Configuration**: `ALLOWED_EMAIL_DOMAIN` constant in `backend/app/routes/auth.py`
-- **Filename pattern**: `{user_id}_{secure_filename}` to avoid collisions
 
 ## Test Data Workflow
 
@@ -490,6 +565,8 @@ The system uses a two-source approach for test management:
    - Strips all leading C-ID prefixes (e.g., `C423016 C423079 Title` → `Title`) from stored titles
    - Removes orphaned test cases (deleted from repo) and empty sections on each sync
    - Safety guard: orphan cleanup skipped if >50% of file fetches fail (protects against API rate limits)
+   - File content fetched via GitHub blob API (`/git/blobs/{sha}`) with 3 retries and backoff — more reliable than contents API for large files
+   - Change detection uses a rolling baseline system — see [Sync Baseline](#sync-baseline-change-detection) section
    - Excluded paths: `manual/`, `utility/`, `utility_lifecycle/`, `weekly/` (configured in `EXCLUDED_PATHS` in `sync_cypress.py`)
 
 2. **CircleCI** → Test results
@@ -563,6 +640,42 @@ When a CircleCI job fails entirely (crash, timeout, infrastructure failure) and 
 2. A warning is printed listing the failed jobs and count (e.g., "2/4 job(s) failed without results")
 3. Cypress tests that would have run in those jobs appear as "Untested" with an error message noting the job failures
 4. The test run description in the database includes the failed job names for visibility in the UI
+
+### Sync Baseline (Change Detection)
+
+The sync system uses a **rolling baseline** to detect new and removed test cases between syncs. This replaces naive "new to DB" counting, which would report all cases as new after a database reset.
+
+**How it works:**
+
+1. **First sync** — No previous baseline exists. The sync runs normally, snapshots all current case IDs and titles into a `SyncBaseline` record, and records `new_cases=0` / `removed_cases=0` in the `SyncLog` (nothing to compare against).
+2. **Subsequent syncs** — Loads the most recent `SyncBaseline`, diffs current case IDs against it:
+   - **Added** = case IDs in current snapshot but not in baseline
+   - **Removed** = case IDs in baseline but not in current snapshot
+   - Saves a new `SyncBaseline` with the current state for the next comparison
+3. **SyncLog** records the baseline-aware counts (`new_cases`, `removed_cases`, `new_case_names`) for the frontend Overview tab.
+
+**Key details:**
+
+| Aspect | Detail |
+|--------|--------|
+| **Frequency** | No fixed schedule required — each sync compares against the latest baseline regardless of when it was created |
+| **Storage** | `sync_baselines` table in SQLite (`app.db`), gitignored. Contains JSON arrays of case IDs and a JSON dict mapping `case_id → "Suite > Section > Title"` |
+| **Baseline reset** | Delete rows from `sync_baselines` table, or delete `app.db` and re-seed. Next sync creates a fresh baseline |
+| **File fetching** | Uses GitHub blob API (`/git/blobs/{sha}`) instead of contents API for reliable, consistent file content regardless of file size. Retries up to 3 times with backoff on failure |
+| **Frontend display** | Overview tab shows "Sync Changes" section with expandable cards listing new/removed case names. Only syncs with changes (`new_cases > 0` or `removed_cases > 0`) are shown |
+
+**Database models** (in `backend/app/models.py`):
+
+- `SyncBaseline` — Stores a snapshot: `project_id`, `case_ids` (JSON array), `case_titles` (JSON dict: `{case_id: "Suite > Section > Title"}`), `case_count`, `created_at`
+- `SyncLog` — Records each sync result: `sync_type`, `project_id`, `total_cases`, `new_cases`, `removed_cases`, `new_case_names` (JSON array), `status`, `created_at`
+
+**Production considerations:**
+
+- **Database migration** — When moving from SQLite to PostgreSQL/MySQL, ensure both `sync_baselines` and `sync_logs` tables are created. The JSON text columns (`case_ids`, `case_titles`, `new_case_names`) store serialized JSON strings and work with any database
+- **Initial baseline** — After deploying to production and running the first sync, the baseline is established automatically. No manual setup needed
+- **Retention** — Old baselines accumulate over time. Consider a cleanup job to keep only the latest N baselines per project (e.g., last 30). The `RETENTION_DAYS` env variable can be extended to cover baselines
+- **Scheduled sync** — Set up a cron job or CI pipeline to run `npm run sync` on a regular cadence (e.g., daily). Each run auto-creates a new baseline and reports changes since the last one
+- **Monitoring** — The `SyncLog` table provides an audit trail. Query for `status='error'` logs to detect sync failures. The `GET /api/sync-logs` endpoint exposes this data to the frontend
 
 ## Troubleshooting
 

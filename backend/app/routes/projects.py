@@ -1,8 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy import func
 
 from app import db
 from app.models import Project, TestCase, TestRun, TestResult, Section, Suite
+from app.audit import log_action
+from app.routes import check_project_ownership
 
 projects_bp = Blueprint("projects", __name__)
 
@@ -11,20 +14,33 @@ projects_bp = Blueprint("projects", __name__)
 @jwt_required()
 def list_projects():
     projects = Project.query.order_by(Project.created_at.asc()).all()
+    if not projects:
+        return jsonify([]), 200
+
+    # Batch-load all suites
+    all_suites = Suite.query.order_by(Suite.created_at.asc()).all()
+    suites_by_project = {}
+    for s in all_suites:
+        suites_by_project.setdefault(s.project_id, []).append(s)
+
+    # Batch case counts per suite: suite_id -> count
+    case_counts = dict(
+        db.session.query(TestCase.suite_id, func.count(TestCase.id))
+        .group_by(TestCase.suite_id)
+        .all()
+    )
+
     result = []
     for p in projects:
         d = p.to_dict()
-        suites = Suite.query.filter_by(project_id=p.id).order_by(Suite.created_at.asc()).all()
+        suites = suites_by_project.get(p.id, [])
         first_suite = suites[0] if suites else None
         d["first_suite_id"] = first_suite.id if first_suite else None
         d["first_suite_name"] = first_suite.name if first_suite else None
         d["suite_count"] = len(suites)
-        # Include lightweight suite list for sidebar navigation
         suite_list = []
         for s in suites:
-            section_ids = [sec.id for sec in Section.query.filter_by(suite_id=s.id).all()]
-            case_count = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
-            suite_list.append({"id": s.id, "name": s.name, "case_count": case_count})
+            suite_list.append({"id": s.id, "name": s.name, "case_count": case_counts.get(s.id, 0)})
         d["suites"] = suite_list
         result.append(d)
     return jsonify(result), 200
@@ -33,7 +49,7 @@ def list_projects():
 @projects_bp.route("/projects", methods=["POST"])
 @jwt_required()
 def create_project():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     if not name:
         return jsonify({"error": "Project name is required"}), 400
@@ -55,9 +71,8 @@ def get_project(project_id):
     result = project.to_dict()
 
     suite_ids = [s.id for s in Suite.query.filter_by(project_id=project_id).all()]
-    section_ids = [s.id for s in Section.query.filter(Section.suite_id.in_(suite_ids)).all()] if suite_ids else []
     result["suite_count"] = len(suite_ids)
-    result["case_count"] = TestCase.query.filter(TestCase.section_id.in_(section_ids)).count() if section_ids else 0
+    result["case_count"] = TestCase.query.filter(TestCase.suite_id.in_(suite_ids)).count() if suite_ids else 0
     result["run_count"] = TestRun.query.filter_by(project_id=project_id).count()
 
     return jsonify(result), 200
@@ -67,7 +82,10 @@ def get_project(project_id):
 @jwt_required()
 def update_project(project_id):
     project = Project.query.get_or_404(project_id)
-    data = request.get_json()
+    denied = check_project_ownership(project)
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
 
     if "name" in data:
         project.name = data["name"].strip()
@@ -82,6 +100,10 @@ def update_project(project_id):
 @jwt_required()
 def delete_project(project_id):
     project = Project.query.get_or_404(project_id)
+    denied = check_project_ownership(project)
+    if denied:
+        return denied
+    log_action("DELETE", "project", project_id)
     db.session.delete(project)
     db.session.commit()
     return jsonify({"message": "Project deleted"}), 200

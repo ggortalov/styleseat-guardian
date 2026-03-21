@@ -52,7 +52,7 @@ def auth_headers(client):
         "/api/auth/register",
         json={
             "username": "testuser",
-            "email": "test@example.com",
+            "email": "test@styleseat.com",
             "password": "TestPass123",
         },
     )

@@ -1,3 +1,4 @@
+import logging
 import os
 
 from flask import Flask, jsonify
@@ -20,6 +21,8 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, sqlite3.Connection):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=60000")  # Wait up to 60s for locks
         cursor.close()
 
 
@@ -46,6 +49,31 @@ def create_app():
         jti = jwt_payload["jti"]
         token = TokenBlocklist.query.filter_by(jti=jti).first()
         return token is not None
+
+    # --- Global error handlers (prevent stack trace leaks) ---
+    @app.errorhandler(400)
+    def bad_request(e):
+        return jsonify({"error": "Bad request"}), 400
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "Not found"}), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(e):
+        return jsonify({"error": "Method not allowed"}), 405
+
+    @app.errorhandler(413)
+    def payload_too_large(e):
+        return jsonify({"error": "File too large"}), 413
+
+    @app.errorhandler(429)
+    def rate_limited(e):
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        return jsonify({"error": "Internal server error"}), 500
 
     # --- Security headers ---
     @app.after_request
@@ -76,9 +104,17 @@ def create_app():
     # Apply rate limits to auth endpoints after registration
     limiter.limit("5 per minute")(app.view_functions["auth.login"])
     limiter.limit("3 per minute")(app.view_functions["auth.register"])
+    limiter.limit("10 per minute")(app.view_functions["auth.upload_avatar"])
 
     # Ensure avatar upload directory exists
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
+    # --- Audit logger ---
+    _audit = logging.getLogger("guardian.audit")
+    _audit.setLevel(logging.INFO)
+    _audit_handler = logging.StreamHandler()
+    _audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    _audit.addHandler(_audit_handler)
 
     # --- Scheduled retention cleanup ---
     from app.retention import run_full_cleanup
