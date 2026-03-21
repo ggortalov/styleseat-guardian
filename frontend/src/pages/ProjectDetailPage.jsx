@@ -10,6 +10,69 @@ import dashboardService from '../services/dashboardService';
 import { STATUS_ORDER } from '../constants/statusColors';
 import './ProjectDetailPage.css';
 
+function SyncLogCard({ log }) {
+  const [expanded, setExpanded] = useState(false);
+  const isSync = log.sync_type === 'cypress_sync';
+  const date = new Date(log.created_at);
+  const timeAgo = formatTimeAgo(date);
+
+  return (
+    <div className={`sync-log-card ${log.status === 'error' ? 'sync-log-card--error' : ''}`}>
+      <div className="sync-log-header" onClick={() => log.new_case_names?.length > 0 && setExpanded(!expanded)}>
+        <div className="sync-log-icon">
+          {isSync ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" />
+            </svg>
+          )}
+        </div>
+        <div className="sync-log-body">
+          <span className="sync-log-title">
+            {isSync ? 'Cypress Sync' : 'CircleCI Import'}
+            <span className={`sync-log-status sync-log-status--${log.status}`}>{log.status}</span>
+          </span>
+          <span className="sync-log-meta">
+            {timeAgo} &middot; {log.total_cases} cases &middot; {log.suites_processed} suites
+            {log.new_cases > 0 && <span className="sync-log-new">+{log.new_cases} new</span>}
+            {log.removed_cases > 0 && <span className="sync-log-removed">-{log.removed_cases} removed</span>}
+          </span>
+        </div>
+        {log.new_case_names?.length > 0 && (
+          <svg className={`sync-log-chevron ${expanded ? 'open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        )}
+      </div>
+      {expanded && log.new_case_names?.length > 0 && (
+        <div className="sync-log-details">
+          <span className="sync-log-details-title">New test cases:</span>
+          {log.new_case_names.map((name, i) => (
+            <div key={i} className="sync-log-case">+ {name}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatTimeAgo(date) {
+  const now = new Date();
+  const diff = now - date;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -17,6 +80,7 @@ export default function ProjectDetailPage() {
   const [suites, setSuites] = useState([]);
   const [runs, setRuns] = useState([]);
   const [dashboardData, setDashboardData] = useState(null);
+  const [syncLogs, setSyncLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'suites';
@@ -25,16 +89,18 @@ export default function ProjectDetailPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [p, s, r, dash] = await Promise.all([
+      const [p, s, r, dash, logs] = await Promise.all([
         projectService.getById(projectId),
         suiteService.getByProject(projectId),
         runService.getByProject(projectId),
         dashboardService.getByProject(projectId),
+        dashboardService.getSyncLogs({ project_id: projectId, limit: 10 }),
       ]);
       setProject(p);
       setSuites(s);
       setRuns(r.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
       setDashboardData(dash);
+      setSyncLogs(logs);
     } catch {
       navigate('/');
     } finally {
@@ -234,6 +300,25 @@ export default function ProjectDetailPage() {
                   <p className="empty-message">No suites yet</p>
                 )}
               </div>
+
+              {/* Sync Reports — only show syncs with new cases */}
+              {(() => {
+                const withNew = syncLogs.filter(l => l.new_cases > 0 || l.removed_cases > 0);
+                return (
+              <div className="ov-sync">
+                <h3 className="ov-section-title">Sync Changes</h3>
+                {withNew.length > 0 ? (
+                  <div className="sync-log-list">
+                    {withNew.map((log) => (
+                      <SyncLogCard key={log.id} log={log} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-message">No changes detected in recent syncs.</p>
+                )}
+              </div>
+                );
+              })()}
             </div>
           );
         })()}

@@ -17,7 +17,7 @@ function getIdsFromPath(pathname) {
   };
 }
 
-export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMobile }) {
+export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMobile, width, onResizeStart, isResizing }) {
   const { user, logout, updateAvatar } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -119,32 +119,28 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   return (
     <aside
       className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''} ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && mobileOpen ? 'sidebar--mobile-open' : ''}`}
+      style={!collapsed && !isMobile && width ? { width, transition: isResizing ? 'none' : undefined } : undefined}
       onClickCapture={collapsed && !isMobile ? (e) => { if (e.target.closest('a[href]')) return; e.stopPropagation(); e.preventDefault(); onToggleCollapse(); } : undefined}
     >
+      {!collapsed && !isMobile && (
+        <div className="sidebar-resize-handle" onMouseDown={onResizeStart} />
+      )}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" />
+          <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} />
           {!collapsed && (
             <div className="sidebar-logo-wordmark">
               <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Guardian</span></span>
             </div>
           )}
         </div>
-        {!collapsed && (
-          isMobile ? (
-            <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Close menu" aria-label="Close menu">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          ) : (
-            <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Collapse sidebar" aria-label="Collapse sidebar">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-          )
+        {isMobile && !collapsed && (
+          <button className="sidebar-collapse-btn" onClick={onToggleCollapse} title="Close menu" aria-label="Close menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -233,16 +229,13 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
                 <NavLink
                   key={r.id}
                   to={`/runs/${r.id}`}
-                  className={`sidebar-suite-item ${pathRunId === r.id ? 'active' : ''}`}
+                  className={`sidebar-run-item ${pathRunId === r.id ? 'active' : ''}`}
                 >
                   <svg className="sidebar-suite-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <polygon points="10 8 16 12 10 16 10 8" />
                   </svg>
-                  <span className="sidebar-suite-item-name">
-                    {r.name?.split(' · ')[0] || r.suite_name || r.name}
-                    {(r.run_date || r.created_at) && <span className="sidebar-run-date">{new Date(r.run_date || r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                  </span>
+                  <span className="sidebar-run-name">{r.name?.split(' · ')[0] || r.suite_name || r.name}</span>
                   <span className="sidebar-suite-item-count">{r.stats?.total || 0}</span>
                 </NavLink>
               ))}

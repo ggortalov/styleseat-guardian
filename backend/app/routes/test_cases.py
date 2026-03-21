@@ -62,7 +62,7 @@ def list_cases_by_project(project_id):
 @cases_bp.route("/cases", methods=["POST"])
 @jwt_required()
 def create_case():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     title = data.get("title", "").strip()
     suite_id = data.get("suite_id")
     section_id = data.get("section_id")
@@ -125,7 +125,7 @@ def get_case(case_id):
 @jwt_required()
 def update_case(case_id):
     case = TestCase.query.get_or_404(case_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     if "title" in data:
         new_title = data["title"].strip()
@@ -171,7 +171,7 @@ def delete_case(case_id):
 @cases_bp.route("/cases/bulk-delete", methods=["POST"])
 @jwt_required()
 def bulk_delete_cases():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     ids = data.get("ids", [])
     if not ids:
         return jsonify({"error": "No case IDs provided"}), 400

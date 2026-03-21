@@ -10,7 +10,7 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "newuser",
-                "email": "new@example.com",
+                "email": "new@styleseat.com",
                 "password": "ValidPass1",
             },
         )
@@ -21,12 +21,12 @@ class TestRegister:
         assert "id" in data
 
     def test_register_duplicate_username(self, client):
-        """Registering with a duplicate username returns 409."""
+        """Registering with a duplicate username returns 403 with generic message."""
         client.post(
             "/api/auth/register",
             json={
                 "username": "dupeuser",
-                "email": "first@example.com",
+                "email": "first@styleseat.com",
                 "password": "ValidPass1",
             },
         )
@@ -34,20 +34,20 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "dupeuser",
-                "email": "second@example.com",
+                "email": "second@styleseat.com",
                 "password": "ValidPass1",
             },
         )
-        assert resp.status_code == 409
-        assert "already exists" in resp.get_json()["error"]
+        assert resp.status_code == 403
+        assert "Unable to create account" in resp.get_json()["error"]
 
     def test_register_duplicate_email(self, client):
-        """Registering with a duplicate email returns 409."""
+        """Registering with a duplicate email returns 403 with generic message."""
         client.post(
             "/api/auth/register",
             json={
                 "username": "user1",
-                "email": "same@example.com",
+                "email": "same@styleseat.com",
                 "password": "ValidPass1",
             },
         )
@@ -55,11 +55,57 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "user2",
-                "email": "same@example.com",
+                "email": "same@styleseat.com",
                 "password": "ValidPass1",
             },
         )
-        assert resp.status_code == 409
+        assert resp.status_code == 403
+
+    def test_register_disallowed_domain(self, client):
+        """Registering with a non-styleseat.com email returns 403 with same generic message."""
+        resp = client.post(
+            "/api/auth/register",
+            json={
+                "username": "outsider",
+                "email": "outsider@example.com",
+                "password": "ValidPass1",
+            },
+        )
+        assert resp.status_code == 403
+        assert "Unable to create account" in resp.get_json()["error"]
+
+    def test_register_disallowed_domain_same_as_duplicate(self, client):
+        """Domain rejection and duplicate rejection are indistinguishable (OWASP)."""
+        # First, create a user
+        client.post(
+            "/api/auth/register",
+            json={
+                "username": "existing",
+                "email": "existing@styleseat.com",
+                "password": "ValidPass1",
+            },
+        )
+        # Attempt with bad domain
+        bad_domain = client.post(
+            "/api/auth/register",
+            json={
+                "username": "newname",
+                "email": "newname@gmail.com",
+                "password": "ValidPass1",
+            },
+        )
+        # Attempt with duplicate username
+        dupe_user = client.post(
+            "/api/auth/register",
+            json={
+                "username": "existing",
+                "email": "other@styleseat.com",
+                "password": "ValidPass1",
+            },
+        )
+        # Both must return identical status and message
+        assert bad_domain.status_code == dupe_user.status_code == 403
+        assert bad_domain.get_json()["error"] == dupe_user.get_json()["error"]
 
     def test_register_missing_fields(self, client):
         """Missing required fields returns 400."""
@@ -72,7 +118,7 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "",
-                "email": "a@b.com",
+                "email": "a@styleseat.com",
                 "password": "ValidPass1",
             },
         )
@@ -84,7 +130,7 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "shortpw",
-                "email": "short@example.com",
+                "email": "short@styleseat.com",
                 "password": "Ab1",
             },
         )
@@ -98,7 +144,7 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "noupperuser",
-                "email": "noupper@example.com",
+                "email": "noupper@styleseat.com",
                 "password": "alllower1",
             },
         )
@@ -110,7 +156,7 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "noloweruser",
-                "email": "nolower@example.com",
+                "email": "nolower@styleseat.com",
                 "password": "ALLUPPER1",
             },
         )
@@ -122,7 +168,7 @@ class TestRegister:
             "/api/auth/register",
             json={
                 "username": "nodigituser",
-                "email": "nodigit@example.com",
+                "email": "nodigit@styleseat.com",
                 "password": "NoDigitsHere",
             },
         )
@@ -150,7 +196,7 @@ class TestLogin:
             "/api/auth/register",
             json={
                 "username": "loginuser",
-                "email": "login@example.com",
+                "email": "login@styleseat.com",
                 "password": "TestPass123",
             },
         )
@@ -169,7 +215,7 @@ class TestLogin:
             "/api/auth/register",
             json={
                 "username": "wrongpw",
-                "email": "wrongpw@example.com",
+                "email": "wrongpw@styleseat.com",
                 "password": "TestPass123",
             },
         )
@@ -197,7 +243,7 @@ class TestMe:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["username"] == "testuser"
-        assert data["email"] == "test@example.com"
+        assert data["email"] == "test@styleseat.com"
         assert "id" in data
 
     def test_me_without_token(self, client):
@@ -216,7 +262,7 @@ class TestLogout:
             "/api/auth/register",
             json={
                 "username": "logoutuser",
-                "email": "logout@example.com",
+                "email": "logout@styleseat.com",
                 "password": "TestPass123",
             },
         )

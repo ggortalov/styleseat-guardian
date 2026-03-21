@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.models import User, TokenBlocklist
 
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif", "avif", "tiff", "tif"}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif", "avif", "tiff", "tif", "ico", "jxl"}
 
 
 def validate_image_bytes(file_stream):
@@ -46,6 +46,12 @@ def validate_image_bytes(file_stream):
         brand = header[8:12].lower()
         if brand in (b'heic', b'heix', b'hevc', b'heif', b'avif', b'avis', b'mif1'):
             return True
+    # ICO (Windows icon)
+    if header[:4] == b'\x00\x00\x01\x00':
+        return True
+    # JPEG XL
+    if header[:2] == b'\xff\x0a' or header[:12] == b'\x00\x00\x00\x0cJXL \r\n\x87\n':
+        return True
 
     return False
 
@@ -109,7 +115,7 @@ auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     email = data.get("email", "").strip()
     password = data.get("password", "")
@@ -151,7 +157,7 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
 
@@ -206,7 +212,7 @@ def upload_avatar():
         return jsonify({"error": "No file selected"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": "Only image files are allowed (JPEG, PNG, GIF, WebP, BMP, HEIC, AVIF, TIFF)"}), 400
+        return jsonify({"error": "File type not allowed. Please upload an image file."}), 400
 
     if not validate_image_bytes(file):
         return jsonify({"error": "File does not appear to be a valid image"}), 400
@@ -219,10 +225,10 @@ def upload_avatar():
     upload_folder = current_app.config["UPLOAD_FOLDER"]
     os.makedirs(upload_folder, exist_ok=True)
 
-    # Remove old avatar file if it exists
+    # Remove old avatar file if it exists (verify path stays inside upload dir)
     if user.avatar:
-        old_path = os.path.join(upload_folder, user.avatar)
-        if os.path.exists(old_path):
+        old_path = os.path.realpath(os.path.join(upload_folder, user.avatar))
+        if old_path.startswith(os.path.realpath(upload_folder) + os.sep) and os.path.exists(old_path):
             os.remove(old_path)
 
     file.save(os.path.join(upload_folder, saved_name))
@@ -237,4 +243,8 @@ def serve_avatar(filename):
     """Intentionally public (no @jwt_required) — <img> tags cannot send Bearer tokens.
     UUID-based filenames prevent enumeration."""
     upload_folder = current_app.config["UPLOAD_FOLDER"]
-    return send_from_directory(upload_folder, filename)
+    response = send_from_directory(upload_folder, filename)
+    response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Disposition"] = "inline"
+    return response

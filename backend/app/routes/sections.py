@@ -41,7 +41,7 @@ def list_sections_by_project(project_id):
 @jwt_required()
 def create_section(suite_id):
     Suite.query.get_or_404(suite_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     if not name:
         return jsonify({"error": "Section name is required"}), 400
@@ -68,7 +68,7 @@ def create_section(suite_id):
 @jwt_required()
 def update_section(section_id):
     section = Section.query.get_or_404(section_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     if "name" in data:
         section.name = data["name"].strip()
     if "description" in data:
@@ -78,6 +78,8 @@ def update_section(section_id):
     if "parent_id" in data:
         new_parent_id = data["parent_id"]
         if new_parent_id:
+            if new_parent_id == section_id:
+                return jsonify({"error": "A section cannot be its own parent"}), 400
             parent = Section.query.get(new_parent_id)
             if not parent or parent.suite_id != section.suite_id:
                 return jsonify({"error": "Parent section does not belong to this suite"}), 400

@@ -389,9 +389,36 @@ def import_workflow(workflow_id):
     else:
         wf_display = 'Workflow'
 
+    # Fetch branch context from pipeline metadata
+    pipeline_id = wf_data.get('pipeline_id')
+    branch_label = ''
+    if pipeline_id:
+        try:
+            pipe_resp = requests.get(
+                f'{BASE_URL}/pipeline/{pipeline_id}',
+                headers=HEADERS, timeout=15
+            )
+            pipe_data = pipe_resp.json()
+            branch = pipe_data.get('vcs', {}).get('branch', '')
+            if branch:
+                # Extract meaningful part: "lc-gem5240wallet-PSiRBU" → "gem5240wallet"
+                # Pattern: strip common prefixes (lc-, rc-, feat-, fix-, etc.) and random suffixes
+                branch_clean = re.sub(r'^(?:lc|rc|feat|fix|hotfix|chore|release)[-_]', '', branch, flags=re.IGNORECASE)
+                # Strip trailing random suffixes (e.g. -PSiRBU, -aBcDeF) — 4-8 char mixed case after last hyphen
+                branch_clean = re.sub(r'[-_][A-Za-z]{4,8}$', '', branch_clean)
+                if branch_clean and branch_clean.lower() not in ('main', 'master', 'develop', 'staging'):
+                    branch_label = branch_clean
+                    print(f"Branch context: {branch} → {branch_label}")
+        except Exception:
+            pass  # Non-critical — skip branch label if pipeline fetch fails
+
     # Step 4: Create single combined run and process all suites
+    # All DB writes use flush() within a single transaction.  The only
+    # commit() is at the very end.  If anything fails, the except handler
+    # rolls back the entire transaction — no orphan empty runs.
     app = create_app()
     with app.app_context():
+      try:
         project = Project.query.filter_by(name='Cypress Automation').first()
         if not project:
             print("ERROR: Project 'Cypress Automation' not found.")
@@ -406,6 +433,19 @@ def import_workflow(workflow_id):
             print(f"WARNING: Workflow {workflow_id[:8]} already imported as run "
                   f"'{existing_run.name}' (ID: {existing_run.id}). Aborting.")
             return
+
+        # Derive run display name from matched suites in DB
+        matched_suite_names = []
+        for wf_name_key in suite_jobs:
+            cp = workflow_name_to_cypress_path(wf_name_key)
+            s = Suite.query.filter_by(project_id=project.id, cypress_path=cp).first()
+            if s:
+                matched_suite_names.append(s.name)
+        if matched_suite_names:
+            suite_prefix = ', '.join(matched_suite_names)
+            wf_display = f'{suite_prefix} {branch_label}'.strip() if branch_label else suite_prefix
+        elif branch_label:
+            wf_display = branch_label
 
         # Create single combined run (suite_id=None)
         run_name = f'{wf_display} \u00b7 {run_date_str}'
@@ -552,14 +592,8 @@ def import_workflow(workflow_id):
                 project_id=project.id, cypress_path=cypress_path
             ).first()
             if not suite:
-                suite = Suite(
-                    project_id=project.id, name=suite_name,
-                    cypress_path=cypress_path,
-                    description='Auto-created from CircleCI import'
-                )
-                db.session.add(suite)
-                db.session.flush()
-                print(f"Created suite: {suite_name} ({cypress_path})")
+                print(f"Skipping workflow '{wf_name}' — no suite found for {cypress_path}. Run sync first.")
+                continue
 
             print(f"\nSuite: {suite.name} (ID: {suite.id})")
 
@@ -938,6 +972,12 @@ def import_workflow(workflow_id):
         if total_runner_only:
             print(f"\n  Runner summary supplemented: {total_runner_only} tests "
                   f"from specs missing in report.json")
+
+      except Exception as e:
+        db.session.rollback()
+        print(f"\nERROR: Import failed — {e}")
+        print("All changes rolled back. No orphan run created.")
+        raise
 
 
 def main():

@@ -26,7 +26,7 @@ def list_suites(project_id):
 @jwt_required()
 def create_suite(project_id):
     Project.query.get_or_404(project_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     if not name:
         return jsonify({"error": "Suite name is required"}), 400
@@ -52,7 +52,7 @@ def get_suite(suite_id):
 @jwt_required()
 def update_suite(suite_id):
     suite = Suite.query.get_or_404(suite_id)
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     if "name" in data:
         suite.name = data["name"].strip()
     if "description" in data:

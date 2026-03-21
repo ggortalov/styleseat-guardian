@@ -17,12 +17,12 @@ class TestGlobalDashboard:
         resp = client.get("/api/dashboard", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.get_json()
-        assert "projects" in data
+        assert "suites" in data
         assert "totals" in data
         assert "global_stats" in data
         assert "recent_runs" in data
-        assert data["projects"] == []
-        assert data["totals"]["projects"] == 0
+        assert data["suites"] == []
+        assert data["totals"]["suites"] == 0
         assert data["totals"]["cases"] == 0
         assert data["totals"]["runs"] == 0
 
@@ -39,7 +39,7 @@ class TestGlobalDashboard:
         assert resp.status_code == 200
         data = resp.get_json()
 
-        assert data["totals"]["projects"] == 1
+        assert data["totals"]["suites"] == 1
         assert data["totals"]["cases"] == 2
         assert data["totals"]["runs"] == 1
 
@@ -47,14 +47,13 @@ class TestGlobalDashboard:
         assert data["global_stats"]["Untested"] == 2
         assert data["global_stats"]["total"] == 2
 
-        # Projects should include stats
-        assert len(data["projects"]) == 1
-        proj = data["projects"][0]
-        assert proj["name"] == "Dashboard Project"
-        assert proj["suite_count"] == 1
-        assert proj["case_count"] == 2
-        assert proj["run_count"] == 1
-        assert "stats" in proj
+        # Suites should include stats
+        assert len(data["suites"]) == 1
+        suite = data["suites"][0]
+        assert suite["name"] == "Test Suite"
+        assert suite["case_count"] == 2
+        assert suite["run_count"] == 1
+        assert "stats" in suite
 
         # Recent runs should include the run
         assert len(data["recent_runs"]) == 1
