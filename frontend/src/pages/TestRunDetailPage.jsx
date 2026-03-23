@@ -355,6 +355,7 @@ export default function TestRunDetailPage() {
             >
               <span className="stat-tile-count">{stats.total}</span>
               <span className="stat-tile-label">Total</span>
+              <span className="stat-tile-pct">&nbsp;</span>
             </button>
             {STATUSES.map((s) => {
               const pct = stats.total > 0 ? Math.round((stats[s] / stats.total) * 100) : 0;
@@ -374,6 +375,7 @@ export default function TestRunDetailPage() {
             <div className="stat-tile stat-tile-rate">
               <span className="stat-tile-count" style={{ color: passRateColor }}>{stats.pass_rate}%</span>
               <span className="stat-tile-label">Pass Rate</span>
+              <span className="stat-tile-pct">&nbsp;</span>
             </div>
           </div>
         </div>
