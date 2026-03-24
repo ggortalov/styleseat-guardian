@@ -16,6 +16,8 @@ const runService = {
   getResult: (id) => api.get(`/results/${id}`).then(r => r.data),
   updateResult: (id, data) => api.put(`/results/${id}`, data).then(r => r.data),
   getResultHistory: (id) => api.get(`/results/${id}/history`).then(r => r.data),
+  importFromCircleCI: (workflowUrl) => api.post('/runs/import-circleci', { workflow_url: workflowUrl }).then(r => r.data),
+  getImportStatus: () => api.get('/runs/import-status').then(r => r.data),
 };
 
 export default runService;

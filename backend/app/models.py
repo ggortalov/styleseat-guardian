@@ -6,6 +6,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 
 
+def _utc_iso(dt):
+    """Serialize a datetime as an ISO string with UTC indicator."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
 class TokenBlocklist(db.Model):
     """Stores revoked JWT token identifiers so they cannot be reused."""
     __tablename__ = "token_blocklist"
@@ -37,7 +46,7 @@ class User(db.Model):
             "username": self.username,
             "email": self.email,
             "avatar": f"/api/auth/avatars/{self.avatar}" if self.avatar else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _utc_iso(self.created_at),
         }
 
 
@@ -61,8 +70,8 @@ class Project(db.Model):
             "name": self.name,
             "description": self.description,
             "created_by": self.created_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _utc_iso(self.created_at),
+            "updated_at": _utc_iso(self.updated_at),
         }
 
 
@@ -85,7 +94,7 @@ class Suite(db.Model):
             "name": self.name,
             "description": self.description,
             "cypress_path": self.cypress_path,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _utc_iso(self.created_at),
         }
 
 
@@ -161,8 +170,8 @@ class TestCase(db.Model):
             "expected_result": self.expected_result,
             "created_by": self.created_by,
             "updated_by": self.updated_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _utc_iso(self.created_at),
+            "updated_at": _utc_iso(self.updated_at),
         }
 
 
@@ -175,6 +184,7 @@ class TestRun(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    run_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
     is_completed = db.Column(db.Boolean, default=False)
@@ -190,8 +200,9 @@ class TestRun(db.Model):
             "name": self.name,
             "description": self.description,
             "created_by": self.created_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "run_date": _utc_iso(self.run_date),
+            "created_at": _utc_iso(self.created_at),
+            "completed_at": _utc_iso(self.completed_at),
             "is_completed": self.is_completed,
         }
 
@@ -233,7 +244,7 @@ class TestResult(db.Model):
             "comment": self.comment,
             "defect_id": self.defect_id,
             "tested_by": self.tested_by,
-            "tested_at": self.tested_at.isoformat() if self.tested_at else None,
+            "tested_at": _utc_iso(self.tested_at),
             "error_message": self.error_message,
             "artifacts": self.artifacts_list,
             "circleci_job_id": self.circleci_job_id,
@@ -272,7 +283,7 @@ class ResultHistory(db.Model):
             "error_message": self.error_message,
             "artifacts": self.artifacts_list,
             "changed_by": self.changed_by,
-            "changed_at": self.changed_at.isoformat() if self.changed_at else None,
+            "changed_at": _utc_iso(self.changed_at),
         }
 
 
@@ -328,5 +339,5 @@ class SyncLog(db.Model):
             "new_case_names": new_names,
             "status": self.status,
             "error_message": self.error_message,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _utc_iso(self.created_at),
         }

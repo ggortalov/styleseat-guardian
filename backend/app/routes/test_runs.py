@@ -1,9 +1,13 @@
 import json
+import os
+import re
+import subprocess
+import sys
 from datetime import datetime, timezone, timedelta
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -13,34 +17,35 @@ from app.routes import check_project_ownership
 
 runs_bp = Blueprint("runs", __name__)
 
+# In-memory tracking of the background import subprocess
+_import_process = None
+_import_output_lines = []
+
 VALID_STATUSES = {"Passed", "Failed", "Blocked", "Retest", "Untested"}
-LOCK_HOURS = 24  # Results are locked after this many hours
+def _is_run_date_locked(run):
+    """Check if a run is locked — editable only on the same calendar day (UTC)."""
+    run_dt = run.run_date or run.created_at
+    if not run_dt:
+        return False
+    run_dt = run_dt if run_dt.tzinfo else run_dt.replace(tzinfo=timezone.utc)
+    today = datetime.now(timezone.utc).date()
+    return run_dt.date() < today
 
 
 def is_result_locked(result):
-    """Check if a result is locked (tested more than LOCK_HOURS ago)."""
-    if not result.tested_at:
+    """Check if a result is locked (its parent run is older than LOCK_HOURS)."""
+    run = TestRun.query.get(result.run_id)
+    if not run:
         return False
-    lock_threshold = datetime.now(timezone.utc) - timedelta(hours=LOCK_HOURS)
-    # Ensure tested_at is timezone-aware for comparison
-    tested_at = result.tested_at if result.tested_at.tzinfo else result.tested_at.replace(tzinfo=timezone.utc)
-    return tested_at < lock_threshold
+    return _is_run_date_locked(run)
 
 
 def is_run_locked(run_id):
-    """Check if a run is locked (all results tested more than LOCK_HOURS ago)."""
-    results = TestResult.query.filter_by(run_id=run_id).all()
-    if not results:
+    """Check if a run is locked (run date is older than LOCK_HOURS)."""
+    run = TestRun.query.get(run_id)
+    if not run:
         return False
-    # Run is locked only if ALL results are locked (all tested > 24h ago)
-    lock_threshold = datetime.now(timezone.utc) - timedelta(hours=LOCK_HOURS)
-    for r in results:
-        if not r.tested_at:
-            return False  # Untested result means run is still open
-        tested_at = r.tested_at if r.tested_at.tzinfo else r.tested_at.replace(tzinfo=timezone.utc)
-        if tested_at >= lock_threshold:
-            return False  # Result tested within 24h means run is still open
-    return True
+    return _is_run_date_locked(run)
 
 
 def get_run_completed_at(run_id):
@@ -55,10 +60,14 @@ def list_all_runs():
     limit = min(request.args.get("limit", 30, type=int), 200)
     offset = max(request.args.get("offset", 0, type=int), 0)
     total_count = TestRun.query.count()
+    effective_date = case(
+        (TestRun.run_date.isnot(None), TestRun.run_date),
+        else_=TestRun.created_at,
+    )
     runs = (
         TestRun.query
         .options(joinedload(TestRun.project), joinedload(TestRun.suite))
-        .order_by(TestRun.created_at.desc())
+        .order_by(effective_date.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -103,9 +112,13 @@ def list_all_runs():
 @jwt_required()
 def list_runs(project_id):
     Project.query.get_or_404(project_id)
+    effective_date = case(
+        (TestRun.run_date.isnot(None), TestRun.run_date),
+        else_=TestRun.created_at,
+    )
     runs = TestRun.query.filter_by(project_id=project_id).options(
         joinedload(TestRun.suite)
-    ).order_by(TestRun.created_at.desc()).all()
+    ).order_by(effective_date.desc()).all()
     run_ids = [r.id for r in runs]
     # Batch result stats for all runs
     all_run_stats = {}
@@ -202,6 +215,7 @@ def get_run(run_id):
     total = sum(d["stats"].values())
     d["stats"]["total"] = total
     d["stats"]["pass_rate"] = round(d["stats"]["Passed"] / total * 100, 1) if total > 0 else 0
+    d["is_locked"] = is_run_locked(run.id)
 
     return jsonify(d), 200
 
@@ -450,3 +464,112 @@ def fetch_circleci_for_result(result_id):
     d = result.to_dict()
     d["is_locked"] = is_result_locked(result)
     return jsonify(d), 200
+
+
+# ---------------------------------------------------------------------------
+# CircleCI workflow import (background subprocess)
+# ---------------------------------------------------------------------------
+
+_WORKFLOW_URL_RE = re.compile(
+    r"(?:https?://app\.circleci\.com/pipelines/github/[^/]+/[^/]+/)?"
+    r"(\d+/workflows/[0-9a-f-]+)"
+    r"|^([0-9a-f-]{36})$",
+    re.IGNORECASE,
+)
+
+
+def _validate_workflow_ref(value):
+    """Return a sanitised workflow reference string, or None if invalid."""
+    value = value.strip()
+    # Full URL
+    if value.startswith("http"):
+        m = re.search(r"\d+/workflows/[0-9a-f-]+", value)
+        return value if m else None
+    # Path fragment  e.g. 61253/workflows/<uuid>
+    if re.match(r"^\d+/workflows/[0-9a-f-]+$", value):
+        return value
+    # Bare UUID
+    if re.match(r"^[0-9a-f-]{36}$", value, re.IGNORECASE):
+        return value
+    return None
+
+
+@runs_bp.route("/runs/import-circleci", methods=["POST"])
+@jwt_required()
+def import_circleci():
+    """Spawn import_circleci.py as a background subprocess."""
+    global _import_process, _import_output_lines
+
+    # Reject if an import is already running
+    if _import_process is not None and _import_process.poll() is None:
+        return jsonify({"error": "An import is already in progress"}), 409
+
+    data = request.get_json(silent=True) or {}
+    workflow_url = data.get("workflow_url", "")
+    if not workflow_url:
+        return jsonify({"error": "workflow_url is required"}), 400
+
+    ref = _validate_workflow_ref(workflow_url)
+    if ref is None:
+        return jsonify({"error": "Invalid CircleCI workflow URL or ID"}), 400
+
+    # Resolve paths
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+    script_path = os.path.join(backend_dir, "import_circleci.py")
+    venv_python = os.path.join(backend_dir, "venv", "bin", "python")
+
+    python_exe = venv_python if os.path.isfile(venv_python) else sys.executable
+
+    if not os.path.isfile(script_path):
+        return jsonify({"error": "import_circleci.py not found"}), 500
+
+    # Reset output buffer
+    _import_output_lines = []
+
+    _import_process = subprocess.Popen(
+        [python_exe, script_path, ref],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=backend_dir,
+    )
+
+    return jsonify({"status": "started", "workflow_ref": ref}), 202
+
+
+@runs_bp.route("/runs/import-status", methods=["GET"])
+@jwt_required()
+def import_status():
+    """Check whether a background import is still running."""
+    global _import_process, _import_output_lines
+
+    if _import_process is None:
+        return jsonify({"running": False, "output": ""}), 200
+
+    # Drain any available stdout without blocking
+    import select
+    while True:
+        ready, _, _ = select.select([_import_process.stdout], [], [], 0)
+        if not ready:
+            break
+        line = _import_process.stdout.readline()
+        if not line:
+            break
+        _import_output_lines.append(line.rstrip("\n"))
+
+    running = _import_process.poll() is None
+    exit_code = _import_process.returncode
+
+    # If finished, drain remaining output
+    if not running:
+        for line in _import_process.stdout:
+            _import_output_lines.append(line.rstrip("\n"))
+
+    output = "\n".join(_import_output_lines[-50:])  # last 50 lines
+
+    resp = {"running": running, "output": output}
+    if not running:
+        resp["exit_code"] = exit_code
+        resp["success"] = exit_code == 0
+
+    return jsonify(resp), 200

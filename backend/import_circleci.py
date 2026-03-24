@@ -440,9 +440,16 @@ def import_workflow(workflow_id):
             TestRun.description.contains(workflow_id[:8])
         ).first()
         if existing_run:
-            print(f"WARNING: Workflow {workflow_id[:8]} already imported as run "
-                  f"'{existing_run.name}' (ID: {existing_run.id}). Aborting.")
-            return
+            result_count = TestResult.query.filter_by(run_id=existing_run.id).count()
+            if result_count == 0:
+                print(f"Found empty run '{existing_run.name}' (ID: {existing_run.id}) "
+                      f"from a previous failed import. Removing it and retrying.")
+                db.session.delete(existing_run)
+                db.session.commit()
+            else:
+                print(f"WARNING: Workflow {workflow_id[:8]} already imported as run "
+                      f"'{existing_run.name}' (ID: {existing_run.id}, {result_count} results). Aborting.")
+                sys.exit(2)  # Exit code 2 = duplicate workflow
 
         # Derive run display name from matched suites in DB
         matched_suite_names = []
@@ -960,6 +967,10 @@ def import_workflow(workflow_id):
             run.description += (
                 f'\nSupplemented from runner summary: {spec_names}'
             )
+
+        # Mark imported run as completed (use the workflow date, not current time)
+        run.is_completed = True
+        run.completed_at = run.created_at
 
         db.session.commit()
 

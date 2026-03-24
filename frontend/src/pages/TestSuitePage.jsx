@@ -11,6 +11,14 @@ import projectService from '../services/projectService';
 import { playConfirmation } from '../services/soundService';
 import './TestSuitePage.css';
 
+function getSourceFile(preconditions) {
+  if (!preconditions) return null;
+  const match = preconditions.match(/(?:Source|File):\s*(.+)/);
+  if (!match) return null;
+  const full = match[1].trim();
+  return full.split('/').pop();
+}
+
 function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selectionMode, selectedCases, toggleAllCases, toggleCase, navigate, projectId, suiteId, setSectionParentId, setEditSection, setSectionName, setSectionDescription, setShowSectionModal, setDeleteSection }) {
   const group = grouped.map[sec.id];
   const children = grouped.childrenMap[sec.id] || [];
@@ -76,8 +84,9 @@ function SectionNode({ sec, depth, grouped, collapsed, toggleCategory, selection
             {group.cases.length > 0 ? group.cases.map((c) => (
               <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
                 {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
+
                 <span className="case-row-title">{c.title}</span>
+                {getSourceFile(c.preconditions) && <span className="case-row-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getSourceFile(c.preconditions)); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{getSourceFile(c.preconditions)}</span>}
                 <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
                 <span className="case-row-meta">{c.author_name || ''}</span>
               </div>
@@ -389,8 +398,9 @@ export default function TestSuitePage() {
                   {filterCases.length > 0 ? filterCases.map((c) => (
                     <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
                       {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                      <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
+      
                       <span className="case-row-title">{c.title}</span>
+                {getSourceFile(c.preconditions) && <span className="case-row-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getSourceFile(c.preconditions)); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{getSourceFile(c.preconditions)}</span>}
                       <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
                       <span className="case-row-meta">{c.author_name || ''}</span>
                     </div>
@@ -474,8 +484,9 @@ export default function TestSuitePage() {
                         {grouped.uncategorized.map((c) => (
                           <div key={c.id} id={`case-row-${c.id}`} className={`case-row ${selectedCases.has(c.id) ? 'case-row--selected' : ''}`} onClick={() => { if (window.getSelection().toString()) return; navigate(`/cases/${c.id}`); }}>
                             {selectionMode && <input type="checkbox" checked={selectedCases.has(c.id)} onChange={(e) => toggleCase(c.id, e)} onClick={(e) => e.stopPropagation()} className="case-checkbox" />}
-                            <span className="case-row-id">C{String(c.id).padStart(7, '0')}</span>
+            
                             <span className="case-row-title">{c.title}</span>
+                {getSourceFile(c.preconditions) && <span className="case-row-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(getSourceFile(c.preconditions)); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{getSourceFile(c.preconditions)}</span>}
                             <span className="case-row-meta">{(c.updated_at || c.created_at) ? new Date(c.updated_at || c.created_at).toLocaleDateString() : ''}</span>
                             <span className="case-row-meta">{c.author_name || ''}</span>
                           </div>

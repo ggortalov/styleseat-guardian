@@ -120,7 +120,19 @@ def global_dashboard():
 @dashboard_bp.route("/projects/<int:project_id>/dashboard", methods=["GET"])
 @jwt_required()
 def project_dashboard(project_id):
+    from flask import request
+    from datetime import date as date_type, datetime, timedelta, timezone
+
     project = Project.query.get_or_404(project_id)
+
+    # Optional date filter for suite_stats (YYYY-MM-DD)
+    date_param = request.args.get("date")
+    filter_date = None
+    if date_param:
+        try:
+            filter_date = date_type.fromisoformat(date_param)
+        except ValueError:
+            pass
 
     runs = TestRun.query.filter_by(project_id=project_id).options(
         joinedload(TestRun.suite)
@@ -162,10 +174,72 @@ def project_dashboard(project_id):
     overall["total"] = total
     overall["pass_rate"] = round(overall["Passed"] / total * 100, 1) if total > 0 else 0
 
+    # Per-suite stats — filter runs to selected date (or latest by date)
+    suite_stats = {}
+    if run_ids:
+        run_date_map = {r.id: (r.run_date or r.created_at) for r in runs}
+
+        # If date filter, only consider runs from that date
+        if filter_date:
+            date_run_ids = [
+                rid for rid, dt in run_date_map.items()
+                if dt and dt.date() == filter_date
+            ]
+        else:
+            date_run_ids = run_ids
+
+        if date_run_ids:
+            # Find all (suite_id, run_id) pairs
+            suite_run_pairs = (
+                db.session.query(TestCase.suite_id, TestResult.run_id)
+                .join(TestCase, TestResult.case_id == TestCase.id)
+                .filter(TestResult.run_id.in_(date_run_ids))
+                .filter(TestCase.suite_id.isnot(None))
+                .distinct()
+                .all()
+            )
+
+            # Pick the run with the latest date per suite
+            suite_run_map = {}
+            for sid, rid in suite_run_pairs:
+                if sid is None:
+                    continue
+                run_dt = run_date_map.get(rid)
+                if sid not in suite_run_map or (run_dt and run_dt > run_date_map.get(suite_run_map[sid])):
+                    suite_run_map[sid] = rid
+
+            if suite_run_map:
+                for sid, rid in suite_run_map.items():
+                    rows = (
+                        db.session.query(TestResult.status, func.count(TestResult.id))
+                        .join(TestCase, TestResult.case_id == TestCase.id)
+                        .filter(TestResult.run_id == rid, TestCase.suite_id == sid)
+                        .group_by(TestResult.status)
+                        .all()
+                    )
+                    stats = {"Passed": 0, "Failed": 0, "Blocked": 0, "Retest": 0, "Untested": 0, "total": 0}
+                    for status, cnt in rows:
+                        if status in stats:
+                            stats[status] = cnt
+                            stats["total"] += cnt
+                    if stats["total"] > 0:
+                        stats["run_id"] = rid
+                        run_dt = run_date_map.get(rid)
+                        stats["run_date"] = run_dt.isoformat() if run_dt else None
+                        suite_stats[sid] = stats
+
+    # Collect dates that have runs (for date navigation)
+    run_dates = sorted(set(
+        (r.run_date or r.created_at).date().isoformat()
+        for r in runs if (r.run_date or r.created_at)
+    ), reverse=True)
+
     return jsonify({
         "project": project.to_dict(),
         "runs": runs_data,
+        "run_dates": run_dates,
         "overall_stats": overall,
+        "suite_stats": suite_stats,
     }), 200
 
 
