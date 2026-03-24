@@ -351,6 +351,17 @@ def import_workflow(workflow_id):
         wf_name = wf_name.replace('-', '_')
         suite_jobs.setdefault(wf_name, []).append(job)
 
+    # Merge job groups that resolve to the same cypress_path (e.g. ab, ab_4a, ab_4b → abTest)
+    merged_suite_jobs = {}
+    for wf_name, wf_jobs in suite_jobs.items():
+        cp = workflow_name_to_cypress_path(wf_name)
+        if cp in merged_suite_jobs:
+            merged_suite_jobs[cp]['jobs'].extend(wf_jobs)
+        else:
+            merged_suite_jobs[cp] = {'wf_name': wf_name, 'jobs': list(wf_jobs)}
+    # Rebuild suite_jobs keyed by canonical wf_name (first seen per path)
+    suite_jobs = {v['wf_name']: v['jobs'] for v in merged_suite_jobs.values()}
+
     print(f"\nDetected {len(suite_jobs)} suite(s):")
     for wf_name, wf_jobs in suite_jobs.items():
         job_nums = [str(j.get('job_number', '?')) for j in wf_jobs]
