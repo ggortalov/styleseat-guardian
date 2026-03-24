@@ -123,6 +123,73 @@
   animation-delay: 0.05s;
 }
 
+.ov-health-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ov-health-header .ov-section-title {
+  margin: 0;
+}
+
+.ov-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.ov-date-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.ov-date-nav-btn:hover:not(:disabled) {
+  color: var(--sidebar-bg);
+  border-color: var(--sidebar-bg);
+  background: var(--primary-light, #f0f7f3);
+}
+
+.ov-date-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ov-date-nav-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0 8px;
+  min-width: 120px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ov-date-today {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--status-passed);
+  background: var(--status-passed-bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
 .ov-section-title {
   font-size: 16px;
   font-weight: 700;
@@ -131,6 +198,40 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.ov-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.ov-refresh-btn:hover {
+  color: var(--sidebar-bg);
+  border-color: var(--sidebar-bg);
+  background: var(--primary-light, #f0f7f3);
+}
+
+.ov-refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ov-refresh-btn--spinning svg {
+  animation: refreshSpin 0.8s linear infinite;
+}
+
+@keyframes refreshSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .ov-suites-grid {
@@ -190,18 +291,52 @@
   color: var(--text-muted);
 }
 
+.ov-suite-card-stats {
+  margin-top: 4px;
+}
+
 .ov-suite-card-bar {
   display: flex;
-  height: 6px;
+  height: 10px;
   border-radius: var(--radius-full);
   overflow: hidden;
   background: var(--border-light);
   width: 100%;
-  margin-top: 2px;
+  gap: 1.5px;
 }
 
 .ov-suite-card-bar > div {
   height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.4s ease;
+}
+
+.ov-suite-card-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+
+.ov-suite-card-count {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ov-suite-card-count-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ov-suite-card-rate {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ── Responsive: 1024px ── */
@@ -232,6 +367,17 @@
 
   .ov-suite-card {
     padding: 12px;
+  }
+
+  .ov-health-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .ov-date-nav-label {
+    font-size: 13px;
+    min-width: 100px;
   }
 }
 

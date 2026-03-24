@@ -193,6 +193,12 @@ body {
   cursor: pointer;
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: #bbb;
+  font-weight: 400;
+}
+
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
