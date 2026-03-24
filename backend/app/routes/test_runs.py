@@ -288,15 +288,18 @@ def list_results(run_id):
             # Extract source file and describe title from preconditions if present
             preconditions = r.test_case.preconditions or ""
             source_file = None
+            source_path_full = None
             describe_title = None
             for line in preconditions.split('\n'):
                 line = line.strip()
                 if line.startswith("Source:") or line.startswith("File:"):
                     source_path = line.split(":", 1)[1].strip()
+                    source_path_full = source_path
                     source_file = source_path.split("/")[-1]
                 elif line.startswith("Describe:"):
                     describe_title = line.split(":", 1)[1].strip()
             d["source_file"] = source_file
+            d["source_path"] = source_path_full
             d["describe_title"] = describe_title
             # Group by file name when available, otherwise by section name
             d["section_name"] = source_file or (r.test_case.section.name if r.test_case.section else "Uncategorized")
@@ -306,6 +309,7 @@ def list_results(run_id):
             d["priority"] = None
             d["suite_name"] = "Unknown"
             d["source_file"] = None
+            d["source_path"] = None
             d["describe_title"] = None
             d["section_name"] = "Deleted"
         out.append(d)
