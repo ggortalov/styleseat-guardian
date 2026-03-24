@@ -100,7 +100,7 @@ describe('Sidebar', () => {
 
   it('renders collapse button with correct label', () => {
     renderSidebar();
-    expect(screen.getByLabelText('Collapse sidebar')).toBeInTheDocument();
+    expect(screen.getByTitle('Collapse sidebar')).toBeInTheDocument();
   });
 
   it('renders close button on mobile', () => {
@@ -112,7 +112,7 @@ describe('Sidebar', () => {
     const onToggle = vi.fn();
     renderSidebar({ onToggleCollapse: onToggle });
     const user = userEvent.setup();
-    await user.click(screen.getByLabelText('Collapse sidebar'));
+    await user.click(screen.getByTitle('Collapse sidebar'));
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 

@@ -6,7 +6,11 @@
   "scripts": {
     "demo": "bash scripts/start-demo.sh",
     "sync": "cd backend && source venv/bin/activate && python sync_cypress.py",
-    "import": "cd backend && source venv/bin/activate && python import_circleci.py"
+    "import": "cd backend && source venv/bin/activate && python import_circleci.py",
+    "e2e": "cd e2e && npx playwright test",
+    "e2e:ui": "cd e2e && npx playwright test --ui",
+    "e2e:headed": "cd e2e && npx playwright test --headed",
+    "e2e:report": "cd e2e && npx playwright show-report"
   },
   "keywords": [],
   "author": "",
