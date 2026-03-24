@@ -129,4 +129,20 @@ export class ApiClient {
   async deleteRun(id: number) {
     return this.request('DELETE', `/runs/${id}`);
   }
+
+  // Import
+  async importCircleCI(workflowUrl: string) {
+    return this.request('POST', '/runs/import-circleci', { workflow_url: workflowUrl });
+  }
+
+  async getImportStatus(): Promise<{ running: boolean; output: string; exit_code?: number; success?: boolean }> {
+    return this.request('GET', '/runs/import-status');
+  }
+
+  // Dashboard / Sync logs
+  async getSyncLogs(projectId?: number, limit = 20) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (projectId) params.set('project_id', String(projectId));
+    return this.request('GET', `/sync-logs?${params}`);
+  }
 }
