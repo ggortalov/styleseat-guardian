@@ -2,6 +2,7 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+DEMO_DATA="$ROOT_DIR/backend/demo_data.json"
 
 echo "=== StyleSeat Guardian Demo ==="
 
@@ -10,12 +11,20 @@ echo "Stopping existing servers..."
 lsof -ti:5001 -ti:5173 -ti:5174 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# 2. Fresh database from seed (creates demo user + Cypress Automation project)
-echo "Resetting database..."
+# 2. Fresh database from demo snapshot
 cd "$ROOT_DIR/backend"
 source venv/bin/activate
-rm -f app.db
-python seed.py
+rm -f app.db app.db-shm app.db-wal
+
+if [ -f "$DEMO_DATA" ]; then
+  echo "Restoring database from demo snapshot..."
+  python restore_db.py "$DEMO_DATA"
+else
+  echo "No demo_data.json found — seeding fresh database..."
+  python seed.py
+  echo ""
+  echo "  NOTE: Run 'npm run sync' to populate test cases from Cypress repo."
+fi
 
 # 3. Start backend
 echo "Starting backend on http://localhost:5001 ..."
@@ -37,22 +46,13 @@ for i in $(seq 1 15); do
   sleep 1
 done
 
-# 6. Sync test cases from Cypress repo (background — app is usable immediately)
-echo "Syncing test cases from Cypress repo (background)..."
-cd "$ROOT_DIR/backend"
-python sync_cypress.py &
-SYNC_PID=$!
-
 echo ""
 echo "=== Demo Ready ==="
 echo "  URL:   http://localhost:5173"
 echo "  Login: demo / Demo1234"
 echo ""
-echo "  Cypress sync is running in the background."
-echo "  Test cases will appear as suites are processed."
-echo ""
 echo "Press Ctrl+C to stop all processes."
 
 # Cleanup on exit
-trap "kill $BACKEND_PID $FRONTEND_PID $SYNC_PID 2>/dev/null; exit" INT TERM
+trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" INT TERM
 wait
