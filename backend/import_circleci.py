@@ -118,7 +118,7 @@ def get_runner_summary(job_num):
             action_output_url = action.get('output_url')
             if not action_output_url:
                 continue
-            if re.match(r'run p\d+', step_name):
+            if re.match(r'run (?:p\d+|dr[_\s])', step_name):
                 output_url = action_output_url
                 break
             elif step_name.startswith('run ') and not fallback_url:
