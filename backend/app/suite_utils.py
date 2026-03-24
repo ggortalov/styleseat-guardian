@@ -24,6 +24,10 @@ _WORKFLOW_PATH_OVERRIDES = {
     'events_mobile': 'events',
     'po': 'p0',
     'p3_admin': 'p3',
+    # AB Test workflow jobs: ab_2/ab_6 strip to "ab"; ab_4a/ab_4b keep their suffix
+    'ab': 'abTest',
+    'ab_4a': 'abTest',
+    'ab_4b': 'abTest',
 }
 
 
