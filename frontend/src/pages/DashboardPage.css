@@ -376,11 +376,26 @@
 
 .run-card-v2--compact .run-card-v2-name {
   font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .run-card-v2--compact .run-card-v2-date {
   font-size: 13px;
   color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.run-card-v2--compact .run-card-v2-rate {
+  margin-left: 16px;
+}
+
+.run-card-v2--compact .run-card-v2-rate-number {
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .run-card-v2--compact:hover {
@@ -469,10 +484,11 @@
 .run-card-v2-rate {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   flex-shrink: 0;
   margin-left: 20px;
-  min-width: 64px;
+  min-width: 72px;
+  text-align: right;
 }
 
 .run-card-v2-rate-number {
@@ -480,6 +496,7 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .run-card-v2-rate-label {
@@ -517,6 +534,7 @@
   .run-card-v2-rate {
     margin-left: auto;
     margin-top: 10px;
+    align-items: flex-end;
   }
 
   .run-card-v2-chevron {

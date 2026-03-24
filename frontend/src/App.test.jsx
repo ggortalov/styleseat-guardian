@@ -191,9 +191,9 @@ describe('App routing', () => {
     it('/suites renders TestSuitesPage with real heading and add-suite button', async () => {
       renderApp('/suites');
       await waitFor(() => {
-        expect(screen.getByText('Test Suites')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '+ Add New Suite' })).toBeInTheDocument();
       });
-      expect(screen.getByRole('button', { name: '+ Add New Suite' })).toBeInTheDocument();
+      expect(screen.getByText('Test Suites')).toBeInTheDocument();
     });
 
     it('/suites shows empty state when no suites exist', async () => {
@@ -249,9 +249,9 @@ describe('App routing', () => {
       mockGetAll.mockResolvedValue([]);
       renderApp('/');
       await waitFor(() => {
-        expect(screen.getByText('Test Suites')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '+ Add New Suite' })).toBeInTheDocument();
       });
-      expect(screen.getByRole('button', { name: '+ Add New Suite' })).toBeInTheDocument();
+      expect(screen.getByText('Test Suites')).toBeInTheDocument();
     });
 
     it('shows loading spinner while fetching projects', async () => {
