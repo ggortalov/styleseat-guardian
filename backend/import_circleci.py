@@ -438,7 +438,7 @@ def import_workflow(workflow_id):
         for wf_name_key in suite_jobs:
             cp = workflow_name_to_cypress_path(wf_name_key)
             s = Suite.query.filter_by(project_id=project.id, cypress_path=cp).first()
-            if s:
+            if s and s.name not in matched_suite_names:
                 matched_suite_names.append(s.name)
         if matched_suite_names:
             suite_prefix = ', '.join(matched_suite_names)
