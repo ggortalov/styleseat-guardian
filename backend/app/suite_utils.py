@@ -28,6 +28,10 @@ _WORKFLOW_PATH_OVERRIDES = {
     'ab': 'abTest',
     'ab_4a': 'abTest',
     'ab_4b': 'abTest',
+    # DR (disaster recovery) jobs run prod tests
+    'dr': 'prod',
+    'dr_mobile': 'prod',
+    'dr_desktop': 'prod',
 }
 
 

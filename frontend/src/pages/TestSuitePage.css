@@ -195,6 +195,61 @@
   white-space: nowrap;
 }
 
+.case-row-file {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: #aaa;
+  cursor: pointer;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.case-row-file:hover {
+  color: var(--sidebar-bg);
+}
+
+.case-row-file:hover::after {
+  content: 'copy';
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--border-light);
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  animation: tooltipIn 0.15s ease forwards;
+}
+
+.case-row-file.copied {
+  color: var(--status-passed);
+}
+
+.case-row-file.copied::after {
+  content: '\2713  copied';
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--status-passed);
+  background: var(--status-passed-bg);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: copiedBadgeIn 0.25s ease forwards;
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes copiedBadgeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .case-row-meta {
   flex-shrink: 0;
   font-size: 13px;

@@ -18,6 +18,8 @@ instance/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -82,3 +84,8 @@ htmlcov/
 coverage/
 *.cover
 .pytest_cache/
+
+# Playwright
+playwright-report/
+e2e/test-results/
+e2e/auth-state/
