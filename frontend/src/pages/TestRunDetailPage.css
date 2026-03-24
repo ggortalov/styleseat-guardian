@@ -347,6 +347,31 @@
   animation: copiedBadgeIn 0.25s ease forwards;
 }
 
+/* Copy icon button next to section filename */
+.run-section-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.run-section-copy-btn:hover {
+  background: var(--primary-light);
+  color: var(--sidebar-bg);
+}
+
+.run-section-copy-btn.copied {
+  color: var(--status-passed);
+  background: var(--status-passed-bg);
+  animation: copiedFlash 0.3s ease;
+}
+
 @keyframes copiedFlash {
   0% { background: rgba(46, 125, 50, 0.25); }
   100% { background: var(--status-passed-bg); }

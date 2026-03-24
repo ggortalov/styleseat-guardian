@@ -21,7 +21,7 @@ test.describe('Test Runs Page', () => {
     // Should show either Open Runs or Completed section
     const openRuns = page.getByText('Open Runs');
     const completed = page.getByText('Completed');
-    await expect(openRuns.or(completed)).toBeVisible({ timeout: 10000 });
+    await expect(openRuns.or(completed).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('shows pass rate on run cards', async ({ page }) => {

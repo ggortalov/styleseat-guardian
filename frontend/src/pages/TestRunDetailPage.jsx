@@ -90,7 +90,7 @@ function groupBySection(results) {
   for (const r of results) {
     const key = r.section_name || 'Uncategorized';
     if (!map[key]) {
-      map[key] = { name: key, describeTitle: r.describe_title || null, results: [] };
+      map[key] = { name: key, describeTitle: r.describe_title || null, sourcePath: r.source_path || null, results: [] };
       groups.push(map[key]);
     }
     map[key].results.push(r);
@@ -411,6 +411,13 @@ export default function TestRunDetailPage() {
                                 <span className="run-section-name">{sec.describeTitle}</span>
                                 <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
                               </span>
+                            ) : sec.sourcePath ? (
+                              <span className="run-section-info">
+                                <span className="run-section-name">{sec.name}</span>
+                                <span className="run-section-copy-btn" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }} title="Copy filename">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                                </span>
+                              </span>
                             ) : (
                               <span className="run-section-name">{sec.name}</span>
                             )}
@@ -477,6 +484,13 @@ export default function TestRunDetailPage() {
                       <span className="run-section-info">
                         <span className="run-section-name">{sec.describeTitle}</span>
                         <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
+                      </span>
+                    ) : sec.sourcePath ? (
+                      <span className="run-section-info">
+                        <span className="run-section-name">{sec.name}</span>
+                        <span className="run-section-copy-btn" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }} title="Copy filename">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                        </span>
                       </span>
                     ) : (
                       <span className="run-section-name">{sec.name}</span>
