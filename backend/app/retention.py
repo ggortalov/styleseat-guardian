@@ -8,6 +8,8 @@ Active (incomplete) runs are never touched.
 import logging
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import case
+
 from app import db
 from app.models import TestRun, ResultHistory, TokenBlocklist
 
@@ -25,10 +27,12 @@ def purge_expired_runs(retention_days: int) -> dict:
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
+    effective_date = case(
+        (TestRun.run_date.isnot(None), TestRun.run_date),
+        else_=TestRun.created_at,
+    )
     expired_runs = TestRun.query.filter(
-        TestRun.is_completed.is_(True),
-        TestRun.completed_at.isnot(None),
-        TestRun.completed_at < cutoff,
+        effective_date < cutoff,
     ).all()
 
     run_count = len(expired_runs)

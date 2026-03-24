@@ -147,7 +147,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       <nav className="sidebar-nav">
         <NavLink
           to={projects.length > 0 ? `/projects/${projects[0].id}` : '/'}
-          className={`sidebar-link ${location.pathname.match(/^\/projects\/\d+$/) ? 'active' : ''}`}
+          className={`sidebar-link ${location.pathname.match(/^\/projects\/\d+$/) && !location.search.includes('tab=suites') && !location.search.includes('tab=runs') ? 'active' : ''}`}
           title="Overview"
         >
           <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
