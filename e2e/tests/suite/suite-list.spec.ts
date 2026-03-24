@@ -4,11 +4,18 @@ import { ApiClient } from '../../helpers/api-client';
 test.describe('Suite List (Dashboard)', () => {
   let api: ApiClient;
   let projectId: number;
+  const createdSuiteIds: number[] = [];
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
     const projects = await api.getProjects();
     projectId = projects[0].id;
+  });
+
+  test.afterAll(async () => {
+    for (const id of createdSuiteIds) {
+      await api.deleteSuite(id).catch(() => {});
+    }
   });
 
   test.beforeEach(async ({ page }) => {
@@ -39,6 +46,9 @@ test.describe('Suite List (Dashboard)', () => {
 
     // Should navigate to the new suite page
     await page.waitForURL(/\/projects\/\d+\/suites\/\d+/, { timeout: 10000 });
+
+    const match = page.url().match(/\/suites\/(\d+)/);
+    if (match) createdSuiteIds.push(Number(match[1]));
   });
 
   test('edits suite name via modal', async ({ page }) => {
