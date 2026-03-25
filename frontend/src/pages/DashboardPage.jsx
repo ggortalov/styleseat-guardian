@@ -68,13 +68,13 @@ export default function DashboardPage() {
     refresh();
   };
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian' }]} /><LoadingSpinner /></>;
 
   return (
     <div>
       <div className="page-content">
         <div className="page-toolbar">
-          <h2 className="page-heading">Dashboard</h2>
+          <h2 className="page-heading">Guardian</h2>
           <button className="btn btn-brand" onClick={() => setShowCreate(true)}>+ Add New Suite</button>
         </div>
 

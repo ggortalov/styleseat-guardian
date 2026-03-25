@@ -94,7 +94,7 @@ function renderPage(initialUrl = '/projects/1') {
     <MemoryRouter initialEntries={[initialUrl]}>
       <Routes>
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/" element={<div>Dashboard Home</div>} />
+        <Route path="/" element={<div>Guardian Home</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -405,7 +405,7 @@ describe('ProjectDetailPage', () => {
       dashboardService.getSyncLogs.mockRejectedValue(new Error('Not found'));
       renderPage();
       await waitFor(() => {
-        expect(screen.getByText('Dashboard Home')).toBeInTheDocument();
+        expect(screen.getByText('Guardian Home')).toBeInTheDocument();
       });
     });
   });

@@ -302,16 +302,16 @@ export default function TestRunDetailPage() {
     });
   };
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian', path: '/' }]} /><LoadingSpinner /></>;
 
   const passRateColor = stats.pass_rate >= 80 ? 'var(--status-passed)' : stats.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
 
   return (
     <div>
       <Header breadcrumbs={[
-        { label: 'Dashboard', path: '/' },
+        { label: 'Guardian', path: '/' },
         ...(run?.project_name ? [{ label: run.project_name, path: `/projects/${run.project_id}` }] : []),
-        { label: formatRunDate(run?.run_date || run?.created_at) || run?.name },
+        { label: run?.name || formatRunDate(run?.run_date || run?.created_at) },
       ]} />
       <div className="page-content">
         <div className="page-toolbar">
