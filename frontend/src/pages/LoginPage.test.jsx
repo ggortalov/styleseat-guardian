@@ -29,7 +29,7 @@ function renderLogin() {
     <MemoryRouter initialEntries={['/login']}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<div>Dashboard</div>} />
+        <Route path="/" element={<div>Guardian</div>} />
         <Route path="/register" element={<div>Register Page</div>} />
       </Routes>
     </MemoryRouter>
@@ -163,7 +163,7 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Log In' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Dashboard')).toBeInTheDocument();
+      expect(screen.getByText('Guardian')).toBeInTheDocument();
     });
   });
 

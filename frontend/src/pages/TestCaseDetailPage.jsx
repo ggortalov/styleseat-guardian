@@ -32,7 +32,7 @@ export default function TestCaseDetailPage() {
     }
   };
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian', path: '/' }]} /><LoadingSpinner /></>;
 
   const editPath = tc?.project_id && tc?.suite_id
     ? `/projects/${tc.project_id}/suites/${tc.suite_id}/cases/${tc.id}/edit`
@@ -41,7 +41,7 @@ export default function TestCaseDetailPage() {
   return (
     <div>
       <Header breadcrumbs={[
-        { label: 'Dashboard', path: '/' },
+        { label: 'Guardian', path: '/' },
         ...(tc.project_name && tc.suite_name && tc.project_name !== tc.suite_name ? [{ label: tc.project_name, path: `/projects/${tc.project_id}` }] : []),
         ...(tc.suite_name && tc.project_id && tc.suite_id ? [{ label: tc.suite_name, path: `/projects/${tc.project_id}/suites/${tc.suite_id}` }] : []),
         { label: stripTestRailId(tc.title) },

@@ -116,10 +116,29 @@ def create_app():
     _audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
     _audit.addHandler(_audit_handler)
 
-    # --- Scheduled retention cleanup ---
+    # --- Scheduled jobs ---
     from app.retention import run_full_cleanup
     from apscheduler.schedulers.background import BackgroundScheduler
     import atexit
+    import subprocess as _sp
+
+    def _run_cypress_sync():
+        """Run sync_cypress.py as a subprocess (requires `gh` CLI auth)."""
+        _sync_logger = logging.getLogger("guardian.sync")
+        _sync_logger.info("Scheduled Cypress sync starting...")
+        try:
+            result = _sp.run(
+                ["python", os.path.join(os.path.dirname(__file__), "..", "sync_cypress.py")],
+                capture_output=True, text=True, timeout=600,
+            )
+            if result.returncode == 0:
+                _sync_logger.info("Scheduled Cypress sync completed:\n%s", result.stdout[-500:] if len(result.stdout) > 500 else result.stdout)
+            else:
+                _sync_logger.error("Scheduled Cypress sync failed (exit %d):\n%s", result.returncode, result.stderr[-500:] if len(result.stderr) > 500 else result.stderr)
+        except _sp.TimeoutExpired:
+            _sync_logger.error("Scheduled Cypress sync timed out after 600s")
+        except Exception as e:
+            _sync_logger.error("Scheduled Cypress sync error: %s", e)
 
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(
@@ -129,6 +148,14 @@ def create_app():
         hour=2,        # Run daily at 2:00 AM
         minute=0,
         id="retention_cleanup",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        func=_run_cypress_sync,
+        trigger="cron",
+        hour=0,        # Run daily at midnight
+        minute=0,
+        id="cypress_sync",
         replace_existing=True,
     )
     scheduler.start()

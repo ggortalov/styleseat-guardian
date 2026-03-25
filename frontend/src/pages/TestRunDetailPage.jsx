@@ -28,6 +28,7 @@ function computeStats(results) {
 /* ── Inline status dropdown ── */
 function StatusDropdown({ status, onChangeStatus, locked }) {
   const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -35,6 +36,16 @@ function StatusDropdown({ status, onChangeStatus, locked }) {
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
+
+  const handleOpen = () => {
+    if (locked) return;
+    if (!open && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUp(spaceBelow < 220);
+    }
+    setOpen(!open);
+  };
 
   return (
     <div className={`status-dropdown ${locked ? 'status-dropdown--locked' : ''}`} ref={ref}>
@@ -44,7 +55,7 @@ function StatusDropdown({ status, onChangeStatus, locked }) {
           color: `var(--status-${status.toLowerCase()})`,
           backgroundColor: `var(--status-${status.toLowerCase()}-bg)`,
         }}
-        onClick={() => !locked && setOpen(!open)}
+        onClick={handleOpen}
         disabled={locked}
         title={locked ? 'Locked - edits not allowed after 24 hours' : undefined}
       >
@@ -60,7 +71,7 @@ function StatusDropdown({ status, onChangeStatus, locked }) {
         )}
       </button>
       {open && !locked && (
-        <div className="status-dropdown-menu">
+        <div className={`status-dropdown-menu ${openUp ? 'status-dropdown-menu--up' : ''}`}>
           {STATUSES.map((s) => (
             <button
               key={s}
@@ -291,16 +302,16 @@ export default function TestRunDetailPage() {
     });
   };
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian', path: '/' }]} /><LoadingSpinner /></>;
 
   const passRateColor = stats.pass_rate >= 80 ? 'var(--status-passed)' : stats.pass_rate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
 
   return (
     <div>
       <Header breadcrumbs={[
-        { label: 'Dashboard', path: '/' },
+        { label: 'Guardian', path: '/' },
         ...(run?.project_name ? [{ label: run.project_name, path: `/projects/${run.project_id}` }] : []),
-        { label: formatRunDate(run?.run_date || run?.created_at) || run?.name },
+        { label: run?.name || formatRunDate(run?.run_date || run?.created_at) },
       ]} />
       <div className="page-content">
         <div className="page-toolbar">
@@ -412,12 +423,7 @@ export default function TestRunDetailPage() {
                                 <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
                               </span>
                             ) : sec.sourcePath ? (
-                              <span className="run-section-info">
-                                <span className="run-section-name">{sec.name}</span>
-                                <span className="run-section-copy-btn" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }} title="Copy filename">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                                </span>
-                              </span>
+                              <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
                             ) : (
                               <span className="run-section-name">{sec.name}</span>
                             )}
@@ -425,7 +431,7 @@ export default function TestRunDetailPage() {
                           </div>
                           {!collapsed[`${sg.name}/${sec.name}`] && (
                             <div className="run-section-cases">
-                              {!run?.is_locked && sec.results.length > 0 && (
+                              {!run?.is_locked && sec.results.length > 1 && (
                                 <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
                                   <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
                                   <span className="run-select-all-label">Select All</span>
@@ -486,12 +492,7 @@ export default function TestRunDetailPage() {
                         <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
                       </span>
                     ) : sec.sourcePath ? (
-                      <span className="run-section-info">
-                        <span className="run-section-name">{sec.name}</span>
-                        <span className="run-section-copy-btn" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }} title="Copy filename">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                        </span>
-                      </span>
+                      <span className="run-section-file" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sec.name); const el = e.currentTarget; el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }}>{sec.name}</span>
                     ) : (
                       <span className="run-section-name">{sec.name}</span>
                     )}
@@ -499,7 +500,7 @@ export default function TestRunDetailPage() {
                   </div>
                   {!collapsed[sec.name] && (
                     <div className="run-section-cases">
-                      {!run?.is_locked && sec.results.length > 0 && (
+                      {!run?.is_locked && sec.results.length > 1 && (
                         <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
                           <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
                           <span className="run-select-all-label">Select All</span>

@@ -321,7 +321,7 @@ export default function TestSuitePage() {
     }
   };
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian', path: '/' }]} /><LoadingSpinner /></>;
 
   const hasCases = cases.length > 0;
   const hasCategories = sections.length > 0;
@@ -333,7 +333,7 @@ export default function TestSuitePage() {
 
   // Build breadcrumbs (skip project if same name as suite to avoid duplication)
   const breadcrumbs = [
-    { label: 'Dashboard', path: '/' },
+    { label: 'Guardian', path: '/' },
   ];
   if (project?.name !== suite?.name) {
     breadcrumbs.push({ label: project?.name, path: `/projects/${projectId}` });
