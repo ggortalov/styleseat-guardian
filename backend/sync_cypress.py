@@ -193,6 +193,8 @@ def main():
                     section = existing_sections[section_name]
 
                 preconditions_text = f'File: {filename}'
+                if describe_title:
+                    preconditions_text += f'\nDescribe: {describe_title}'
 
                 for title in tests:
                     title_lower = title.lower()
