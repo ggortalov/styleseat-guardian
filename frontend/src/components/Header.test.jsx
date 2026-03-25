@@ -13,8 +13,8 @@ function renderHeader(props) {
 
 describe('Header', () => {
   it('renders breadcrumb text', () => {
-    renderHeader({ breadcrumbs: [{ label: 'Dashboard' }] });
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    renderHeader({ breadcrumbs: [{ label: 'Guardian' }] });
+    expect(screen.getByText('Guardian')).toBeInTheDocument();
   });
 
   it('renders multiple breadcrumbs with separators', () => {

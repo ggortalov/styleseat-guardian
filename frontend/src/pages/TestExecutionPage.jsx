@@ -117,7 +117,7 @@ export default function TestExecutionPage() {
 
   const currentIndex = allResults.findIndex((r) => r.id === parseInt(resultId));
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian', path: '/' }]} /><LoadingSpinner /></>;
 
   const tc = result?.test_case || {};
 
@@ -139,9 +139,9 @@ export default function TestExecutionPage() {
   return (
     <div>
       <Header breadcrumbs={[
-        { label: 'Dashboard', path: '/' },
+        { label: 'Guardian', path: '/' },
         { label: result?.run_name || 'Run', path: `/runs/${runId}` },
-        { label: `Execute C${String(tc.id).padStart(7, '0')}` },
+        { label: tc.title || 'Execute' },
       ]} />
       <div className="page-content">
         <div className="exec-nav">
@@ -159,7 +159,7 @@ export default function TestExecutionPage() {
 
         <div className="exec-layout">
           <div className="exec-case card">
-            <h3>C{tc.id} - {tc.title}</h3>
+            <h3>{tc.title}</h3>
             <div className="exec-meta">
               <span>Section: {tc.section_name}</span>
               <span>Priority: {tc.priority}</span>

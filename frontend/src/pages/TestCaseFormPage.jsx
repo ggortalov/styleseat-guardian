@@ -106,12 +106,12 @@ export default function TestCaseFormPage() {
     }
   };
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard', path: '/' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian', path: '/' }]} /><LoadingSpinner /></>;
 
   return (
     <div>
       <Header breadcrumbs={[
-        { label: 'Dashboard', path: '/' },
+        { label: 'Guardian', path: '/' },
         ...(project?.name !== suite?.name ? [{ label: project?.name, path: `/projects/${projectId}` }] : []),
         { label: suite?.name, path: `/projects/${projectId}/suites/${suiteId}` },
         { label: isEdit ? 'Edit Test Case' : 'New Test Case' },

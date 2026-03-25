@@ -167,7 +167,7 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { fetchAll(); }, [projectId]);
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian' }]} /><LoadingSpinner /></>;
 
   return (
     <div>
@@ -395,20 +395,19 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
-              {/* Sync Reports — only show syncs with new cases */}
+              {/* Sync Reports */}
               {(() => {
-                const withNew = syncLogs.filter(l => l.new_cases > 0 || l.removed_cases > 0);
                 return (
               <div className="ov-sync">
                 <h3 className="ov-section-title">Sync Changes</h3>
-                {withNew.length > 0 ? (
+                {syncLogs.length > 0 ? (
                   <div className="sync-log-list">
-                    {withNew.map((log) => (
+                    {syncLogs.map((log) => (
                       <SyncLogCard key={log.id} log={log} />
                     ))}
                   </div>
                 ) : (
-                  <p className="empty-message">No changes detected in recent syncs.</p>
+                  <p className="empty-message">No syncs recorded yet.</p>
                 )}
               </div>
                 );

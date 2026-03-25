@@ -407,7 +407,6 @@
   border-radius: var(--radius-lg);
   background: var(--bg-white);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
 }
 
 .run-suite-header {
@@ -661,6 +660,11 @@
   padding: 4px;
   min-width: 140px;
   animation: scaleIn 0.12s ease;
+}
+
+.status-dropdown-menu--up {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .status-dropdown-option {
