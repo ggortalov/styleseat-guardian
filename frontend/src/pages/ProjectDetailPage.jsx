@@ -167,7 +167,7 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { fetchAll(); }, [projectId]);
 
-  if (loading) return <><Header breadcrumbs={[{ label: 'Dashboard' }]} /><LoadingSpinner /></>;
+  if (loading) return <><Header breadcrumbs={[{ label: 'Guardian' }]} /><LoadingSpinner /></>;
 
   return (
     <div>
