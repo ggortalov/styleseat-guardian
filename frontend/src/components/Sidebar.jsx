@@ -4,6 +4,15 @@ import { useEffect, useState, useRef } from 'react';
 import projectService from '../services/projectService';
 import runService from '../services/runService';
 import authService from '../services/authService';
+import Modal from './Modal';
+import {
+  SOUND_OPTIONS, SOUND_CATEGORIES, ERROR_SOUND_OPTIONS,
+  getSoundEnabled, setSoundEnabled,
+  getSoundChoice, setSoundChoice,
+  getSoundVolume, setSoundVolume,
+  getErrorSoundChoice, setErrorSoundChoice,
+  previewSound, previewErrorSound,
+} from '../services/soundService';
 import './Sidebar.css';
 
 function getIdsFromPath(pathname) {
@@ -64,6 +73,29 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
     return () => { delete window.__refreshSidebarProjects; delete window.__refreshSidebarRuns; };
   }, []);
 
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [soundEnabled, _setSoundEnabled] = useState(getSoundEnabled);
+  const [soundChoice, _setSoundChoice] = useState(getSoundChoice);
+  const [errorSoundChoice, _setErrorSoundChoice] = useState(getErrorSoundChoice);
+  const [soundVolume, _setSoundVolume] = useState(getSoundVolume);
+
+  // Re-read per-user preferences when the user changes
+  useEffect(() => {
+    _setSoundEnabled(getSoundEnabled());
+    _setSoundChoice(getSoundChoice());
+    _setErrorSoundChoice(getErrorSoundChoice());
+    _setSoundVolume(getSoundVolume());
+  }, [user?.id]);
+
+  const handleSoundToggle = () => {
+    const next = !soundEnabled;
+    _setSoundEnabled(next);
+    setSoundEnabled(next);
+  };
+  const handleSoundChoice = (name) => { _setSoundChoice(name); setSoundChoice(name); previewSound(name); };
+  const handleErrorSoundChoice = (name) => { _setErrorSoundChoice(name); setErrorSoundChoice(name); previewErrorSound(name); };
+  const handleSoundVolume = (e) => { const v = parseInt(e.target.value, 10); _setSoundVolume(v); setSoundVolume(v); };
+
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const logoutTimerRef = useRef(null);
 
@@ -117,6 +149,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   };
 
   return (
+    <>
     <aside
       className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''} ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && mobileOpen ? 'sidebar--mobile-open' : ''}`}
       style={!collapsed && !isMobile && width ? { width, transition: isResizing ? 'none' : undefined } : undefined}
@@ -255,10 +288,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           accept="image/*"
           style={{ display: 'none' }}
         />
-        <div className="sidebar-user">
+        <div
+          className={`sidebar-user ${!collapsed ? 'sidebar-user--clickable' : ''}`}
+          onClick={!collapsed ? (e) => { e.stopPropagation(); setSettingsOpen(true); } : undefined}
+          title={!collapsed ? 'Open settings' : undefined}
+        >
           <div
             className={`sidebar-avatar ${uploading ? 'sidebar-avatar--uploading' : ''}`}
-            onClick={handleAvatarClick}
+            onClick={(e) => { e.stopPropagation(); handleAvatarClick(e); }}
             title="Change profile photo"
           >
             {user?.avatar ? (
@@ -282,17 +319,31 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
             </div>
           )}
           {!collapsed && (
-            <span className="sidebar-username">{user?.username}</span>
+            <>
+              <span className="sidebar-username">{user?.username}</span>
+              <svg className="sidebar-user-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </>
           )}
         </div>
         {collapsed ? (
-          <button className={`sidebar-logout-icon ${logoutConfirm ? 'sidebar-logout--confirm' : ''}`} onClick={(e) => { e.stopPropagation(); handleLogoutClick(); }} title={logoutConfirm ? 'Click again to confirm' : 'Logout'} aria-label="Logout">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
+          <>
+            <button className="sidebar-settings-icon" onClick={(e) => { e.stopPropagation(); setSettingsOpen(true); }} title="Settings" aria-label="Settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+            <button className={`sidebar-logout-icon ${logoutConfirm ? 'sidebar-logout--confirm' : ''}`} onClick={(e) => { e.stopPropagation(); handleLogoutClick(); }} title={logoutConfirm ? 'Click again to confirm' : 'Logout'} aria-label="Logout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </>
         ) : (
           <button className={`sidebar-logout ${logoutConfirm ? 'sidebar-logout--confirm' : ''}`} onClick={handleLogoutClick}>
             <svg className="sidebar-logout-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -304,6 +355,65 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
           </button>
         )}
       </div>
+
     </aside>
+
+      <Modal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} title="Settings">
+        <div className="settings-modal-section">
+          <div className="settings-modal-row">
+            <span className="settings-modal-label">Sounds</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {!soundEnabled && (
+                <span className="settings-modal-aaron">Aaron mode</span>
+              )}
+              <button
+                className="settings-flyout-toggle"
+                onClick={handleSoundToggle}
+                data-enabled={soundEnabled}
+              >
+                <span className="settings-flyout-toggle-knob" />
+              </button>
+            </div>
+          </div>
+
+          {soundEnabled && (
+            <div className="settings-modal-body">
+              <label className="settings-flyout-volume">
+                <span>Volume</span>
+                <input type="range" min="0" max="100" value={soundVolume} onChange={handleSoundVolume} />
+                <span className="settings-flyout-volume-val">{soundVolume}%</span>
+              </label>
+
+              <div className="settings-flyout-section">
+                <div className="settings-flyout-label">Success sound</div>
+                {SOUND_CATEGORIES.map((cat) => (
+                  <div key={cat} className="settings-flyout-group">
+                    <div className="settings-flyout-cat">{cat}</div>
+                    <div className="settings-flyout-pills">
+                      {SOUND_OPTIONS.filter((s) => s.category === cat).map((s) => (
+                        <button key={s.name} className={`settings-flyout-pill ${soundChoice === s.name ? 'active' : ''}`} onClick={() => handleSoundChoice(s.name)} title={s.description}>
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="settings-flyout-section">
+                <div className="settings-flyout-label">Error sound</div>
+                <div className="settings-flyout-pills">
+                  {ERROR_SOUND_OPTIONS.map((s) => (
+                    <button key={s.name} className={`settings-flyout-pill ${errorSoundChoice === s.name ? 'active' : ''}`} onClick={() => handleErrorSoundChoice(s.name)} title={s.description}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+    </>
   );
 }

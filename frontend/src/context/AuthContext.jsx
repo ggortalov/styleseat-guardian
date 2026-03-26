@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService';
 import { getToken, clearAuth } from '../services/api';
+import { setCurrentUserId } from '../services/soundService';
 
 const AuthContext = createContext(null);
 
@@ -12,9 +13,10 @@ export function AuthProvider({ children }) {
     const token = getToken();
     if (token) {
       authService.getMe()
-        .then((data) => setUser(data))
+        .then((data) => { setCurrentUserId(data.id); setUser(data); })
         .catch(() => {
           clearAuth();
+          setCurrentUserId(null);
         })
         .finally(() => setLoading(false));
     } else {
@@ -28,6 +30,7 @@ export function AuthProvider({ children }) {
     storage.setItem('token', data.token);
     const userObj = { id: data.id, username: data.username, avatar: data.avatar };
     storage.setItem('user', JSON.stringify(userObj));
+    setCurrentUserId(data.id);
     setUser(userObj);
     return data;
   };
@@ -37,6 +40,7 @@ export function AuthProvider({ children }) {
     sessionStorage.setItem('token', data.token);
     const userObj = { id: data.id, username: data.username, avatar: data.avatar };
     sessionStorage.setItem('user', JSON.stringify(userObj));
+    setCurrentUserId(data.id);
     setUser(userObj);
     return data;
   };
@@ -48,6 +52,7 @@ export function AuthProvider({ children }) {
       // Token may already be expired; proceed with local cleanup
     }
     clearAuth();
+    setCurrentUserId(null);
     setUser(null);
   };
 

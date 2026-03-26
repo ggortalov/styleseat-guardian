@@ -739,6 +739,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 8px;
   border-top: none;
 }
 
@@ -833,6 +834,178 @@
 
 .sidebar-user--clickable:hover .sidebar-user-gear {
   opacity: 0.8;
+}
+
+/* Settings icon (collapsed) */
+.sidebar-settings-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+  padding: 0;
+  text-decoration: none;
+}
+
+.sidebar-settings-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar-settings-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+/* ============ Settings Modal Content ============ */
+.settings-modal-section {
+  margin: -8px 0;
+}
+
+.settings-modal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.settings-modal-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.settings-modal-aaron {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sidebar-bg, #1a3a2a);
+  white-space: nowrap;
+}
+
+.settings-modal-body {
+  padding-top: 4px;
+}
+
+.settings-flyout-toggle {
+  width: 38px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: #ccc;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-flyout-toggle[data-enabled="true"] {
+  background: var(--sidebar-bg, #1a3a2a);
+}
+
+.settings-flyout-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.settings-flyout-toggle[data-enabled="true"] .settings-flyout-toggle-knob {
+  left: 20px;
+}
+
+.settings-flyout-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 14px;
+}
+
+.settings-flyout-volume input[type="range"] {
+  flex: 1;
+  accent-color: var(--sidebar-bg, #1a3a2a);
+  height: 4px;
+}
+
+.settings-flyout-volume-val {
+  width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: #999;
+}
+
+.settings-flyout-section {
+  margin-bottom: 12px;
+}
+
+.settings-flyout-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-flyout-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.settings-flyout-group {
+  margin-bottom: 8px;
+}
+
+.settings-flyout-cat {
+  font-size: 10px;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.settings-flyout-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.settings-flyout-pill {
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #444;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.settings-flyout-pill:hover {
+  border-color: #999;
+  background: #f5f5f5;
+}
+
+.settings-flyout-pill.active {
+  border-color: var(--sidebar-bg, #1a3a2a);
+  background: var(--sidebar-bg, #1a3a2a);
+  color: #fff;
 }
 
 .sidebar-logout {

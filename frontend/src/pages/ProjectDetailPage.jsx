@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
+import ConfirmDialog from '../components/ConfirmDialog';
 import projectService from '../services/projectService';
 import suiteService from '../services/suiteService';
 import runService from '../services/runService';
@@ -85,6 +86,59 @@ export default function ProjectDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'overview';
   const setTab = (t) => setSearchParams(t === 'overview' ? {} : { tab: t }, { replace: true });
+
+  // Runs tab: filter, search, selection state
+  const [runStatusFilter, setRunStatusFilter] = useState('All');
+  const [runSearchQuery, setRunSearchQuery] = useState('');
+  const [selectedRuns, setSelectedRuns] = useState(new Set());
+  const [showBulkDeleteRuns, setShowBulkDeleteRuns] = useState(false);
+
+  const filteredRuns = useMemo(() => {
+    let result = runs;
+    if (runStatusFilter === 'Active') result = result.filter(r => !r.is_completed);
+    else if (runStatusFilter === 'Completed') result = result.filter(r => r.is_completed);
+    if (runSearchQuery.trim()) {
+      const q = runSearchQuery.toLowerCase();
+      result = result.filter(r =>
+        r.name.toLowerCase().includes(q) ||
+        (r.suite_name || '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [runs, runStatusFilter, runSearchQuery]);
+
+  const runFilterStats = useMemo(() => ({
+    All: runs.length,
+    Active: runs.filter(r => !r.is_completed).length,
+    Completed: runs.filter(r => r.is_completed).length,
+  }), [runs]);
+
+  const toggleRunSelect = (id) => {
+    setSelectedRuns(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleRunSelectAll = () => {
+    const visibleIds = filteredRuns.map(r => r.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedRuns.has(id));
+    if (allSelected) {
+      setSelectedRuns(new Set());
+    } else {
+      setSelectedRuns(new Set(visibleIds));
+    }
+  };
+
+  const handleBulkDeleteRuns = async () => {
+    try {
+      await runService.bulkDelete([...selectedRuns]);
+      setSelectedRuns(new Set());
+      setShowBulkDeleteRuns(false);
+      fetchAll();
+    } catch { /* ignore */ }
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -236,36 +290,116 @@ export default function ProjectDetailPage() {
         })()}
 
         {tab === 'runs' && (
-          <div className="card">
-            {runs.length > 0 ? (
-              <table className="data-table">
-                <thead>
-                  <tr><th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th>Created</th></tr>
-                </thead>
-                <tbody>
-                  {runs.map((r) => (
-                    <tr key={r.id} className="clickable-row" onClick={() => navigate(`/runs/${r.id}`)}>
-                      <td className="text-primary-bold">{r.name}</td>
-                      <td>{r.suite_name}</td>
-                      <td>{r.is_completed ? <StatusBadge status="Passed" size="sm" /> : <span className="badge-active">Active</span>}</td>
-                      <td>
-                        <div className="mini-bar">
-                          {['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'].map((s) => (
-                            r.stats[s] > 0 && (
-                              <div key={s} style={{ width: `${(r.stats[s] / r.stats.total) * 100}%`, backgroundColor: `var(--status-${s.toLowerCase()})` }} title={`${s}: ${r.stats[s]}`} />
-                            )
-                          ))}
-                        </div>
-                        <span className="mini-bar-label">{r.stats.pass_rate}%</span>
-                      </td>
-                      <td className="text-muted">{new Date(r.created_at).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="empty-message">No test runs yet.</p>
+          <div>
+            {/* Filter toolbar */}
+            <div className="runs-filter-toolbar">
+              <div className="runs-filter-pills">
+                {['All', 'Active', 'Completed'].map(f => (
+                  <button
+                    key={f}
+                    className={`runs-filter-pill${runStatusFilter === f ? ' runs-filter-pill--active' : ''}`}
+                    onClick={() => { setRunStatusFilter(f); setSelectedRuns(new Set()); }}
+                  >
+                    {f} <span className="runs-filter-pill-count">{runFilterStats[f]}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="runs-search-wrapper">
+                <svg className="runs-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  className="runs-search-input"
+                  type="text"
+                  placeholder="Search runs..."
+                  value={runSearchQuery}
+                  onChange={e => { setRunSearchQuery(e.target.value); setSelectedRuns(new Set()); }}
+                />
+                {runSearchQuery && (
+                  <button className="runs-search-clear" onClick={() => { setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Active filter indicator */}
+            {(runStatusFilter !== 'All' || runSearchQuery) && (
+              <div className="runs-active-filter">
+                Showing {filteredRuns.length} of {runs.length} runs
+                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
+                  Clear filters
+                </button>
+              </div>
             )}
+
+            <div className="card">
+              {filteredRuns.length > 0 ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th className="runs-checkbox-col">
+                        <input
+                          type="checkbox"
+                          checked={filteredRuns.length > 0 && filteredRuns.every(r => selectedRuns.has(r.id))}
+                          onChange={toggleRunSelectAll}
+                        />
+                      </th>
+                      <th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th className="runs-created-col">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRuns.map((r) => (
+                      <tr key={r.id} className={`clickable-row${selectedRuns.has(r.id) ? ' runs-row--selected' : ''}`} onClick={() => navigate(`/runs/${r.id}`)}>
+                        <td className="runs-checkbox-col" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedRuns.has(r.id)}
+                            onChange={() => toggleRunSelect(r.id)}
+                          />
+                        </td>
+                        <td className="text-primary-bold">{r.name}</td>
+                        <td>{r.suite_name}</td>
+                        <td>{r.is_completed ? <StatusBadge status="Passed" size="sm" /> : <span className="badge-active">Active</span>}</td>
+                        <td>
+                          <div className="mini-bar">
+                            {['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'].map((s) => (
+                              r.stats[s] > 0 && (
+                                <div key={s} style={{ width: `${(r.stats[s] / r.stats.total) * 100}%`, backgroundColor: `var(--status-${s.toLowerCase()})` }} title={`${s}: ${r.stats[s]}`} />
+                              )
+                            ))}
+                          </div>
+                          <span className="mini-bar-label">{r.stats.pass_rate}%</span>
+                        </td>
+                        <td className="text-muted runs-created-col">{new Date(r.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="empty-message">{runs.length > 0 ? 'No runs match the current filters.' : 'No test runs yet.'}</p>
+              )}
+            </div>
+
+            {/* Floating bulk action bar */}
+            {selectedRuns.size > 0 && (
+              <div className="bulk-action-bar">
+                <span className="bulk-action-count">{selectedRuns.size} run{selectedRuns.size !== 1 ? 's' : ''} selected</span>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedRuns(new Set())}>Clear</button>
+                <button className="btn btn-danger btn-sm" onClick={() => setShowBulkDeleteRuns(true)}>DELETE</button>
+              </div>
+            )}
+
+            <ConfirmDialog
+              isOpen={showBulkDeleteRuns}
+              onClose={() => setShowBulkDeleteRuns(false)}
+              onConfirm={handleBulkDeleteRuns}
+              title="Delete Test Runs"
+              message={`${selectedRuns.size} test run${selectedRuns.size !== 1 ? 's' : ''} will be permanently deleted. This cannot be undone.`}
+              requireSafeguard
+            />
           </div>
         )}
 

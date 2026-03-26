@@ -18,6 +18,8 @@ const runService = {
   getResultHistory: (id) => api.get(`/results/${id}/history`).then(r => r.data),
   importFromCircleCI: (workflowUrl) => api.post('/runs/import-circleci', { workflow_url: workflowUrl }).then(r => r.data),
   getImportStatus: () => api.get('/runs/import-status').then(r => r.data),
+  getDelta: (id) => api.get(`/runs/${id}/delta`).then(r => r.data),
+  bulkDelete: (ids) => api.post('/runs/bulk-delete', { ids }).then(r => r.data),
 };
 
 export default runService;

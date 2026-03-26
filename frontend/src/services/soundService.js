@@ -1,10 +1,35 @@
 // Sound Settings Service — manages confirmation sounds with localStorage persistence
 
-const STORAGE_KEYS = {
+const BASE_KEYS = {
   enabled: 'soundEnabled',
   choice: 'soundChoice',
   volume: 'soundVolume',
+  errorChoice: 'errorSoundChoice',
 };
+
+function storageKey(base) {
+  const uid = _currentUserId;
+  return uid ? `${base}_${uid}` : base;
+}
+
+// Read a per-user key, falling back to the old global key for migration
+function readStorage(base) {
+  const uid = _currentUserId;
+  if (uid) {
+    const userVal = localStorage.getItem(`${base}_${uid}`);
+    if (userVal !== null) return userVal;
+    // Migrate: check old non-user-scoped key
+    return localStorage.getItem(base);
+  }
+  return localStorage.getItem(base);
+}
+
+// Active user ID — set via setCurrentUserId() from AuthContext
+let _currentUserId = null;
+
+export function setCurrentUserId(id) {
+  _currentUserId = id;
+}
 
 export const SOUND_OPTIONS = [
   // Nature
@@ -27,32 +52,47 @@ export const SOUND_OPTIONS = [
 
 export const SOUND_CATEGORIES = ['Nature', 'Instrument', 'Digital', 'Ambient'];
 
+export const ERROR_SOUND_OPTIONS = [
+  { name: 'Plum Plum', description: 'Two soft descending plucks' },
+  { name: 'Hollow Knock', description: 'Two low wooden taps' },
+  { name: 'Soft Bubble', description: 'Low bloop dropping in pitch' },
+  { name: 'Gentle Whomp', description: 'Soft bass thud with resonance' },
+];
+
 // ── Preference getters/setters ──────────────────────────
 
 export function getSoundEnabled() {
-  const val = localStorage.getItem(STORAGE_KEYS.enabled);
+  const val = readStorage(BASE_KEYS.enabled);
   return val === null ? true : val === 'true';
 }
 
 export function setSoundEnabled(enabled) {
-  localStorage.setItem(STORAGE_KEYS.enabled, String(enabled));
+  localStorage.setItem(storageKey(BASE_KEYS.enabled), String(enabled));
 }
 
 export function getSoundChoice() {
-  return localStorage.getItem(STORAGE_KEYS.choice) || 'Droplet';
+  return readStorage(BASE_KEYS.choice) || 'Piano';
 }
 
 export function setSoundChoice(name) {
-  localStorage.setItem(STORAGE_KEYS.choice, name);
+  localStorage.setItem(storageKey(BASE_KEYS.choice), name);
 }
 
 export function getSoundVolume() {
-  const val = localStorage.getItem(STORAGE_KEYS.volume);
+  const val = readStorage(BASE_KEYS.volume);
   return val === null ? 75 : parseInt(val, 10);
 }
 
 export function setSoundVolume(volume) {
-  localStorage.setItem(STORAGE_KEYS.volume, String(volume));
+  localStorage.setItem(storageKey(BASE_KEYS.volume), String(volume));
+}
+
+export function getErrorSoundChoice() {
+  return readStorage(BASE_KEYS.errorChoice) || 'Plum Plum';
+}
+
+export function setErrorSoundChoice(name) {
+  localStorage.setItem(storageKey(BASE_KEYS.errorChoice), name);
 }
 
 // ── Sound generators ────────────────────────────────────
@@ -417,6 +457,137 @@ export function playConfirmation() {
   if (!getSoundEnabled()) return;
   const choice = getSoundChoice();
   previewSound(choice);
+}
+
+// ── Error sound generators ───────────────────────────────
+
+function playPlumPlum(ctx, dest) {
+  const t = ctx.currentTime;
+  [390, 310].forEach((freq, i) => {
+    const offset = i * 0.18;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t + offset);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.85, t + offset + 0.12);
+    g.gain.setValueAtTime(0.22, t + offset);
+    g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.15);
+    osc.connect(g).connect(dest);
+    osc.start(t + offset);
+    osc.stop(t + offset + 0.15);
+  });
+  return 500;
+}
+
+function playHollowKnock(ctx, dest) {
+  const t = ctx.currentTime;
+  [180, 150].forEach((freq, i) => {
+    const offset = i * 0.15;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t + offset);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.6, t + offset + 0.08);
+    g.gain.setValueAtTime(0.3, t + offset);
+    g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.1);
+    osc.connect(g).connect(dest);
+    osc.start(t + offset);
+    osc.stop(t + offset + 0.1);
+    // Woody body resonance
+    const body = ctx.createOscillator();
+    const bg = ctx.createGain();
+    body.type = 'sine';
+    body.frequency.setValueAtTime(freq * 2.2, t + offset);
+    body.frequency.exponentialRampToValueAtTime(freq * 1.2, t + offset + 0.06);
+    bg.gain.setValueAtTime(0.08, t + offset);
+    bg.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.07);
+    body.connect(bg).connect(dest);
+    body.start(t + offset);
+    body.stop(t + offset + 0.07);
+  });
+  return 400;
+}
+
+function playSoftBubble(ctx, dest) {
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(350, t);
+  osc.frequency.exponentialRampToValueAtTime(120, t + 0.18);
+  g.gain.setValueAtTime(0.25, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  osc.connect(g).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.25);
+  // Subtle pop overtone
+  const pop = ctx.createOscillator();
+  const pg = ctx.createGain();
+  pop.type = 'sine';
+  pop.frequency.setValueAtTime(700, t);
+  pop.frequency.exponentialRampToValueAtTime(200, t + 0.06);
+  pg.gain.setValueAtTime(0.1, t);
+  pg.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  pop.connect(pg).connect(dest);
+  pop.start(t);
+  pop.stop(t + 0.06);
+  return 350;
+}
+
+function playGentleWhomp(ctx, dest) {
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(140, t);
+  osc.frequency.exponentialRampToValueAtTime(80, t + 0.2);
+  g.gain.setValueAtTime(0.3, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  osc.connect(g).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.35);
+  // Warm mid resonance
+  const mid = ctx.createOscillator();
+  const mg = ctx.createGain();
+  mid.type = 'sine';
+  mid.frequency.setValueAtTime(280, t);
+  mid.frequency.exponentialRampToValueAtTime(160, t + 0.15);
+  mg.gain.setValueAtTime(0.1, t);
+  mg.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  mid.connect(mg).connect(dest);
+  mid.start(t);
+  mid.stop(t + 0.2);
+  return 450;
+}
+
+const ERROR_GENERATORS = {
+  'Plum Plum': playPlumPlum,
+  'Hollow Knock': playHollowKnock,
+  'Soft Bubble': playSoftBubble,
+  'Gentle Whomp': playGentleWhomp,
+};
+
+/** Play the user's chosen error sound (respects enabled setting). */
+export function playError() {
+  if (!getSoundEnabled()) return;
+  const choice = getErrorSoundChoice();
+  previewErrorSound(choice);
+}
+
+/** Preview a specific error sound by name (ignores enabled setting). */
+export function previewErrorSound(name) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const volume = getSoundVolume() / 100;
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = volume;
+    masterGain.connect(ctx.destination);
+    const generator = ERROR_GENERATORS[name] || ERROR_GENERATORS['Plum Plum'];
+    const duration = generator(ctx, masterGain);
+    setTimeout(() => ctx.close(), duration);
+  } catch {
+    // AudioContext not available
+  }
 }
 
 /** Play a specific sound by name (ignores enabled setting — used for previews). */

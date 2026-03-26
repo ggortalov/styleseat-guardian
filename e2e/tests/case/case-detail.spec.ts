@@ -10,22 +10,32 @@ test.describe('Test Case Detail Page', () => {
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
 
-    const suites = await api.getSuites(projectId);
-    suiteId = suites.find((s: any) => s.case_count > 0)?.id || suites[0].id;
+    const project = await api.createProject(`E2E Case Detail Project ${Date.now()}`);
+    projectId = project.id;
 
-    const cases = await api.getCases(suiteId);
-    if (cases.length > 0) {
-      caseId = cases[0].id;
-      sectionId = cases[0].section_id;
-    }
+    const suite = await api.createSuite(projectId, `E2E CD Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E CD Section ${Date.now()}`);
+    sectionId = section.id;
+
+    const testCase = await api.createCase({
+      title: `E2E CD Case ${Date.now()}`,
+      section_id: sectionId,
+      suite_id: suiteId,
+      priority: 'High',
+      case_type: 'Functional',
+      steps: [{ action: 'Step 1', expected: 'Result 1' }],
+    });
+    caseId = testCase.id;
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test('displays case title, meta, and steps', async ({ page }) => {
-    test.skip(!caseId, 'No test cases available');
-
     await page.goto(`/cases/${caseId}`);
     await page.waitForLoadState('networkidle');
 
@@ -39,8 +49,6 @@ test.describe('Test Case Detail Page', () => {
   });
 
   test('shows priority badge', async ({ page }) => {
-    test.skip(!caseId, 'No test cases available');
-
     await page.goto(`/cases/${caseId}`);
     await page.waitForLoadState('networkidle');
 
@@ -49,8 +57,6 @@ test.describe('Test Case Detail Page', () => {
   });
 
   test('navigates to edit form', async ({ page }) => {
-    test.skip(!caseId, 'No test cases available');
-
     await page.goto(`/cases/${caseId}`);
     await page.waitForLoadState('networkidle');
 

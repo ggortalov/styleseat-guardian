@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ImportProvider, ImportToast } from './context/ImportContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -130,6 +131,7 @@ function AppLayout({ children }) {
         style={!isMobile && !collapsed ? { marginLeft: sidebarWidth, transition: isDragging ? 'none' : undefined } : undefined}
       >
         {children}
+        <ImportToast />
       </main>
     </div>
   );
@@ -181,7 +183,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <ImportProvider>
+        <AppRoutes />
+      </ImportProvider>
     </AuthProvider>
   );
 }
