@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import runService from '../services/runService';
+import { useImport } from '../context/ImportContext';
 import './DashboardPage.css';
 
 const STATUS_ORDER = ['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'];
@@ -111,14 +112,12 @@ export default function TestRunsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-
-  // Import modal state
-  const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
-  const [importState, setImportState] = useState('idle'); // idle | submitting | running | done | error
-  const [importOutput, setImportOutput] = useState('');
-  const [importError, setImportError] = useState('');
-  const pollRef = useRef(null);
+
+  const {
+    importState, importOutput, importError, importQueue,
+    importModalOpen, startImport, openModal, closeModal,
+  } = useImport();
 
   const fetchRuns = useCallback((offset = 0, append = false) => {
     const setLoadState = append ? setLoadingMore : setLoading;
@@ -135,69 +134,26 @@ export default function TestRunsPage() {
 
   useEffect(() => { fetchRuns(); }, [fetchRuns]);
 
-  // Cleanup polling on unmount
+  // Refresh runs list when an import completes
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    stopPolling();
-    pollRef.current = setInterval(async () => {
-      try {
-        const status = await runService.getImportStatus();
-        setImportOutput(status.output || '');
-        if (!status.running) {
-          stopPolling();
-          if (status.success) {
-            setImportState('done');
-            fetchRuns(); // refresh the run list
-            window.__refreshSidebarRuns?.();
-          } else if (status.exit_code === 2) {
-            // Exit code 2 = duplicate workflow
-            setImportState('duplicate');
-          } else {
-            setImportState('error');
-            setImportError(status.output || 'Import failed. Check server logs.');
-          }
-        }
-      } catch {
-        stopPolling();
-        setImportState('error');
-        setImportError('Lost connection while checking import status.');
-      }
-    }, 2000);
-  }, [stopPolling, fetchRuns]);
+    window.__onImportComplete = () => fetchRuns();
+    return () => { delete window.__onImportComplete; };
+  }, [fetchRuns]);
 
   const handleImportSubmit = async () => {
     if (!importUrl.trim()) return;
-    setImportState('submitting');
-    setImportError('');
-    setImportOutput('');
-    try {
-      await runService.importFromCircleCI(importUrl.trim());
-      setImportState('running');
-      startPolling();
-    } catch (err) {
-      setImportState('error');
-      setImportError(err.response?.data?.error || 'Failed to start import.');
-    }
+    const url = importUrl.trim();
+    setImportUrl('');
+    await startImport(url);
   };
 
   const handleImportClose = () => {
-    if (importState === 'running') return; // don't close while running
-    stopPolling();
-    setImportModalOpen(false);
+    closeModal();
     setImportUrl('');
-    setImportState('idle');
-    setImportOutput('');
-    setImportError('');
+  };
+
+  const handleImportOpen = () => {
+    openModal();
   };
 
   const hasMore = runs.length < totalCount;
@@ -233,7 +189,7 @@ export default function TestRunsPage() {
               Showing {runs.length} of {totalCount} run{totalCount !== 1 ? 's' : ''}
             </span>
           </div>
-          <button className="btn btn-primary" onClick={() => setImportModalOpen(true)}>
+          <button className="btn btn-primary" onClick={handleImportOpen}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
@@ -304,97 +260,109 @@ export default function TestRunsPage() {
       </div>
 
       <Modal isOpen={importModalOpen} onClose={handleImportClose} title="Import from CircleCI">
-        {importState === 'idle' || importState === 'submitting' || importState === 'error' ? (
-          <>
-            <p style={{ margin: '0 0 12px', color: '#666', fontSize: 14 }}>
-              Paste a CircleCI workflow URL, path, or UUID to import test results.
-            </p>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Paste CircleCI workflow URL or ID"
-              value={importUrl}
-              onChange={(e) => setImportUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && importState !== 'submitting' && handleImportSubmit()}
-              disabled={importState === 'submitting'}
-              style={{ width: '100%', marginBottom: 12 }}
-              autoFocus
-            />
-            {importError && (
-              <p style={{ color: 'var(--status-failed)', fontSize: 13, margin: '0 0 12px' }}>{importError}</p>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button className="btn btn-secondary" onClick={handleImportClose} disabled={importState === 'submitting'}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={handleImportSubmit} disabled={importState === 'submitting' || !importUrl.trim()}>
-                {importState === 'submitting' ? 'Starting...' : 'Import'}
-              </button>
-            </div>
-          </>
-        ) : importState === 'running' ? (
-          <>
-            <style>{`
-              @keyframes dotPulse {
-                0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-                40% { opacity: 1; transform: scale(1); }
-              }
-              .import-dots { display: inline-flex; gap: 4px; align-items: center; }
-              .import-dots span {
-                width: 7px; height: 7px; border-radius: 50%;
-                background: var(--sidebar-bg, #1a3a2a);
-                animation: dotPulse 1.4s infinite ease-in-out both;
-              }
-              .import-dots span:nth-child(2) { animation-delay: 0.16s; }
-              .import-dots span:nth-child(3) { animation-delay: 0.32s; }
-            `}</style>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div className="import-dots"><span /><span /><span /></div>
-              <span style={{ fontSize: 14, color: '#333' }}>Importing from CircleCI</span>
-            </div>
-            {importOutput && (
-              <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, fontSize: 12, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {importOutput}
-              </pre>
-            )}
-          </>
-        ) : importState === 'done' ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--status-passed)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-              <span style={{ fontSize: 14, color: '#333', fontWeight: 500 }}>Import completed successfully.</span>
-            </div>
-            {importOutput && (
-              <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, fontSize: 12, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {importOutput}
-              </pre>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="btn btn-primary" onClick={handleImportClose}>Close</button>
-            </div>
-          </>
-        ) : importState === 'duplicate' ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--status-blocked)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span style={{ fontSize: 14, color: '#333', fontWeight: 500 }}>This workflow has already been imported.</span>
-            </div>
-            {importOutput && (
-              <pre style={{ background: '#fff8e1', padding: 12, borderRadius: 6, fontSize: 12, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', border: '1px solid #ffe082' }}>
-                {importOutput}
-              </pre>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="btn btn-primary" onClick={handleImportClose}>Close</button>
-            </div>
-          </>
-        ) : null}
+        <div className="import-modal">
+          {importState === 'idle' || importState === 'submitting' || importState === 'error' ? (
+            <>
+              <p className="import-modal-hint">Paste a CircleCI workflow URL to import test results.</p>
+              <div className="import-modal-input-row">
+                <input
+                  type="text"
+                  className="import-modal-input"
+                  placeholder="https://app.circleci.com/pipelines/..."
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && importState !== 'submitting' && handleImportSubmit()}
+                  disabled={importState === 'submitting'}
+                  autoFocus
+                />
+                <button className="import-modal-submit" onClick={handleImportSubmit} disabled={importState === 'submitting' || !importUrl.trim()}>
+                  {importState === 'submitting' ? (
+                    <span className="import-modal-spinner" />
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {importError && (
+                <div className="import-modal-error">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                  {importError}
+                </div>
+              )}
+            </>
+          ) : importState === 'running' ? (
+            <>
+              <div className="import-modal-status">
+                <div className="import-modal-status-icon import-modal-status-icon--running">
+                  <span className="import-modal-ring" />
+                </div>
+                <div className="import-modal-status-body">
+                  <span className="import-modal-status-title">Importing...</span>
+                  {importQueue.length > 0 && (
+                    <span className="import-modal-status-sub">+{importQueue.length} queued</span>
+                  )}
+                </div>
+              </div>
+              {importOutput && (
+                <pre className="import-modal-output">{importOutput}</pre>
+              )}
+              <div className="import-modal-queue">
+                <input
+                  type="text"
+                  className="import-modal-input"
+                  placeholder="Queue another workflow URL..."
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleImportSubmit()}
+                />
+                <button className="import-modal-submit" onClick={handleImportSubmit} disabled={!importUrl.trim()}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </button>
+              </div>
+            </>
+          ) : importState === 'done' ? (
+            <>
+              <div className="import-modal-status">
+                <div className="import-modal-status-icon import-modal-status-icon--done">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </div>
+                <span className="import-modal-status-title">Import complete</span>
+              </div>
+              {importOutput && (
+                <pre className="import-modal-output">{importOutput}</pre>
+              )}
+              <div className="import-modal-actions">
+                <button className="btn btn-primary" onClick={handleImportClose}>Done</button>
+              </div>
+            </>
+          ) : importState === 'duplicate' ? (
+            <>
+              <div className="import-modal-status">
+                <div className="import-modal-status-icon import-modal-status-icon--duplicate">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <span className="import-modal-status-title">Already imported</span>
+              </div>
+              {importOutput && (
+                <pre className="import-modal-output import-modal-output--warn">{importOutput}</pre>
+              )}
+              <div className="import-modal-actions">
+                <button className="btn btn-primary" onClick={handleImportClose}>Done</button>
+              </div>
+            </>
+          ) : null}
+        </div>
       </Modal>
     </div>
   );

@@ -400,9 +400,11 @@ def import_workflow(workflow_id):
     else:
         wf_display = 'Workflow'
 
-    # Fetch branch context from pipeline metadata
+    # Fetch branch context and attribution from pipeline metadata
     pipeline_id = wf_data.get('pipeline_id')
     branch_label = ''
+    pipeline_commit_sha = None
+    pipeline_triggered_by = None
     if pipeline_id:
         try:
             pipe_resp = requests.get(
@@ -420,10 +422,19 @@ def import_workflow(workflow_id):
                 if branch_clean and branch_clean.lower() not in ('main', 'master', 'develop', 'staging'):
                     branch_label = branch_clean
                     print(f"Branch context: {branch} → {branch_label}")
+            # Extract attribution: commit SHA and who triggered the pipeline
+            pipeline_commit_sha = pipe_data.get('vcs', {}).get('revision')
+            trigger_info = pipe_data.get('trigger', {})
+            actor = trigger_info.get('actor', {})
+            pipeline_triggered_by = actor.get('login')
+            if pipeline_commit_sha:
+                print(f"Commit SHA: {pipeline_commit_sha[:8]}")
+            if pipeline_triggered_by:
+                print(f"Triggered by: {pipeline_triggered_by}")
         except Exception:
-            pass  # Non-critical — skip branch label if pipeline fetch fails
+            pass  # Non-critical — skip branch/attribution if pipeline fetch fails
 
-    # Step 4: Create single combined run and process all suites
+    # Step 4: Create per-suite runs and process each suite independently
     # DB writes are committed per-suite to avoid holding a SQLite write lock
     # for the entire duration of the import (which involves slow network I/O).
     app = create_app()
@@ -434,51 +445,39 @@ def import_workflow(workflow_id):
             print("ERROR: Project 'Cypress Automation' not found.")
             sys.exit(1)
 
-        # Duplicate detection at workflow level
-        existing_run = TestRun.query.filter(
+        # Duplicate detection at workflow level (exact match on dedicated column)
+        existing_runs = TestRun.query.filter(
             TestRun.project_id == project.id,
-            TestRun.description.contains(workflow_id[:8])
-        ).first()
-        if existing_run:
-            result_count = TestResult.query.filter_by(run_id=existing_run.id).count()
-            if result_count == 0:
-                print(f"Found empty run '{existing_run.name}' (ID: {existing_run.id}) "
-                      f"from a previous failed import. Removing it and retrying.")
-                db.session.delete(existing_run)
+            TestRun.circleci_workflow_id == workflow_id
+        ).all()
+        # Fallback: check description for older runs imported before the column existed
+        if not existing_runs:
+            existing_runs = TestRun.query.filter(
+                TestRun.project_id == project.id,
+                TestRun.description.contains(workflow_id[:8])
+            ).all()
+        if existing_runs:
+            # If ALL existing runs for this workflow are empty, remove them and retry
+            all_empty = all(
+                TestResult.query.filter_by(run_id=r.id).count() == 0
+                for r in existing_runs
+            )
+            if all_empty:
+                for r in existing_runs:
+                    print(f"Found empty run '{r.name}' (ID: {r.id}) "
+                          f"from a previous failed import. Removing it.")
+                    db.session.delete(r)
                 db.session.commit()
             else:
-                print(f"WARNING: Workflow {workflow_id[:8]} already imported as run "
-                      f"'{existing_run.name}' (ID: {existing_run.id}, {result_count} results). Aborting.")
+                run_names = ', '.join(f"'{r.name}' (ID: {r.id})" for r in existing_runs)
+                print(f"WARNING: Workflow {workflow_id[:8]} already imported as: "
+                      f"{run_names}. Aborting.")
                 sys.exit(2)  # Exit code 2 = duplicate workflow
-
-        # Derive run display name from matched suites in DB
-        matched_suite_names = []
-        for wf_name_key in suite_jobs:
-            cp = workflow_name_to_cypress_path(wf_name_key)
-            s = Suite.query.filter_by(project_id=project.id, cypress_path=cp).first()
-            if s and s.name not in matched_suite_names:
-                matched_suite_names.append(s.name)
-        if matched_suite_names:
-            suite_prefix = ', '.join(matched_suite_names)
-            wf_display = f'{suite_prefix} {branch_label}'.strip() if branch_label else suite_prefix
-        elif branch_label:
-            wf_display = branch_label
-
-        # Create single combined run (suite_id=None)
-        run_name = f'{wf_display} \u00b7 {run_date_str}'
-        run_desc = f'Imported from CircleCI workflow {workflow_id[:8]}'
-        run = TestRun(
-            project_id=project.id, suite_id=None, name=run_name,
-            description=run_desc, created_at=wf_date
-        )
-        db.session.add(run)
-        db.session.commit()  # Commit run immediately to release DB lock during network I/O
-
-        print(f"\nCreated combined run: {run.name} (ID: {run.id})")
 
         grand_totals = {'Passed': 0, 'Failed': 0, 'Blocked': 0, 'Untested': 0}
         suite_reports = []
         all_failed_jobs = []
+        created_runs = []
 
         for wf_name, wf_jobs in suite_jobs.items():
             wf_job_numbers = [j.get('job_number') for j in wf_jobs]
@@ -613,6 +612,27 @@ def import_workflow(workflow_id):
                 continue
 
             print(f"\nSuite: {suite.name} (ID: {suite.id})")
+
+            # Create a dedicated run for this suite
+            suite_display = suite.name
+            if branch_label:
+                suite_display = f'{suite_display} {branch_label}'
+            variant = WORKFLOW_VARIANTS.get(wf_name.lower())
+            if variant:
+                suite_display = f'{suite_display} ({variant})'
+            run_name = f'{suite_display} \u00b7 {run_date_str}'
+            run_desc = f'Imported from CircleCI workflow {workflow_id[:8]}'
+            run = TestRun(
+                project_id=project.id, suite_id=suite.id, name=run_name,
+                description=run_desc, created_at=wf_date,
+                circleci_workflow_id=workflow_id,
+                commit_sha=pipeline_commit_sha,
+                triggered_by=pipeline_triggered_by,
+            )
+            db.session.add(run)
+            db.session.commit()
+            created_runs.append(run)
+            print(f"Created run: {run.name} (ID: {run.id})")
 
             # Build section-aware case index: (section_id, norm_title) → case
             # Plus a secondary title-only index for fallback
@@ -937,6 +957,23 @@ def import_workflow(workflow_id):
             for status_key, count in results_created.items():
                 grand_totals[status_key] += count
 
+            # Update this suite's run description with failed job info
+            if suite_failed_jobs:
+                failed_names = ', '.join(fj['name'] for fj in suite_failed_jobs)
+                run.description += (f'\nWARNING: {len(suite_failed_jobs)} '
+                                    f'job(s) failed without results: {failed_names}')
+
+            # Note runner-supplemented specs in run description
+            if missing_specs:
+                spec_names = ', '.join(s.split('/')[-1] for s in missing_specs)
+                run.description += (
+                    f'\nSupplemented from runner summary: {spec_names}'
+                )
+
+            # Mark this suite's run as completed
+            run.is_completed = True
+            run.completed_at = run.created_at
+
             # Commit after each suite to release the DB write lock between suites.
             # This prevents the backend from being blocked while the import
             # fetches data from CircleCI and GitHub APIs.
@@ -944,6 +981,8 @@ def import_workflow(workflow_id):
 
             suite_reports.append({
                 'suite_name': suite.name,
+                'run_id': run.id,
+                'run_name': run.name,
                 'results': dict(results_created),
                 'total': total,
                 'failed_jobs': list(suite_failed_jobs),
@@ -952,32 +991,11 @@ def import_workflow(workflow_id):
                 'missing_specs': dict(missing_specs),
             })
 
-        # Update run description with failed job info
-        if all_failed_jobs:
-            failed_names = ', '.join(fj['name'] for fj in all_failed_jobs)
-            run.description += (f'\nWARNING: {len(all_failed_jobs)} '
-                                f'job(s) failed without results: {failed_names}')
-
-        # Note runner-supplemented specs in run description
-        all_missing_specs = {}
-        for sr in suite_reports:
-            all_missing_specs.update(sr.get('missing_specs', {}))
-        if all_missing_specs:
-            spec_names = ', '.join(s.split('/')[-1] for s in all_missing_specs)
-            run.description += (
-                f'\nSupplemented from runner summary: {spec_names}'
-            )
-
-        # Mark imported run as completed (use the workflow date, not current time)
-        run.is_completed = True
-        run.completed_at = run.created_at
-
-        db.session.commit()
-
         # Final Report
         print(f"\n{'=' * 60}")
-        print(f"IMPORT COMPLETE - 1 combined run with {len(suite_reports)} suite(s)")
-        print(f"Run: {run.name} (ID: {run.id})")
+        print(f"IMPORT COMPLETE - {len(created_runs)} run(s) from {len(suite_reports)} suite(s)")
+        for r in created_runs:
+            print(f"  Run: {r.name} (ID: {r.id})")
         print(f"{'=' * 60}")
 
         total_runner_only = 0

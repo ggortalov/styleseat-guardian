@@ -110,6 +110,226 @@
   opacity: 1;
 }
 
+/* ── Delta reporter ── */
+.run-delta-section {
+  animation: slideUp 0.3s ease;
+  margin-bottom: 24px;
+}
+
+.run-delta-card {
+  background: var(--bg-white);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.run-delta-card:hover {
+  border-color: var(--border);
+}
+
+.run-delta-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.run-delta-header--clickable {
+  cursor: pointer;
+}
+
+.run-delta-header--clickable:hover {
+  background: var(--bg-subtle);
+}
+
+.run-delta-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--status-passed-bg);
+  color: var(--status-passed);
+}
+
+.run-delta-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.run-delta-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.run-delta-link {
+  color: var(--sidebar-bg);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.run-delta-link:hover {
+  text-decoration: underline;
+}
+
+.run-delta-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.run-delta-added {
+  color: var(--status-passed);
+  font-weight: 600;
+}
+
+.run-delta-removed {
+  color: var(--status-failed);
+  font-weight: 600;
+}
+
+.run-delta-regression {
+  color: var(--status-failed);
+  font-weight: 600;
+}
+
+.run-delta-fix {
+  color: var(--status-passed);
+  font-weight: 600;
+}
+
+.run-delta-attribution {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.run-delta-commit {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  padding: 1px 5px;
+  border-radius: 3px;
+  cursor: default;
+  text-decoration: none;
+}
+
+a.run-delta-commit {
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+a.run-delta-commit:hover {
+  color: var(--sidebar-bg);
+  background: rgba(26, 58, 42, 0.08);
+}
+
+.run-delta-blame {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.run-delta-blame svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.run-delta-blame strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.run-delta-icon--empty {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.run-delta-icon--unchanged {
+  background: var(--bg-subtle);
+  color: var(--status-passed);
+}
+
+.run-delta-title--empty {
+  color: var(--text-muted);
+}
+
+.run-delta-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.run-delta-chevron.open {
+  transform: rotate(90deg);
+}
+
+.run-delta-details {
+  border-top: 1px solid var(--border-light);
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideUp 0.2s ease;
+}
+
+.run-delta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.run-delta-list-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.run-delta-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 4px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.run-delta-list-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.run-delta-list-section {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
 /* ── Editable run heading ── */
 .run-heading-editable {
   cursor: pointer;
@@ -950,6 +1170,24 @@
     display: none;
   }
 
+  .run-delta-header {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .run-delta-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .run-delta-list-section {
+    display: none;
+  }
+
+  .run-delta-details {
+    padding: 10px 14px;
+  }
+
   .bulk-status-bar {
     max-width: calc(100% - 32px);
     flex-wrap: wrap;
@@ -1003,6 +1241,43 @@
 
   .run-select-all {
     padding: 4px 12px 4px 24px;
+  }
+
+  .run-delta-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .run-delta-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .run-delta-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .run-delta-title {
+    font-size: 12px;
+  }
+
+  .run-delta-meta {
+    font-size: 11px;
+  }
+
+  .run-delta-details {
+    padding: 8px 12px;
+  }
+
+  .run-delta-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .run-delta-list-section {
+    display: none;
   }
 
   .bulk-status-bar {

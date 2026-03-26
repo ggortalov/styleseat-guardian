@@ -72,6 +72,7 @@ backend/uploads/avatars/
 
 # Claude Code
 .claude/settings.local.json
+.mcp.json
 
 # Logs
 *.log
@@ -88,4 +89,6 @@ coverage/
 # Playwright
 playwright-report/
 e2e/test-results/
+frontend/test-results/
 e2e/auth-state/
+.last-run.json

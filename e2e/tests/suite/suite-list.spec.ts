@@ -4,44 +4,58 @@ import { ApiClient } from '../../helpers/api-client';
 test.describe('Suite List (Dashboard)', () => {
   let api: ApiClient;
   let projectId: number;
+  let suiteId: number;
+  let suiteName: string;
   const createdSuiteIds: number[] = [];
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
+
+    const project = await api.createProject(`E2E Suite List Project ${Date.now()}`);
+    projectId = project.id;
+
+    // Create a suite with a case so the card has stats
+    suiteName = `E2E Existing Suite ${Date.now()}`;
+    const suite = await api.createSuite(projectId, suiteName);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E SL Section ${Date.now()}`);
+    await api.createCase({
+      title: `E2E SL Case ${Date.now()}`,
+      section_id: section.id,
+      suite_id: suiteId,
+    });
   });
 
   test.afterAll(async () => {
     for (const id of createdSuiteIds) {
       await api.deleteSuite(id).catch(() => {});
     }
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test.beforeEach(async ({ page }) => {
-    // Navigate to the /suites route (TestSuitesPage / DashboardPage)
+    // Navigate to the global TestSuitesPage
     await page.goto('/suites');
     await page.waitForLoadState('networkidle');
   });
 
   test('displays suite grid with stats', async ({ page }) => {
-    const suiteCards = page.locator('.project-card');
-    await expect(suiteCards.first()).toBeVisible({ timeout: 15000 });
-    const count = await suiteCards.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    await expect(suiteCards.first().locator('.project-card-summary')).toBeVisible();
+    // Our created suite should appear in the global list
+    const ourCard = page.locator('.project-card', { hasText: suiteName });
+    await expect(ourCard).toBeVisible({ timeout: 15000 });
+    await expect(ourCard.locator('.project-card-summary')).toBeVisible();
   });
 
   test('creates new suite via modal', async ({ page }) => {
-    const suiteName = `E2E Suite ${Date.now()}`;
+    const newSuiteName = `E2E New Suite ${Date.now()}`;
 
     await page.getByRole('button', { name: '+ Add New Suite' }).click();
 
     const modal = page.locator('.modal-overlay');
     await expect(modal).toBeVisible();
 
-    await modal.locator('input[placeholder="Enter suite name"]').fill(suiteName);
+    await modal.locator('input[placeholder="Enter suite name"]').fill(newSuiteName);
     await modal.getByRole('button', { name: 'Create Suite' }).click();
 
     // Should navigate to the new suite page
@@ -52,9 +66,11 @@ test.describe('Suite List (Dashboard)', () => {
   });
 
   test('edits suite name via modal', async ({ page }) => {
-    const firstCard = page.locator('.project-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 15000 });
-    await firstCard.locator('.project-card-links button', { hasText: 'Edit' }).click();
+    const ourCard = page.locator('.project-card', { hasText: suiteName });
+    await expect(ourCard).toBeVisible({ timeout: 15000 });
+
+    // Click the Edit button on our specific suite card
+    await ourCard.locator('.project-card-links button', { hasText: 'Edit' }).click();
 
     const modal = page.locator('.modal-overlay');
     await expect(modal).toBeVisible();
@@ -70,13 +86,13 @@ test.describe('Suite List (Dashboard)', () => {
   });
 
   test('deletes suite with confirmation', async ({ page }) => {
-    const suiteName = `Delete Me ${Date.now()}`;
-    await api.createSuite(projectId, suiteName);
+    const deleteSuiteName = `Delete Me ${Date.now()}`;
+    await api.createSuite(projectId, deleteSuiteName);
 
     await page.reload();
     await page.waitForLoadState('networkidle');
 
-    const card = page.locator('.project-card', { hasText: suiteName });
+    const card = page.locator('.project-card', { hasText: deleteSuiteName });
     await expect(card).toBeVisible({ timeout: 15000 });
     await card.locator('.project-card-links button', { hasText: 'Delete' }).click();
 
@@ -91,9 +107,9 @@ test.describe('Suite List (Dashboard)', () => {
   });
 
   test('navigates to suite detail from card', async ({ page }) => {
-    const firstSuiteLink = page.locator('.project-card-name').first();
-    await expect(firstSuiteLink).toBeVisible({ timeout: 15000 });
-    await firstSuiteLink.click();
+    const ourCardLink = page.locator('.project-card', { hasText: suiteName }).locator('.project-card-name');
+    await expect(ourCardLink).toBeVisible({ timeout: 15000 });
+    await ourCardLink.click();
 
     await page.waitForURL(/\/projects\/\d+\/suites\/\d+/);
     await expect(page.locator('.page-heading')).toBeVisible();

@@ -369,7 +369,7 @@ export default function TestSuitePage() {
                   setSectionDescription(filterSection.description || '');
                   setShowSectionModal(true);
                 }}>Edit</button>
-                <button className="btn btn-danger" onClick={() => setDeleteSection(filterSection)}>Delete</button>
+                <button className="btn btn-danger" onClick={() => setDeleteSection(filterSection)}>DELETE</button>
                 <button className="btn btn-secondary" onClick={() => navigate(suitePath)}>
                   All Categories
                 </button>
@@ -417,7 +417,7 @@ export default function TestSuitePage() {
             <div className="page-toolbar">
               <h2 className="page-heading">{suite?.name}</h2>
               <div className="toolbar-actions">
-                <button className="btn btn-danger" onClick={() => setShowDeleteSuite(true)}>Delete Suite</button>
+                <button className="btn btn-danger" onClick={() => setShowDeleteSuite(true)}>DELETE SUITE</button>
                 <button className={`btn ${selectionMode ? 'btn-manage-active' : 'btn-secondary'}`} onClick={toggleSelectionMode}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
                   Manage
@@ -554,7 +554,7 @@ export default function TestSuitePage() {
           <span className="bulk-action-count">{selectedCases.size} test case{selectedCases.size !== 1 ? 's' : ''} selected</span>
           <div className="bulk-action-buttons">
             <button className="btn btn-secondary btn-sm" onClick={() => setSelectedCases(new Set())}>Clear</button>
-            <button className="btn btn-danger btn-sm" onClick={() => setShowBulkDelete(true)}>Delete Selected</button>
+            <button className="btn btn-danger btn-sm" onClick={() => setShowBulkDelete(true)}>DELETE SELECTED</button>
           </div>
         </div>
       )}

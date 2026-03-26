@@ -61,8 +61,8 @@ describe('soundService', () => {
   });
 
   describe('getSoundChoice / setSoundChoice', () => {
-    it('returns Droplet by default when localStorage is empty', () => {
-      expect(getSoundChoice()).toBe('Droplet');
+    it('returns Piano by default when localStorage is empty', () => {
+      expect(getSoundChoice()).toBe('Piano');
     });
 
     it('round-trips setSoundChoice/getSoundChoice', () => {

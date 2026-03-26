@@ -9,15 +9,26 @@ test.describe('Test Case Create Page', () => {
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
 
-    const suites = await api.getSuites(projectId);
-    const suiteWithSections = suites.find((s: any) => s.case_count > 0) || suites[0];
-    suiteId = suiteWithSections.id;
+    const project = await api.createProject(`E2E Case Create Project ${Date.now()}`);
+    projectId = project.id;
 
-    const sections = await api.getSections(suiteId);
-    sectionId = sections[0]?.id;
+    const suite = await api.createSuite(projectId, `E2E CC Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E CC Section ${Date.now()}`);
+    sectionId = section.id;
+
+    // Create a case so the suite has content
+    await api.createCase({
+      title: `E2E CC Existing Case ${Date.now()}`,
+      section_id: sectionId,
+      suite_id: suiteId,
+    });
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test.beforeEach(async ({ page }) => {

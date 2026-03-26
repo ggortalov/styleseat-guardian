@@ -659,3 +659,272 @@
     padding-left: 16px;
   }
 }
+
+/* ── Runs Tab: Filter Toolbar ── */
+.runs-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.runs-filter-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.runs-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.runs-filter-pill:hover {
+  border-color: var(--sidebar-bg);
+  color: var(--sidebar-bg);
+}
+
+.runs-filter-pill--active {
+  background: var(--sidebar-bg);
+  border-color: var(--sidebar-bg);
+  color: #fff;
+}
+
+.runs-filter-pill--active:hover {
+  background: var(--sidebar-hover);
+  border-color: var(--sidebar-hover);
+  color: #fff;
+}
+
+.runs-filter-pill-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.runs-filter-pill--active .runs-filter-pill-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Search input */
+.runs-search-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
+}
+
+.runs-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.runs-search-input {
+  width: 100%;
+  padding: 7px 32px 7px 32px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.runs-search-input:focus {
+  border-color: var(--sidebar-bg);
+}
+
+.runs-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.runs-search-clear:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+
+/* Active filter indicator */
+.runs-active-filter {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.runs-clear-filters {
+  background: none;
+  border: none;
+  color: var(--sidebar-bg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.runs-clear-filters:hover {
+  color: var(--sidebar-hover);
+}
+
+/* Checkbox column */
+.runs-checkbox-col {
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.runs-checkbox-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--sidebar-bg);
+}
+
+/* Selected row highlight */
+.runs-row--selected {
+  background: var(--status-passed-bg) !important;
+}
+
+/* Floating bulk action bar (mirrors TestSuitePage) */
+.bulk-action-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--sidebar-bg);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  will-change: transform;
+  animation: bulkBarIn 0.2s ease;
+}
+
+@keyframes bulkBarIn {
+  from { opacity: 0; bottom: 8px; }
+  to { opacity: 1; bottom: 24px; }
+}
+
+.bulk-action-count {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bulk-action-bar .btn-secondary {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
+.bulk-action-bar .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+.bulk-action-bar .btn-danger {
+  background: var(--status-failed);
+  border-color: var(--status-failed);
+  color: #fff;
+}
+
+.bulk-action-bar .btn-danger:hover {
+  background: #d32f2f;
+  border-color: #d32f2f;
+}
+
+/* ── Runs tab responsive: 1024px ── */
+@media (max-width: 1024px) {
+  .runs-filter-pill {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .runs-created-col {
+    display: none;
+  }
+
+  .bulk-action-bar {
+    max-width: calc(100% - 32px);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* ── Runs tab responsive: 768px ── */
+@media (max-width: 768px) {
+  .runs-filter-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .runs-search-wrapper {
+    max-width: none;
+  }
+}
+
+/* ── Runs tab responsive: 640px ── */
+@media (max-width: 640px) {
+  .runs-filter-pills {
+    gap: 4px;
+  }
+
+  .runs-filter-pill {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .runs-checkbox-col {
+    width: 32px;
+  }
+
+  .bulk-action-bar {
+    bottom: 16px;
+    padding: 10px 16px;
+    gap: 12px;
+    font-size: 13px;
+  }
+}

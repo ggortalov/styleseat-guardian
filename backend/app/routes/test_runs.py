@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -11,7 +12,7 @@ from sqlalchemy import func, case
 from sqlalchemy.orm import joinedload
 
 from app import db
-from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Project, User
+from app.models import TestRun, TestResult, ResultHistory, TestCase, Suite, Section, Project, User
 from app.audit import log_action
 from app.routes import check_project_ownership
 
@@ -22,14 +23,29 @@ _import_process = None
 _import_output_lines = []
 
 VALID_STATUSES = {"Passed", "Failed", "Blocked", "Retest", "Untested"}
+
+
+def _get_user_tz():
+    """Return the user's timezone from the X-Timezone header, falling back to UTC."""
+    tz_name = request.headers.get("X-Timezone")
+    if tz_name:
+        try:
+            return ZoneInfo(tz_name)
+        except (KeyError, Exception):
+            pass
+    return timezone.utc
+
+
 def _is_run_date_locked(run):
-    """Check if a run is locked — editable only on the same calendar day (UTC)."""
+    """Check if a run is locked — editable only on the same calendar day in the user's timezone."""
     run_dt = run.run_date or run.created_at
     if not run_dt:
         return False
     run_dt = run_dt if run_dt.tzinfo else run_dt.replace(tzinfo=timezone.utc)
-    today = datetime.now(timezone.utc).date()
-    return run_dt.date() < today
+    user_tz = _get_user_tz()
+    run_local = run_dt.astimezone(user_tz).date()
+    today_local = datetime.now(user_tz).date()
+    return run_local < today_local
 
 
 def is_result_locked(result):
@@ -220,6 +236,177 @@ def get_run(run_id):
     return jsonify(d), 200
 
 
+@runs_bp.route("/runs/<int:run_id>/delta", methods=["GET"])
+@jwt_required()
+def get_run_delta(run_id):
+    """Compare this run's test cases against the most recent prior run with the same suite(s)."""
+    run = TestRun.query.get_or_404(run_id)
+
+    effective_date = case(
+        (TestRun.run_date.isnot(None), TestRun.run_date),
+        else_=TestRun.created_at,
+    )
+    current_effective = run.run_date or run.created_at
+    current_results = TestResult.query.filter_by(run_id=run.id).all()
+
+    if run.suite_id:
+        # Suite-scoped run: match by suite_id
+        match_filter = TestRun.suite_id == run.suite_id
+    else:
+        # Combined run (no suite_id): find which suites this run's results belong to,
+        # then find the most recent prior run whose results share the same suite(s).
+        current_suite_ids = {
+            r.test_case.suite_id for r in current_results
+            if r.test_case and r.test_case.suite_id
+        }
+        if not current_suite_ids:
+            return jsonify({"has_previous": False}), 200
+
+        # Find run IDs (other than current) whose results reference the same suite(s)
+        candidate_run_ids = (
+            db.session.query(TestResult.run_id)
+            .join(TestCase, TestResult.case_id == TestCase.id)
+            .filter(
+                TestResult.run_id != run.id,
+                TestCase.suite_id.in_(current_suite_ids),
+            )
+            .distinct()
+            .all()
+        )
+        candidate_ids = [row[0] for row in candidate_run_ids]
+        if not candidate_ids:
+            return jsonify({"has_previous": False}), 200
+
+        match_filter = TestRun.id.in_(candidate_ids)
+
+    prev_run = (
+        TestRun.query
+        .filter(
+            match_filter,
+            TestRun.id != run.id,
+            case(
+                (TestRun.run_date.isnot(None), TestRun.run_date),
+                else_=TestRun.created_at,
+            ) < current_effective,
+        )
+        .order_by(effective_date.desc())
+        .first()
+    )
+
+    if not prev_run:
+        return jsonify({"has_previous": False}), 200
+    prev_results = TestResult.query.filter_by(run_id=prev_run.id).all()
+
+    current_case_ids = {r.case_id for r in current_results}
+    prev_case_ids = {r.case_id for r in prev_results}
+
+    added_ids = current_case_ids - prev_case_ids
+    removed_ids = prev_case_ids - current_case_ids
+
+    # Filter out rename pairs (added+removed with similar titles)
+    if added_ids and removed_ids:
+        added_cases = {tc.id: tc for tc in TestCase.query.filter(TestCase.id.in_(added_ids)).all()}
+        removed_cases = {tc.id: tc for tc in TestCase.query.filter(TestCase.id.in_(removed_ids)).all()}
+
+        def _tokenize(s):
+            return set(s.lower().split())
+
+        def _jaccard(a, b):
+            ta, tb = _tokenize(a), _tokenize(b)
+            inter = len(ta & tb)
+            union = len(ta | tb)
+            return inter / union if union else 0.0
+
+        matched_added = set()
+        matched_removed = set()
+        for aid, ac in added_cases.items():
+            best_score, best_rid = 0, None
+            for rid, rc in removed_cases.items():
+                if rid in matched_removed:
+                    continue
+                score = _jaccard(ac.title, rc.title)
+                if score > best_score:
+                    best_score, best_rid = score, rid
+            if best_score >= 0.6 and best_rid is not None:
+                matched_added.add(aid)
+                matched_removed.add(best_rid)
+
+        added_ids -= matched_added
+        removed_ids -= matched_removed
+
+    common_ids = current_case_ids & prev_case_ids
+
+    # Status changes for common cases
+    current_status = {r.case_id: r.status for r in current_results if r.case_id in common_ids}
+    prev_status = {r.case_id: r.status for r in prev_results if r.case_id in common_ids}
+
+    regression_ids = []
+    fix_ids = []
+    other_changes = 0
+    for cid in common_ids:
+        cs = current_status.get(cid)
+        ps = prev_status.get(cid)
+        if cs == ps:
+            continue
+        if ps == "Passed" and cs == "Failed":
+            regression_ids.append(cid)
+        elif ps == "Failed" and cs == "Passed":
+            fix_ids.append(cid)
+        else:
+            other_changes += 1
+
+    # Build lookup for case details (added + removed + regressions + fixes)
+    all_case_ids = added_ids | removed_ids | set(regression_ids) | set(fix_ids)
+    cases = {}
+    if all_case_ids:
+        for tc in TestCase.query.filter(TestCase.id.in_(all_case_ids)).all():
+            section_name = tc.section.name if tc.section else None
+            cases[tc.id] = {"case_id": tc.id, "title": tc.title, "section_name": section_name}
+
+    def _case_detail(cid):
+        return cases.get(cid, {"case_id": cid, "title": f"Case #{cid}", "section_name": None})
+
+    added = [_case_detail(cid) for cid in sorted(added_ids)]
+    removed = [_case_detail(cid) for cid in sorted(removed_ids)]
+    regressions = [_case_detail(cid) for cid in sorted(regression_ids)]
+    fixes = [_case_detail(cid) for cid in sorted(fix_ids)]
+
+    prev_date = prev_run.run_date or prev_run.created_at
+
+    # Derive GitHub repo URL from CIRCLECI_PROJECT_SLUG (e.g. "gh/styleseat/cypress" → "styleseat/cypress")
+    slug = os.environ.get('CIRCLECI_PROJECT_SLUG', '')
+    vcs_repo = '/'.join(slug.split('/')[1:]) if '/' in slug else None
+
+    return jsonify({
+        "has_previous": True,
+        "vcs_repo": vcs_repo,
+        "previous_run": {
+            "id": prev_run.id,
+            "name": prev_run.name,
+            "date": prev_date.isoformat() if prev_date else None,
+            "total": len(prev_results),
+            "triggered_by": prev_run.triggered_by,
+            "commit_sha": prev_run.commit_sha,
+        },
+        "current_run": {
+            "triggered_by": run.triggered_by,
+            "commit_sha": run.commit_sha,
+        },
+        "current_total": len(current_results),
+        "added": added,
+        "removed": removed,
+        "added_count": len(added),
+        "removed_count": len(removed),
+        "status_changes": {
+            "regressions": len(regressions),
+            "regression_details": regressions,
+            "fixes": len(fixes),
+            "fix_details": fixes,
+            "other_changes": other_changes,
+        },
+    }), 200
+
+
 @runs_bp.route("/runs/<int:run_id>", methods=["PUT"])
 @jwt_required()
 def update_run(run_id):
@@ -255,6 +442,33 @@ def delete_run(run_id):
     db.session.delete(run)
     db.session.commit()
     return jsonify({"message": "Test run deleted"}), 200
+
+
+@runs_bp.route("/runs/bulk-delete", methods=["POST"])
+@jwt_required()
+def bulk_delete_runs():
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"error": "No run IDs provided"}), 400
+    runs = TestRun.query.filter(TestRun.id.in_(ids)).all()
+    # Check ownership for all runs via their project
+    checked_projects = {}
+    for run in runs:
+        pid = run.project_id
+        if pid and pid not in checked_projects:
+            project = Project.query.get(pid)
+            if project:
+                denied = check_project_ownership(project)
+                if denied:
+                    return denied
+                checked_projects[pid] = True
+    deleted_ids = [r.id for r in runs]
+    for run in runs:
+        db.session.delete(run)
+    db.session.commit()
+    log_action("BULK_DELETE", "test_run", deleted_ids)
+    return jsonify({"message": f"{len(runs)} test run(s) deleted"}), 200
 
 
 @runs_bp.route("/runs/<int:run_id>/results", methods=["GET"])
@@ -575,5 +789,11 @@ def import_status():
     if not running:
         resp["exit_code"] = exit_code
         resp["success"] = exit_code == 0
+        # Parse the run ID from import output (e.g. "(ID: 42)" or "(ID: 42, 63 results)")
+        for line in reversed(_import_output_lines):
+            m = re.search(r'\(ID:\s*(\d+)', line)
+            if m:
+                resp["run_id"] = int(m.group(1))
+                break
 
     return jsonify(resp), 200
