@@ -11,13 +11,23 @@ test.describe('Test Execution Page', () => {
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
 
-    const suites = await api.getSuites(projectId);
-    const suiteWithCases = suites.find((s: any) => s.case_count > 2);
-    if (!suiteWithCases) return;
-    suiteId = suiteWithCases.id;
+    const project = await api.createProject(`E2E Execution Project ${Date.now()}`);
+    projectId = project.id;
+
+    const suite = await api.createSuite(projectId, `E2E Exec Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E Exec Section ${Date.now()}`);
+    // Create 3 cases so we can test position indicator
+    for (let i = 1; i <= 3; i++) {
+      await api.createCase({
+        title: `E2E Exec Case ${i} ${Date.now()}`,
+        section_id: section.id,
+        suite_id: suiteId,
+        steps: [{ action: `Step ${i}`, expected: `Result ${i}` }],
+      });
+    }
 
     const run = await api.createRun(projectId, `E2E Execution ${Date.now()}`, suiteId);
     runId = run.id;
@@ -30,14 +40,10 @@ test.describe('Test Execution Page', () => {
   });
 
   test.afterAll(async () => {
-    if (runId) {
-      await api.deleteRun(runId).catch(() => {});
-    }
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test('displays case details and steps', async ({ page }) => {
-    test.skip(!runId || !resultId, 'No run or result');
-
     await page.goto(`/runs/${runId}/execute/${resultId}`);
     await page.waitForLoadState('networkidle');
 
@@ -53,8 +59,6 @@ test.describe('Test Execution Page', () => {
   });
 
   test('changes status via dropdown', async ({ page }) => {
-    test.skip(!runId || !resultId, 'No run or result');
-
     await page.goto(`/runs/${runId}/execute/${resultId}`);
     await page.waitForLoadState('networkidle');
 
@@ -72,8 +76,6 @@ test.describe('Test Execution Page', () => {
   });
 
   test('shows history after status change', async ({ page }) => {
-    test.skip(!runId || !resultId, 'No run or result');
-
     // Set a status via API so there's history
     await api.updateResult(resultId, 'Failed', 'E2E test comment');
 
@@ -85,7 +87,7 @@ test.describe('Test Execution Page', () => {
   });
 
   test('shows position indicator', async ({ page }) => {
-    test.skip(!runId || resultIds.length < 2, 'Need at least 2 results');
+    test.skip(resultIds.length < 2, 'Need at least 2 results');
 
     await page.goto(`/runs/${runId}/execute/${resultIds[0]}`);
     await page.waitForLoadState('networkidle');
@@ -102,8 +104,6 @@ test.describe('Test Execution Page', () => {
   });
 
   test('back button returns to run detail', async ({ page }) => {
-    test.skip(!runId || !resultId, 'No run or result');
-
     // First navigate to the run detail so there's history to go back to
     await page.goto(`/runs/${runId}`);
     await page.waitForLoadState('networkidle');

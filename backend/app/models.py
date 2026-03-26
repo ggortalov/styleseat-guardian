@@ -188,6 +188,10 @@ class TestRun(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
     is_completed = db.Column(db.Boolean, default=False)
+    # CircleCI attribution fields
+    circleci_workflow_id = db.Column(db.String(100), nullable=True)
+    commit_sha = db.Column(db.String(40), nullable=True)
+    triggered_by = db.Column(db.String(100), nullable=True)  # CircleCI actor login
 
     suite = db.relationship("Suite", backref="test_runs_rel")
     results = db.relationship("TestResult", backref="test_run", cascade="all, delete-orphan", lazy=True)
@@ -204,6 +208,9 @@ class TestRun(db.Model):
             "created_at": _utc_iso(self.created_at),
             "completed_at": _utc_iso(self.completed_at),
             "is_completed": self.is_completed,
+            "circleci_workflow_id": self.circleci_workflow_id,
+            "commit_sha": self.commit_sha,
+            "triggered_by": self.triggered_by,
         }
 
 

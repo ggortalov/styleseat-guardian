@@ -541,3 +541,208 @@
     display: none;
   }
 }
+
+/* ============ Import Modal ============ */
+.import-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.import-modal-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Input + arrow button row */
+.import-modal-input-row,
+.import-modal-queue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-modal-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--bg-white);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+}
+
+.import-modal-input::placeholder {
+  color: var(--text-muted);
+}
+
+.import-modal-input:focus {
+  border-color: var(--sidebar-bg);
+  box-shadow: 0 0 0 3px rgba(26, 58, 42, 0.1);
+}
+
+.import-modal-submit {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--sidebar-bg);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition), opacity var(--transition);
+}
+
+.import-modal-submit:hover:not(:disabled) {
+  background: #24503a;
+  transform: translateX(2px);
+}
+
+.import-modal-submit:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.import-modal-submit:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Spinner inside submit button */
+.import-modal-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: importSpin 0.7s linear infinite;
+}
+
+@keyframes importSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error banner */
+.import-modal-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: var(--status-failed);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.import-modal-error svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Status banner (running / done / duplicate) ── */
+.import-modal-status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.import-modal-status-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.import-modal-status-icon--running {
+  background: rgba(26, 58, 42, 0.1);
+  color: var(--sidebar-bg);
+}
+
+.import-modal-status-icon--done {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--status-passed);
+}
+
+.import-modal-status-icon--duplicate {
+  background: rgba(255, 152, 0, 0.12);
+  color: var(--status-blocked);
+}
+
+.import-modal-status-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.import-modal-status-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.import-modal-status-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+/* Spinning ring for running state */
+.import-modal-ring {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid rgba(26, 58, 42, 0.15);
+  border-top-color: var(--sidebar-bg);
+  border-radius: 50%;
+  animation: importSpin 0.8s linear infinite;
+}
+
+/* Output log */
+.import-modal-output {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: #f8f9fa;
+  border: 1px solid var(--border-light);
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  line-height: 1.6;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+
+.import-modal-output--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+/* Footer actions */
+.import-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}

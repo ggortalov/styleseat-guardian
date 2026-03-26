@@ -160,6 +160,8 @@ export default function TestRunDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
   const nameInputRef = useRef(null);
+  const [delta, setDelta] = useState(null);
+  const [deltaExpanded, setDeltaExpanded] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -177,6 +179,13 @@ export default function TestRunDetailPage() {
   }, [runId, navigate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch delta comparison (non-blocking, failure-safe)
+  useEffect(() => {
+    let cancelled = false;
+    runService.getDelta(runId).then((d) => { if (!cancelled) setDelta(d); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [runId]);
 
   // Restore scroll position and highlight after content loads
   useLayoutEffect(() => {
@@ -339,7 +348,7 @@ export default function TestRunDetailPage() {
             <p className="page-description">{run?.name} &middot; {run?.is_locked ? 'Locked' : run?.is_completed ? 'Completed' : 'Active'}</p>
           </div>
           <div className="toolbar-actions">
-            <button className="btn btn-danger" onClick={() => setShowDeleteRun(true)}>Delete</button>
+            <button className="btn btn-danger" onClick={() => setShowDeleteRun(true)}>DELETE</button>
             <button className="btn btn-secondary" onClick={() => navigate(`/projects/${run.project_id}`)}>Back to Project</button>
           </div>
         </div>
@@ -377,6 +386,133 @@ export default function TestRunDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* ── Delta reporter ── */}
+        {delta && !delta.has_previous && (
+          <div className="run-delta-section">
+            <div className="run-delta-card">
+              <div className="run-delta-header">
+                <span className="run-delta-icon run-delta-icon--empty">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                </span>
+                <span className="run-delta-body">
+                  <span className="run-delta-title run-delta-title--empty">First run</span>
+                  <span className="run-delta-meta">Nothing to compare yet. Changes will show up after the next import...</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        {delta?.has_previous && (() => {
+          const hasDetails = delta.added_count > 0 || delta.removed_count > 0;
+          const prevTotal = delta.previous_run.total;
+          const curTotal = delta.current_total;
+          const diff = curTotal - prevTotal;
+          const diffStr = diff > 0 ? `+${diff}` : diff === 0 ? '0' : `${diff}`;
+          const noChanges = !hasDetails && diff === 0;
+          return (
+            <div className="run-delta-section">
+              <div className="run-delta-card">
+                {noChanges ? (
+                  <div className="run-delta-header">
+                    <span className="run-delta-icon run-delta-icon--unchanged">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </span>
+                    <span className="run-delta-body">
+                      <span className="run-delta-title">No changes since{' '}
+                        <a
+                          className="run-delta-link"
+                          href={`/runs/${delta.previous_run.id}`}
+                          onClick={(e) => { e.preventDefault(); navigate(`/runs/${delta.previous_run.id}`); }}
+                        >
+                          {delta.previous_run.name}
+                        </a>
+                      </span>
+                      <span className="run-delta-meta">
+                        {curTotal} tests, identical to previous run
+                        {delta.current_run?.triggered_by && (
+                          <>{' '}&middot; by <span className="run-delta-attribution">{delta.current_run.triggered_by}</span></>
+                        )}
+                      </span>
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      className={`run-delta-header ${hasDetails ? 'run-delta-header--clickable' : ''}`}
+                      onClick={() => hasDetails && setDeltaExpanded(!deltaExpanded)}
+                    >
+                      <span className="run-delta-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="23 4 23 10 17 10" />
+                          <polyline points="1 20 1 14 7 14" />
+                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                        </svg>
+                      </span>
+                      <span className="run-delta-body">
+                        <span className="run-delta-title">
+                          Compared to{' '}
+                          <a
+                            className="run-delta-link"
+                            href={`/runs/${delta.previous_run.id}`}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); navigate(`/runs/${delta.previous_run.id}`); }}
+                          >
+                            {delta.previous_run.name}
+                          </a>
+                        </span>
+                        <span className="run-delta-meta">
+                          {curTotal} tests (was {prevTotal}, {diffStr} net)
+                          {delta.added_count > 0 && <>{' '}<span className="run-delta-added">+{delta.added_count} new</span></>}
+                          {delta.removed_count > 0 && <>{' '}<span className="run-delta-removed">-{delta.removed_count} removed</span></>}
+                          {delta.current_run?.triggered_by && (
+                            <>{' '}&middot; by <span className="run-delta-attribution">{delta.current_run.triggered_by}</span></>
+                          )}
+                        </span>
+                      </span>
+                      {hasDetails && (
+                        <svg className={`run-delta-chevron ${deltaExpanded ? 'open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      )}
+                    </div>
+                    {deltaExpanded && hasDetails && (
+                      <div className="run-delta-details">
+                        {delta.added.length > 0 && (
+                          <div className="run-delta-list">
+                            <span className="run-delta-list-label run-delta-added">+ Added ({delta.added.length})</span>
+                            {delta.added.map((c) => (
+                              <div key={c.case_id} className="run-delta-list-item">
+                                <span className="run-delta-list-title">{c.title}</span>
+                                {c.section_name && <span className="run-delta-list-section">{c.section_name}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {delta.removed.length > 0 && (
+                          <div className="run-delta-list">
+                            <span className="run-delta-list-label run-delta-removed">- Removed ({delta.removed.length})</span>
+                            {delta.removed.map((c) => (
+                              <div key={c.case_id} className="run-delta-list-item">
+                                <span className="run-delta-list-title">{c.title}</span>
+                                {c.section_name && <span className="run-delta-list-section">{c.section_name}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Results grouped by section ── */}
         <div className="results-header">

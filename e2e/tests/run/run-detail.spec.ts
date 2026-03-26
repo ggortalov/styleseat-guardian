@@ -10,13 +10,19 @@ test.describe('Test Run Detail Page', () => {
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
 
-    const suites = await api.getSuites(projectId);
-    const suiteWithCases = suites.find((s: any) => s.case_count > 0);
-    if (!suiteWithCases) return;
-    suiteId = suiteWithCases.id;
+    const project = await api.createProject(`E2E Run Detail Project ${Date.now()}`);
+    projectId = project.id;
+
+    const suite = await api.createSuite(projectId, `E2E RD Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E RD Section ${Date.now()}`);
+    await api.createCase({
+      title: `E2E RD Case ${Date.now()}`,
+      section_id: section.id,
+      suite_id: suiteId,
+    });
 
     const run = await api.createRun(projectId, `E2E Run ${Date.now()}`, suiteId);
     runId = run.id;
@@ -28,14 +34,10 @@ test.describe('Test Run Detail Page', () => {
   });
 
   test.afterAll(async () => {
-    if (runId) {
-      await api.deleteRun(runId).catch(() => {});
-    }
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test('displays run stats and results', async ({ page }) => {
-    test.skip(!runId, 'No run created');
-
     await page.goto(`/runs/${runId}`);
     await page.waitForLoadState('networkidle');
 
@@ -49,8 +51,6 @@ test.describe('Test Run Detail Page', () => {
   });
 
   test('filters results by status', async ({ page }) => {
-    test.skip(!runId, 'No run created');
-
     await page.goto(`/runs/${runId}`);
     await page.waitForLoadState('networkidle');
 
@@ -70,8 +70,6 @@ test.describe('Test Run Detail Page', () => {
   });
 
   test('changes result status via dropdown', async ({ page }) => {
-    test.skip(!runId || !resultId, 'No run or result');
-
     await page.goto(`/runs/${runId}`);
     await page.waitForLoadState('networkidle');
 
@@ -96,8 +94,6 @@ test.describe('Test Run Detail Page', () => {
   });
 
   test('bulk select and update status', async ({ page }) => {
-    test.skip(!runId, 'No run created');
-
     await page.goto(`/runs/${runId}`);
     await page.waitForLoadState('networkidle');
 
@@ -122,8 +118,6 @@ test.describe('Test Run Detail Page', () => {
   });
 
   test('renames run inline', async ({ page }) => {
-    test.skip(!runId, 'No run created');
-
     await page.goto(`/runs/${runId}`);
     await page.waitForLoadState('networkidle');
 

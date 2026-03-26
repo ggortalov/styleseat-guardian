@@ -53,7 +53,7 @@ export default function TestCaseDetailPage() {
               {editPath && (
                 <button className="btn btn-secondary" onClick={() => navigate(editPath)}>Edit</button>
               )}
-              <button className="btn btn-danger" onClick={() => setShowDelete(true)}>Delete</button>
+              <button className="btn btn-danger" onClick={() => setShowDelete(true)}>DELETE</button>
             </div>
           </div>
 

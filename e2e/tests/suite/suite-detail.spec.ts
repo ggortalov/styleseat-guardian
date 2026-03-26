@@ -6,20 +6,30 @@ test.describe('Suite Detail Page', () => {
   let projectId: number;
   let suiteId: number;
   let sectionId: number;
+  let caseId: number;
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
 
-    const suites = await api.getSuites(projectId);
-    const suiteWithCases = suites.find((s: any) => s.case_count > 0) || suites[0];
-    suiteId = suiteWithCases.id;
+    const project = await api.createProject(`E2E Suite Detail Project ${Date.now()}`);
+    projectId = project.id;
 
-    const sections = await api.getSections(suiteId);
-    if (sections.length > 0) {
-      sectionId = sections[0].id;
-    }
+    const suite = await api.createSuite(projectId, `E2E Suite Detail ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E SD Section ${Date.now()}`);
+    sectionId = section.id;
+
+    const testCase = await api.createCase({
+      title: `E2E SD Case ${Date.now()}`,
+      section_id: sectionId,
+      suite_id: suiteId,
+    });
+    caseId = testCase.id;
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test.beforeEach(async ({ page }) => {
@@ -31,7 +41,7 @@ test.describe('Suite Detail Page', () => {
     const categoryGroups = page.locator('.category-group');
     await expect(categoryGroups.first()).toBeVisible({ timeout: 15000 });
     const count = await categoryGroups.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    expect(count).toBe(1); // We created exactly 1 section
   });
 
   test('collapses and expands sections', async ({ page }) => {
@@ -61,7 +71,7 @@ test.describe('Suite Detail Page', () => {
     // Wait for modal to close
     await expect(modal).not.toBeVisible({ timeout: 5000 });
 
-    // New category should appear in the tree (may need to scroll)
+    // New category should appear in the tree
     const newCategory = page.locator('.category-header-name', { hasText: categoryName });
     await expect(newCategory).toBeVisible({ timeout: 15000 });
 
@@ -84,11 +94,9 @@ test.describe('Suite Detail Page', () => {
     }
 
     const firstCase = page.locator('.case-row-title').first();
-    const isVisible = await firstCase.isVisible().catch(() => false);
-    if (isVisible) {
-      await firstCase.click();
-      await page.waitForURL(/\/cases\/\d+/);
-    }
+    await expect(firstCase).toBeVisible({ timeout: 5000 });
+    await firstCase.click();
+    await page.waitForURL(/\/cases\/\d+/);
   });
 
   test('navigates to new case form', async ({ page }) => {
@@ -114,8 +122,6 @@ test.describe('Suite Detail Page', () => {
   });
 
   test('bulk delete selected cases', async ({ page }) => {
-    if (!sectionId) return;
-
     const caseName = `E2E Delete Case ${Date.now()}`;
     const newCase = await api.createCase({
       title: caseName,

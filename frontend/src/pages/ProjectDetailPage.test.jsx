@@ -215,7 +215,7 @@ describe('ProjectDetailPage', () => {
       renderPage();
       await waitForPageLoad();
       await user.click(screen.getByText('Test Runs (2)'));
-      expect(screen.getByText('Active')).toBeInTheDocument();
+      expect(document.querySelector('.badge-active')).toBeInTheDocument();
     });
 
     it('shows pass rate in mini-bar label', async () => {
