@@ -130,6 +130,14 @@ export class ApiClient {
     return this.request('DELETE', `/runs/${id}`);
   }
 
+  async bulkDeleteRuns(ids: number[]) {
+    return this.request('POST', '/runs/bulk-delete', { ids });
+  }
+
+  async completeRun(id: number) {
+    return this.request('PUT', `/runs/${id}`, { is_completed: true });
+  }
+
   // Import
   async importCircleCI(workflowUrl: string) {
     return this.request('POST', '/runs/import-circleci', { workflow_url: workflowUrl });

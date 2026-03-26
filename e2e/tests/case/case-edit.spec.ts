@@ -11,14 +11,15 @@ test.describe('Test Case Edit Page', () => {
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
 
-    const suites = await api.getSuites(projectId);
-    suiteId = suites.find((s: any) => s.case_count > 0)?.id || suites[0].id;
+    const project = await api.createProject(`E2E Case Edit Project ${Date.now()}`);
+    projectId = project.id;
 
-    const sections = await api.getSections(suiteId);
-    sectionId = sections[0]?.id;
+    const suite = await api.createSuite(projectId, `E2E CE Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E CE Section ${Date.now()}`);
+    sectionId = section.id;
 
     // Create a dedicated case for edit tests
     caseName = `E2E Edit Case ${Date.now()}`;
@@ -36,9 +37,7 @@ test.describe('Test Case Edit Page', () => {
   });
 
   test.afterAll(async () => {
-    if (caseId) {
-      await api.deleteCase(caseId).catch(() => {});
-    }
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test('loads existing data into form', async ({ page }) => {

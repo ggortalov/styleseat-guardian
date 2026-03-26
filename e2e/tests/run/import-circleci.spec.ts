@@ -21,8 +21,10 @@ test.describe('CircleCI Import — DR→PROD mapping', () => {
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
+
+    // Create a dedicated project for the import test
+    const project = await api.createProject(`E2E Import Project ${Date.now()}`);
+    projectId = project.id;
 
     // Remove any previous import of this workflow so the test is idempotent
     const runs = await api.getRuns(projectId);
@@ -38,6 +40,7 @@ test.describe('CircleCI Import — DR→PROD mapping', () => {
     if (createdRunId) {
       await api.deleteRun(createdRunId).catch(() => {});
     }
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test('imports dr_mobile workflow as PROD with results', async ({ page }) => {
@@ -61,11 +64,17 @@ test.describe('CircleCI Import — DR→PROD mapping', () => {
     expect(status.output).not.toMatch(/Suite: SMOKE/);
     expect(status.output).not.toMatch(/Suite: DR\b/);
 
-    // Find the newly created run
-    const runs = await api.getRuns(projectId);
-    const prodRun = runs.find(
-      (r: any) => r.description?.includes(WORKFLOW_ID_PREFIX) && r.name.includes('PROD')
-    );
+    // Find the newly created run (import creates runs in the main Cypress project, not our E2E project)
+    // We need to search across all projects for the imported run
+    const projects = await api.getProjects();
+    let prodRun: any = null;
+    for (const proj of projects) {
+      const runs = await api.getRuns(proj.id);
+      prodRun = runs.find(
+        (r: any) => r.description?.includes(WORKFLOW_ID_PREFIX) && r.name.includes('PROD')
+      );
+      if (prodRun) break;
+    }
     expect(prodRun).toBeTruthy();
     createdRunId = prodRun.id;
 

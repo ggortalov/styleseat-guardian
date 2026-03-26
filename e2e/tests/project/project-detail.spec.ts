@@ -1,9 +1,39 @@
 import { test, expect } from '@playwright/test';
+import { ApiClient } from '../../helpers/api-client';
 
 test.describe('Project Detail Page', () => {
+  let api: ApiClient;
+  let projectId: number;
+  let suiteId: number;
+  let runId: number;
+
+  test.beforeAll(async () => {
+    api = await ApiClient.login();
+
+    const project = await api.createProject(`E2E Project Detail ${Date.now()}`);
+    projectId = project.id;
+
+    const suite = await api.createSuite(projectId, `E2E PD Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E PD Section ${Date.now()}`);
+    await api.createCase({
+      title: `E2E PD Case ${Date.now()}`,
+      section_id: section.id,
+      suite_id: suiteId,
+    });
+
+    const run = await api.createRun(projectId, `E2E PD Run ${Date.now()}`, suiteId);
+    runId = run.id;
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
+  });
+
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForURL(/\/projects\/\d+/, { timeout: 15000 });
+    await page.goto(`/projects/${projectId}`);
+    await page.waitForLoadState('networkidle');
   });
 
   test('displays project name in header', async ({ page }) => {
@@ -36,20 +66,17 @@ test.describe('Project Detail Page', () => {
   test('shows runs table in Runs tab', async ({ page }) => {
     await page.locator('.tab', { hasText: 'Test Runs' }).click();
 
-    // Either show runs table or "no runs" message
+    // We created a run, so the table should appear
     const table = page.locator('.data-table');
-    const empty = page.locator('.empty-message');
-    await expect(table.or(empty)).toBeVisible({ timeout: 10000 });
+    await expect(table).toBeVisible({ timeout: 10000 });
   });
 
   test('navigates to run detail from run row', async ({ page }) => {
     await page.locator('.tab', { hasText: 'Test Runs' }).click();
 
     const firstRow = page.locator('.data-table tbody tr').first();
-    const isVisible = await firstRow.isVisible({ timeout: 5000 }).catch(() => false);
-    if (isVisible) {
-      await firstRow.click();
-      await page.waitForURL(/\/runs\/\d+/);
-    }
+    await expect(firstRow).toBeVisible({ timeout: 10000 });
+    await firstRow.click();
+    await page.waitForURL(/\/runs\/\d+/);
   });
 });

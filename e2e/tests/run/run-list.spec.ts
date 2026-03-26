@@ -4,64 +4,63 @@ import { ApiClient } from '../../helpers/api-client';
 test.describe('Test Runs Page', () => {
   let api: ApiClient;
   let projectId: number;
+  let suiteId: number;
+  let runId: number;
 
   test.beforeAll(async () => {
     api = await ApiClient.login();
-    const projects = await api.getProjects();
-    projectId = projects[0].id;
+
+    const project = await api.createProject(`E2E Run List Project ${Date.now()}`);
+    projectId = project.id;
+
+    const suite = await api.createSuite(projectId, `E2E RL Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E RL Section ${Date.now()}`);
+    await api.createCase({
+      title: `E2E RL Case ${Date.now()}`,
+      section_id: section.id,
+      suite_id: suiteId,
+    });
+
+    const run = await api.createRun(projectId, `E2E RL Run ${Date.now()}`, suiteId);
+    runId = run.id;
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
   });
 
   test('displays run sections', async ({ page }) => {
-    await page.goto('/runs');
+    await page.goto(`/projects/${projectId}?tab=runs`);
     await page.waitForLoadState('networkidle');
 
-    // Page should show "Test Runs" heading
-    await expect(page.locator('.page-heading')).toContainText('Test Runs', { timeout: 15000 });
+    // Should show the runs table with our created run
+    const table = page.locator('.data-table');
+    await expect(table).toBeVisible({ timeout: 15000 });
 
-    // Should show either Open Runs or Completed section
-    const openRuns = page.getByText('Open Runs');
-    const completed = page.getByText('Completed');
-    await expect(openRuns.or(completed).first()).toBeVisible({ timeout: 10000 });
+    const rows = page.locator('.data-table tbody tr');
+    const count = await rows.count();
+    expect(count).toBe(1); // We created exactly 1 run
   });
 
-  test('shows pass rate on run cards', async ({ page }) => {
-    await page.goto('/runs');
+  test('shows run data in table row', async ({ page }) => {
+    await page.goto(`/projects/${projectId}?tab=runs`);
     await page.waitForLoadState('networkidle');
 
-    // Run cards (compact or full) should show pass rate
-    const runCards = page.locator('.run-card-v2, .run-card-v2--compact');
-    const hasCards = await runCards.first().isVisible({ timeout: 5000 }).catch(() => false);
-    if (hasCards) {
-      expect(hasCards).toBeTruthy();
-    }
+    // Run row should show the run name
+    const runRow = page.locator('.data-table tbody tr').first();
+    await expect(runRow).toBeVisible({ timeout: 10000 });
+    await expect(runRow).toContainText('E2E RL Run');
   });
 
-  test('navigates to run detail from card', async ({ page }) => {
-    await page.goto('/runs');
+  test('navigates to run detail from row', async ({ page }) => {
+    await page.goto(`/projects/${projectId}?tab=runs`);
     await page.waitForLoadState('networkidle');
 
-    const firstRunLink = page.locator('.run-card-v2-name').first();
-    const isVisible = await firstRunLink.isVisible({ timeout: 5000 }).catch(() => false);
-    if (isVisible) {
-      await firstRunLink.click();
-      await page.waitForURL(/\/runs\/\d+/);
-    }
-  });
-
-  test('opens import modal (UI only)', async ({ page }) => {
-    await page.goto('/runs');
-    await page.waitForLoadState('networkidle');
-
-    // The button says "Import from CircleCI"
-    const importBtn = page.getByRole('button', { name: /import from circleci/i });
-    await expect(importBtn).toBeVisible({ timeout: 15000 });
-    await importBtn.click();
-
-    const modal = page.locator('.modal-overlay');
-    await expect(modal).toBeVisible();
-
-    // Close the modal
-    await modal.getByRole('button', { name: /cancel/i }).click();
-    await expect(modal).not.toBeVisible();
+    const firstRow = page.locator('.data-table tbody tr').first();
+    await expect(firstRow).toBeVisible({ timeout: 10000 });
+    await firstRow.click();
+    await page.waitForURL(/\/runs\/\d+/);
   });
 });

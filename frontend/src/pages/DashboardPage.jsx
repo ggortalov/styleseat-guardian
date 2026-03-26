@@ -106,7 +106,7 @@ export default function DashboardPage() {
                       <span className="project-card-separator">|</span>
                       <button className="link-btn" onClick={() => { setEditSuite(s); setEditName(s.name); }}>Edit</button>
                       <span className="project-card-separator">|</span>
-                      <button className="link-btn danger" onClick={() => setDeleteSuite(s)}>Delete</button>
+                      <button className="link-btn danger" onClick={() => setDeleteSuite(s)}>DELETE</button>
                     </div>
                     <div className="project-card-summary">
                       {s.case_count} test case{s.case_count !== 1 ? 's' : ''} &middot; {s.run_count} test run{s.run_count !== 1 ? 's' : ''}.

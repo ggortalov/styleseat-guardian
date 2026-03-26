@@ -1,9 +1,35 @@
 import { test, expect } from '@playwright/test';
+import { ApiClient } from '../../helpers/api-client';
 
 test.describe('Sidebar Navigation', () => {
+  let api: ApiClient;
+  let projectId: number;
+  let suiteId: number;
+
+  test.beforeAll(async () => {
+    api = await ApiClient.login();
+
+    const project = await api.createProject(`E2E Sidebar Project ${Date.now()}`);
+    projectId = project.id;
+
+    const suite = await api.createSuite(projectId, `E2E Sidebar Suite ${Date.now()}`);
+    suiteId = suite.id;
+
+    const section = await api.createSection(suiteId, `E2E Sidebar Section ${Date.now()}`);
+    await api.createCase({
+      title: `E2E Sidebar Case ${Date.now()}`,
+      section_id: section.id,
+      suite_id: suiteId,
+    });
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await api.deleteProject(projectId).catch(() => {});
+  });
+
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForURL(/\/projects\/\d+/, { timeout: 15000 });
+    await page.goto(`/projects/${projectId}`);
+    await page.waitForLoadState('networkidle');
   });
 
   test('displays brand logo and wordmark', async ({ page }) => {
@@ -78,7 +104,7 @@ test.describe('Sidebar Navigation', () => {
       await page.waitForTimeout(300);
     }
 
-    // Click Overview link
+    // Click Overview link — navigates to a project page
     const overviewLink = page.locator('.sidebar-link', { hasText: /overview/i });
     await expect(overviewLink).toBeVisible();
     await overviewLink.click();

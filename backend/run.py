@@ -108,6 +108,14 @@ with app.app_context():
         conn.execute("PRAGMA foreign_keys=ON")
         conn.commit()
         print("Migration complete.")
+    # Add CircleCI attribution columns to test_runs if missing
+    run_col_names = [row[1] for row in conn.execute("PRAGMA table_info(test_runs)").fetchall()]
+    if "circleci_workflow_id" not in run_col_names:
+        conn.execute("ALTER TABLE test_runs ADD COLUMN circleci_workflow_id VARCHAR(100)")
+        conn.execute("ALTER TABLE test_runs ADD COLUMN commit_sha VARCHAR(40)")
+        conn.execute("ALTER TABLE test_runs ADD COLUMN triggered_by VARCHAR(100)")
+        conn.commit()
+        print("Added CircleCI attribution columns to test_runs.")
     conn.close()
 
 if __name__ == "__main__":
