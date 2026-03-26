@@ -8,6 +8,7 @@ import suiteService from '../services/suiteService';
 import sectionService from '../services/sectionService';
 import caseService from '../services/caseService';
 import projectService from '../services/projectService';
+import runService from '../services/runService';
 import { playConfirmation } from '../services/soundService';
 import './TestSuitePage.css';
 
@@ -151,6 +152,9 @@ export default function TestSuitePage() {
   // Delete suite
   const [showDeleteSuite, setShowDeleteSuite] = useState(false);
 
+  // Manual run
+  const [creatingRun, setCreatingRun] = useState(false);
+
   // Bulk selection
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedCases, setSelectedCases] = useState(new Set());
@@ -181,6 +185,22 @@ export default function TestSuitePage() {
     await suiteService.delete(suiteId);
     if (window.__refreshSidebarProjects) window.__refreshSidebarProjects();
     navigate(`/projects/${projectId}`);
+  };
+
+  const handleCreateRun = async () => {
+    if (creatingRun) return;
+    setCreatingRun(true);
+    try {
+      const date = new Date().toLocaleDateString();
+      const run = await runService.create(projectId, {
+        name: `${suite.name} - Manual Run ${date}`,
+        suite_id: parseInt(suiteId),
+      });
+      window.__refreshSidebarRuns?.();
+      navigate(`/runs/${run.id}`);
+    } catch {
+      setCreatingRun(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, [projectId, suiteId]);
@@ -359,6 +379,12 @@ export default function TestSuitePage() {
                 {filterSection.description && <p className="page-description">{filterSection.description}</p>}
               </div>
               <div className="toolbar-actions">
+                {!suite?.cypress_path && hasCases && (
+                  <button className="btn btn-primary" onClick={handleCreateRun} disabled={creatingRun}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                    {creatingRun ? 'Creating...' : 'Start Manual Run'}
+                  </button>
+                )}
                 <button className={`btn ${selectionMode ? 'btn-manage-active' : 'btn-secondary'}`} onClick={toggleSelectionMode}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
                   Manage
@@ -417,6 +443,12 @@ export default function TestSuitePage() {
             <div className="page-toolbar">
               <h2 className="page-heading">{suite?.name}</h2>
               <div className="toolbar-actions">
+                {!suite?.cypress_path && hasCases && (
+                  <button className="btn btn-primary" onClick={handleCreateRun} disabled={creatingRun}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                    {creatingRun ? 'Creating...' : 'Start Manual Run'}
+                  </button>
+                )}
                 <button className="btn btn-danger" onClick={() => setShowDeleteSuite(true)}>DELETE SUITE</button>
                 <button className={`btn ${selectionMode ? 'btn-manage-active' : 'btn-secondary'}`} onClick={toggleSelectionMode}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>

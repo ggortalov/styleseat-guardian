@@ -109,6 +109,21 @@ function groupBySection(results) {
   return groups;
 }
 
+/* ── Group results by parent section (e.g. Android/iOS) — flat list per device ── */
+function groupByParentSection(results) {
+  const groups = [];
+  const map = {};
+  for (const r of results) {
+    const parentKey = r.parent_section_name || r.section_name || 'Uncategorized';
+    if (!map[parentKey]) {
+      map[parentKey] = { name: parentKey, results: [] };
+      groups.push(map[parentKey]);
+    }
+    map[parentKey].results.push(r);
+  }
+  return groups;
+}
+
 /* ── Group results by suite, then by section (for combined runs) ── */
 function groupBySuiteThenSection(results) {
   const suiteGroups = [];
@@ -271,8 +286,11 @@ export default function TestRunDetailPage() {
   const stats = computeStats(results);
   const filtered = filter === 'All' ? results : results.filter((r) => r.status === filter);
   const isCombinedRun = run?.suite_name === 'All Suites' || !run?.suite_id;
+  const isManualRun = !!(run?.suite_id && !run?.cypress_path);
+  const hasParentSections = isManualRun && filtered.some((r) => r.parent_section_name);
   const sections = useMemo(() => groupBySection(filtered), [filtered]);
   const suiteGroups = useMemo(() => isCombinedRun ? groupBySuiteThenSection(filtered) : null, [filtered, isCombinedRun]);
+  const parentGroups = useMemo(() => hasParentSections ? groupByParentSection(filtered) : null, [filtered, hasParentSections]);
   const [collapsedSuites, setCollapsedSuites] = useState({});
   const toggleSuite = (name) => setCollapsedSuites((prev) => ({ ...prev, [name]: !prev[name] }));
 
@@ -526,9 +544,61 @@ export default function TestRunDetailPage() {
           </h3>
         </div>
 
-        {(isCombinedRun ? (suiteGroups && suiteGroups.length > 0) : sections.length > 0) ? (
+        {(hasParentSections ? (parentGroups && parentGroups.length > 0) : isCombinedRun ? (suiteGroups && suiteGroups.length > 0) : sections.length > 0) ? (
           <div className="run-section-tree">
-            {isCombinedRun ? (
+            {hasParentSections ? (
+              /* Grouped by device (Android/iOS) — flat case list per device */
+              parentGroups.map((pg) => (
+                <div key={pg.name} className="run-section-group">
+                  <div className="run-section-header" onClick={() => toggleSection(pg.name)}>
+                    <svg className={`run-section-chevron ${collapsed[pg.name] ? '' : 'open'}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    <span className="run-section-name">{pg.name}</span>
+                    <span className="run-section-count">{pg.results.length}</span>
+                  </div>
+                  {!collapsed[pg.name] && (
+                    <div className="run-section-cases">
+                      {!run?.is_locked && pg.results.length > 1 && (
+                        <div className="run-select-all" onClick={() => toggleSelectAll(pg.results.map((r) => r.id))}>
+                          <input type="checkbox" checked={pg.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
+                          <span className="run-select-all-label">Select All</span>
+                        </div>
+                      )}
+                      {pg.results.map((r) => (
+                        <div
+                          key={r.id}
+                          id={`result-${r.id}`}
+                          className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
+                          onClick={() => {
+                            sessionStorage.setItem('runPageScroll', window.scrollY.toString());
+                            navigate(`/runs/${runId}/execute/${r.id}`);
+                          }}
+                        >
+                          {!run?.is_locked && (
+                            <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
+                          )}
+                          <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
+                          <span className="run-case-tested-by">
+                            <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>{r.tested_by_name || 'Automation'}</span>
+                          </span>
+                          <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
+                            <StatusDropdown status={r.status} onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)} locked={r.is_locked} />
+                          </span>
+                          <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test ID, file, and title">
+                            {copiedRowId === r.id ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : isCombinedRun ? (
               /* Two-level: Suite > Section > Results */
               suiteGroups.map((sg) => (
                 <div key={sg.name} className="run-suite-group">
