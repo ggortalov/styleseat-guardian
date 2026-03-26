@@ -212,6 +212,7 @@ def get_run(run_id):
     run = TestRun.query.get_or_404(run_id)
     d = run.to_dict()
     d["suite_name"] = run.suite.name if run.suite else "All Suites"
+    d["cypress_path"] = run.suite.cypress_path if run.suite else None
     project = Project.query.get(run.project_id) if run.project_id else None
     d["project_name"] = project.name if project else None
 
@@ -490,6 +491,12 @@ def list_results(run_id):
     if suite_ids:
         suites = Suite.query.filter(Suite.id.in_(suite_ids)).all()
         suite_map = {s.id: s.name for s in suites}
+    # Batch-fetch parent section names for hierarchical grouping
+    parent_ids = {r.test_case.section.parent_id for r in results if r.test_case and r.test_case.section and r.test_case.section.parent_id}
+    parent_section_map = {}
+    if parent_ids:
+        parent_sections = Section.query.filter(Section.id.in_(parent_ids)).all()
+        parent_section_map = {s.id: s.name for s in parent_sections}
     out = []
     for r in results:
         d = r.to_dict()
@@ -517,6 +524,11 @@ def list_results(run_id):
             d["describe_title"] = describe_title
             # Group by file name when available, otherwise by section name
             d["section_name"] = source_file or (r.test_case.section.name if r.test_case.section else "Uncategorized")
+            # Include parent section name for hierarchical grouping (e.g., Android > Client tests)
+            if r.test_case.section and r.test_case.section.parent_id:
+                d["parent_section_name"] = parent_section_map.get(r.test_case.section.parent_id)
+            else:
+                d["parent_section_name"] = None
         else:
             # Test case was deleted — preserve the result with fallback values
             d["case_title"] = f"[Deleted case #{r.case_id}]" if r.case_id else "[Deleted case]"
@@ -526,6 +538,7 @@ def list_results(run_id):
             d["source_path"] = None
             d["describe_title"] = None
             d["section_name"] = "Deleted"
+            d["parent_section_name"] = None
         out.append(d)
     return jsonify(out), 200
 
