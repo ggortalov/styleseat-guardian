@@ -7,6 +7,7 @@
     "demo": "bash scripts/start-demo.sh",
     "sync": "cd backend && source venv/bin/activate && python sync_cypress.py",
     "import": "cd backend && source venv/bin/activate && python import_circleci.py",
+    "save": "cd backend && source venv/bin/activate && python backup_db.py demo_data.json && cp demo_data.json seed_data.json && echo 'Saved to demo_data.json and seed_data.json'",
     "e2e": "cd e2e && npx playwright test",
     "e2e:ui": "cd e2e && npx playwright test --ui",
     "e2e:headed": "cd e2e && npx playwright test --headed",

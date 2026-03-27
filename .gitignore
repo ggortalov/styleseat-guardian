@@ -71,7 +71,7 @@ backend/testrail_data.json
 backend/uploads/avatars/
 
 # Claude Code
-.claude/settings.local.json
+.claude/
 .mcp.json
 
 # Logs
