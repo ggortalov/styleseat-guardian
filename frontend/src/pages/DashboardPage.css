@@ -741,6 +741,30 @@
   color: #92400e;
 }
 
+/* Compact active-import banner (shown when modal reopened during import) */
+.import-modal-active-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(26, 58, 42, 0.06);
+  border: 1px solid rgba(26, 58, 42, 0.1);
+}
+
+.import-modal-active-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sidebar-bg);
+}
+
+.import-modal-ring--small {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  flex-shrink: 0;
+}
+
 /* Footer actions */
 .import-modal-actions {
   display: flex;
