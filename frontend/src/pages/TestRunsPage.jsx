@@ -297,34 +297,30 @@ export default function TestRunsPage() {
             </>
           ) : importState === 'running' ? (
             <>
-              <div className="import-modal-status">
-                <div className="import-modal-status-icon import-modal-status-icon--running">
-                  <span className="import-modal-ring" />
-                </div>
-                <div className="import-modal-status-body">
-                  <span className="import-modal-status-title">Importing...</span>
-                  {importQueue.length > 0 && (
-                    <span className="import-modal-status-sub">+{importQueue.length} queued</span>
-                  )}
-                </div>
-              </div>
-              {importOutput && (
-                <pre className="import-modal-output">{importOutput}</pre>
-              )}
-              <div className="import-modal-queue">
+              <p className="import-modal-hint">Paste a CircleCI workflow URL to import test results.</p>
+              <div className="import-modal-input-row">
                 <input
                   type="text"
                   className="import-modal-input"
-                  placeholder="Queue another workflow URL..."
+                  placeholder="https://app.circleci.com/pipelines/..."
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleImportSubmit()}
+                  autoFocus
                 />
                 <button className="import-modal-submit" onClick={handleImportSubmit} disabled={!importUrl.trim()}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
                   </svg>
                 </button>
+              </div>
+              <div className="import-modal-active-banner">
+                <span className="import-modal-ring import-modal-ring--small" />
+                <span className="import-modal-active-text">Import in progress</span>
+                {importQueue.length > 0 && (
+                  <span className="import-modal-status-sub">+{importQueue.length} queued</span>
+                )}
               </div>
             </>
           ) : importState === 'done' ? (

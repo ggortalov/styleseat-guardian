@@ -160,6 +160,9 @@ export default function TestRunDetailPage() {
       searchParams.set('status', status);
     }
     setSearchParams(searchParams, { replace: true });
+    // Clear selection when switching filters so bulk actions only affect visible results
+    setSelected(new Set());
+    sessionStorage.removeItem(`runSelection-${runId}`);
   };
   const [updating, setUpdating] = useState({});
   const [collapsed, setCollapsed] = useState({});
@@ -171,6 +174,7 @@ export default function TestRunDetailPage() {
   });
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [copiedRowId, setCopiedRowId] = useState(null);
+  const [departing, setDeparting] = useState({}); // { resultId: newStatus } — rows animating out of filter
   const [showDeleteRun, setShowDeleteRun] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -231,9 +235,27 @@ export default function TestRunDetailPage() {
     setUpdating((prev) => ({ ...prev, [resultId]: true }));
     try {
       await runService.updateResult(resultId, { status: newStatus });
-      setResults((prev) =>
-        prev.map((r) => (r.id === resultId ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r))
-      );
+      // If a filter is active and the new status doesn't match, mark as departing
+      const isFiltered = filter !== 'All' && newStatus !== filter;
+      if (isFiltered) {
+        setDeparting((prev) => ({ ...prev, [resultId]: newStatus }));
+        // Update the result data (so the badge shows new status) but keep it visible
+        setResults((prev) =>
+          prev.map((r) => (r.id === resultId ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r))
+        );
+        // After animation, remove from departing set
+        setTimeout(() => {
+          setDeparting((prev) => {
+            const next = { ...prev };
+            delete next[resultId];
+            return next;
+          });
+        }, 1000);
+      } else {
+        setResults((prev) =>
+          prev.map((r) => (r.id === resultId ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r))
+        );
+      }
     } catch {
       /* silently fail — user sees status didn't change */
     } finally {
@@ -268,12 +290,31 @@ export default function TestRunDetailPage() {
 
   const handleBulkStatus = async (newStatus) => {
     setBulkUpdating(true);
-    const ids = [...selected];
+    // Only update results that are currently visible in the filtered view
+    const visibleIds = new Set(filtered.map((r) => r.id));
+    const ids = [...selected].filter((id) => visibleIds.has(id));
     try {
       await Promise.all(ids.map((id) => runService.updateResult(id, { status: newStatus })));
-      setResults((prev) =>
-        prev.map((r) => ids.includes(r.id) ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r)
-      );
+      const isFiltered = filter !== 'All' && newStatus !== filter;
+      if (isFiltered) {
+        const departingBatch = {};
+        ids.forEach((id) => { departingBatch[id] = newStatus; });
+        setDeparting((prev) => ({ ...prev, ...departingBatch }));
+        setResults((prev) =>
+          prev.map((r) => ids.includes(r.id) ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r)
+        );
+        setTimeout(() => {
+          setDeparting((prev) => {
+            const next = { ...prev };
+            ids.forEach((id) => delete next[id]);
+            return next;
+          });
+        }, 1000);
+      } else {
+        setResults((prev) =>
+          prev.map((r) => ids.includes(r.id) ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r)
+        );
+      }
       setSelected(new Set());
       sessionStorage.removeItem(`runSelection-${runId}`);
     } catch {
@@ -284,7 +325,7 @@ export default function TestRunDetailPage() {
   };
 
   const stats = computeStats(results);
-  const filtered = filter === 'All' ? results : results.filter((r) => r.status === filter);
+  const filtered = filter === 'All' ? results : results.filter((r) => r.status === filter || departing[r.id]);
   const isCombinedRun = run?.suite_name === 'All Suites' || !run?.suite_id;
   const isManualRun = !!(run?.suite_id && !run?.cypress_path);
   const hasParentSections = isManualRun && filtered.some((r) => r.parent_section_name);
@@ -569,7 +610,7 @@ export default function TestRunDetailPage() {
                         <div
                           key={r.id}
                           id={`result-${r.id}`}
-                          className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
+                          className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''} ${departing[r.id] ? 'run-case-row--departing' : ''}`}
                           onClick={() => {
                             sessionStorage.setItem('runPageScroll', window.scrollY.toString());
                             navigate(`/runs/${runId}/execute/${r.id}`);
@@ -647,7 +688,7 @@ export default function TestRunDetailPage() {
                                 <div
                                   key={r.id}
                                   id={`result-${r.id}`}
-                                  className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
+                                  className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''} ${departing[r.id] ? 'run-case-row--departing' : ''}`}
                                   onClick={() => {
                                     sessionStorage.setItem('runPageScroll', window.scrollY.toString());
                                     navigate(`/runs/${runId}/execute/${r.id}`);
@@ -716,7 +757,7 @@ export default function TestRunDetailPage() {
                         <div
                           key={r.id}
                           id={`result-${r.id}`}
-                          className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''}`}
+                          className={`run-case-row ${updating[r.id] ? 'row-updating' : ''} ${selected.has(r.id) ? 'run-case-row--selected' : ''} ${departing[r.id] ? 'run-case-row--departing' : ''}`}
                           onClick={() => {
                             sessionStorage.setItem('runPageScroll', window.scrollY.toString());
                             navigate(`/runs/${runId}/execute/${r.id}`);

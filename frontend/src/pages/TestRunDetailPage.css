@@ -984,6 +984,29 @@ a.run-delta-commit:hover {
   }
 }
 
+/* Row departing a filtered view after status change */
+.run-case-row--departing {
+  animation: rowDepart 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes rowDepart {
+  0% {
+    background: rgba(76, 175, 80, 0.18);
+    opacity: 1;
+    transform: translateX(0);
+  }
+  50% {
+    background: rgba(76, 175, 80, 0.06);
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
 .run-select-all {
   display: flex;
   align-items: center;
