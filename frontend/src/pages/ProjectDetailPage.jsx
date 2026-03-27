@@ -90,6 +90,8 @@ export default function ProjectDetailPage() {
   // Runs tab: filter, search, selection state
   const [runStatusFilter, setRunStatusFilter] = useState('All');
   const [runSearchQuery, setRunSearchQuery] = useState('');
+  const [runDateFrom, setRunDateFrom] = useState('');
+  const [runDateTo, setRunDateTo] = useState('');
   const [selectedRuns, setSelectedRuns] = useState(new Set());
   const [showBulkDeleteRuns, setShowBulkDeleteRuns] = useState(false);
 
@@ -104,8 +106,16 @@ export default function ProjectDetailPage() {
         (r.suite_name || '').toLowerCase().includes(q)
       );
     }
+    if (runDateFrom) {
+      const from = new Date(runDateFrom + 'T00:00:00');
+      result = result.filter(r => new Date(r.created_at) >= from);
+    }
+    if (runDateTo) {
+      const to = new Date(runDateTo + 'T23:59:59');
+      result = result.filter(r => new Date(r.created_at) <= to);
+    }
     return result;
-  }, [runs, runStatusFilter, runSearchQuery]);
+  }, [runs, runStatusFilter, runSearchQuery, runDateFrom, runDateTo]);
 
   const runFilterStats = useMemo(() => ({
     All: runs.length,
@@ -323,13 +333,36 @@ export default function ProjectDetailPage() {
                   </button>
                 )}
               </div>
+              <div className="runs-date-filter">
+                <label className="runs-date-label">From</label>
+                <input
+                  type="date"
+                  className="runs-date-input"
+                  value={runDateFrom}
+                  onChange={e => { setRunDateFrom(e.target.value); setSelectedRuns(new Set()); }}
+                />
+                <label className="runs-date-label">To</label>
+                <input
+                  type="date"
+                  className="runs-date-input"
+                  value={runDateTo}
+                  onChange={e => { setRunDateTo(e.target.value); setSelectedRuns(new Set()); }}
+                />
+                {(runDateFrom || runDateTo) && (
+                  <button className="runs-date-clear" onClick={() => { setRunDateFrom(''); setRunDateTo(''); setSelectedRuns(new Set()); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Active filter indicator */}
-            {(runStatusFilter !== 'All' || runSearchQuery) && (
+            {(runStatusFilter !== 'All' || runSearchQuery || runDateFrom || runDateTo) && (
               <div className="runs-active-filter">
                 Showing {filteredRuns.length} of {runs.length} runs
-                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
+                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setRunDateFrom(''); setRunDateTo(''); setSelectedRuns(new Set()); }}>
                   Clear filters
                 </button>
               </div>
