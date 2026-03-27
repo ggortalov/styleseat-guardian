@@ -2,11 +2,14 @@
 .category-tree {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  background: #d0dfd4;
+  border-radius: var(--radius-lg);
+  padding: 16px;
 }
 
 .category-group {
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-white);
   box-shadow: var(--shadow-sm);
@@ -18,14 +21,14 @@
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  background: var(--bg-subtle);
+  background: #e8f0ea;
   cursor: pointer;
   user-select: none;
   transition: background var(--transition);
 }
 
 .category-header:hover {
-  background: var(--border-light);
+  background: #dce8df;
 }
 
 .category-chevron {
@@ -94,7 +97,7 @@
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-white);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 16px;
   font-weight: 600;
@@ -111,6 +114,52 @@
   border-color: var(--sidebar-bg);
   transform: scale(1.08);
   box-shadow: var(--shadow-sm);
+}
+
+/* Subcategory button — teal */
+.category-action-btn:nth-child(1) {
+  color: var(--status-retest);
+  border-color: rgba(0, 105, 92, 0.3);
+  background: var(--status-retest-bg);
+}
+
+.category-action-btn:nth-child(1):hover {
+  background: var(--status-retest);
+  color: #fff;
+  border-color: var(--status-retest);
+}
+
+/* Add test case button — green */
+.category-action-btn:nth-child(2) {
+  color: var(--status-passed);
+  border-color: rgba(46, 125, 50, 0.3);
+  background: var(--status-passed-bg);
+}
+
+.category-action-btn:nth-child(2):hover {
+  background: var(--status-passed);
+  color: #fff;
+  border-color: var(--status-passed);
+}
+
+/* Edit button — amber */
+.category-action-btn:nth-child(3) {
+  color: var(--status-blocked);
+  border-color: rgba(230, 81, 0, 0.25);
+  background: var(--status-blocked-bg);
+}
+
+.category-action-btn:nth-child(3):hover {
+  background: var(--status-blocked);
+  color: #fff;
+  border-color: var(--status-blocked);
+}
+
+/* Delete button — red */
+.category-action-btn.danger {
+  color: var(--status-failed);
+  border-color: rgba(198, 40, 40, 0.25);
+  background: var(--status-failed-bg);
 }
 
 .category-action-btn.danger:hover {

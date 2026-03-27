@@ -1,8 +1,10 @@
+import base64
 import json
 import os
 import re
 import subprocess
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -639,6 +641,1229 @@ def get_result_history(result_id):
         result.append(d)
 
     return jsonify(result), 200
+
+
+# ---------------------------------------------------------------------------
+# Test Health Analysis
+# ---------------------------------------------------------------------------
+
+# Error pattern classification table
+_ERROR_PATTERNS = [
+    {
+        "id": "timeout",
+        "patterns": ["timed out", "timeout", "exceeded", "cy.wait", "waited for"],
+        "label": "Timeout / Async Wait",
+        "suggestion": (
+            "Replace cy.wait(ms) with cy.intercept() + cy.wait('@alias'). "
+            "In Electron/CI, timing is less predictable than local - always wait for "
+            "specific network responses or DOM states instead of fixed delays."
+        ),
+    },
+    {
+        "id": "assertion",
+        "patterns": ["assertionerror", "expected", "assert", "should have", "to equal"],
+        "label": "Assertion Failure",
+        "suggestion": (
+            "Verify test expectations match current app behavior. If the app has A/B tests, "
+            "the assertion may see a different variant in CI than locally. Use cy.intercept() "
+            "to stub experiment endpoints and force a deterministic variant."
+        ),
+    },
+    {
+        "id": "element_not_found",
+        "patterns": ["not found", "does not exist", "detached from dom"],
+        "label": "Element Not Found",
+        "suggestion": (
+            "Use data-testid/data-cy selectors instead of CSS classes. Element may render "
+            "later in Electron headless due to slower rendering. Add .should('be.visible') "
+            "before interacting."
+        ),
+    },
+    {
+        "id": "network",
+        "patterns": ["econnrefused", "net::err", "fetch failed", "status code", "500"],
+        "label": "Network / API Error",
+        "suggestion": (
+            "Mock external APIs with cy.intercept() to avoid depending on real services "
+            "in nightly CI runs. For backend errors, check if the test environment services "
+            "are healthy. Consider using cy.intercept() to stub all non-essential API calls."
+        ),
+    },
+    {
+        "id": "state",
+        "patterns": ["stale element", "not interactable", "not visible", "covered by"],
+        "label": "Element State Issue",
+        "suggestion": (
+            "Electron renders differently than Chrome - elements may be covered by overlays "
+            "or animations. Use cy.get().should('be.visible').click() instead of force:true. "
+            "Wait for animations: cy.get('.element').should('not.have.class', 'animating')."
+        ),
+    },
+    {
+        "id": "data",
+        "patterns": ["undefined", "null", "cannot read propert", "typeerror"],
+        "label": "Data / Type Error",
+        "suggestion": (
+            "Likely a race condition: the test accesses data before it's loaded. "
+            "Use cy.intercept() to wait for the data API to respond before asserting. "
+            "Check fixtures load correctly in CI."
+        ),
+    },
+    {
+        "id": "auth",
+        "patterns": ["401", "403", "unauthorized", "forbidden", "session expired"],
+        "label": "Auth Issue",
+        "suggestion": (
+            "Sessions may expire between tests in nightly runs. Ensure cy.session() or "
+            "programmatic login runs in beforeEach(). Check cookie domain/SameSite settings "
+            "for Electron headless."
+        ),
+    },
+    {
+        "id": "viewport",
+        "patterns": ["viewport", "responsive", "mobile", "breakpoint", "media query"],
+        "label": "Viewport / Responsive",
+        "suggestion": (
+            "Electron's default viewport may differ from Chrome. Set cy.viewport() explicitly "
+            "in beforeEach() to ensure consistent rendering across CI environments."
+        ),
+    },
+    {
+        "id": "resource",
+        "patterns": ["enomem", "killed", "out of memory", "heap", "segfault"],
+        "label": "CI Resource Exhaustion",
+        "suggestion": (
+            "CircleCI container may be running out of memory. Use resource_class: medium+ or "
+            "larger for Electron jobs. Consider splitting specs across parallel containers."
+        ),
+    },
+]
+
+# Code smell detection patterns
+_CODE_SMELLS = [
+    {
+        "id": "hardcoded_wait",
+        "regex": r"cy\.wait\(\s*\d+\s*\)",
+        "label": "Hardcoded cy.wait()",
+        "suggestion": (
+            "Replace cy.wait(ms) with cy.intercept() + cy.wait('@alias'). "
+            "Hardcoded waits are the #1 cause of Electron CI flakiness because "
+            "timing varies per resource_class."
+        ),
+    },
+    {
+        "id": "force_click",
+        "regex": r"\.click\(\s*\{\s*force\s*:\s*true",
+        "label": "Forced Click Actions",
+        "suggestion": (
+            "Remove { force: true } and fix the root cause. Force-clicking bypasses "
+            "Cypress's visibility checks, masking real bugs that surface as flakes in Electron."
+        ),
+    },
+    {
+        "id": "fragile_selector",
+        "regex": r"cy\.get\(\s*['\"][\.\#][^'\"]+['\"]\s*\)",
+        "label": "Fragile CSS Selectors",
+        "suggestion": (
+            "Use data-testid or data-cy attributes. CSS selectors break when styles change, "
+            "causing intermittent failures across branches."
+        ),
+    },
+    {
+        "id": "uncaught_exception",
+        "regex": r"Cypress\.on\(\s*['\"]uncaught:exception['\"]",
+        "label": "Suppressed Exceptions",
+        "suggestion": (
+            "Returning false from uncaught:exception hides real app errors. Instead, use "
+            "cy.intercept() to prevent the error, or fix the app code causing it."
+        ),
+    },
+    {
+        "id": "ab_test",
+        "regex": r"(?:variant|experiment|split_test|feature_flag|optimizely|launchdarkly)",
+        "label": "A/B Test / Feature Flag",
+        "suggestion": (
+            "Test may hit different experiment groups in CI vs local. Use cy.intercept() to "
+            "stub the experiment API and force a consistent variant. This is a top cause of "
+            "'works locally, flakes in CI'."
+        ),
+    },
+    {
+        "id": "chained_commands",
+        "regex": r"\.then\([^)]*\)\s*\.\s*then\([^)]*\)\s*\.\s*then\([^)]*\)\s*\.\s*then\(",
+        "label": "Deeply Chained Commands",
+        "suggestion": (
+            "Break into smaller Cypress command chains. Deep nesting makes retry-ability "
+            "harder and timing issues more likely in Electron."
+        ),
+    },
+]
+
+
+def _classify_error(error_msg):
+    """Return the first matching error pattern ID, or None."""
+    if not error_msg:
+        return None
+    lower = error_msg.lower()
+    for pat in _ERROR_PATTERNS:
+        for substr in pat["patterns"]:
+            if substr in lower:
+                return pat["id"]
+    return None
+
+
+def _get_error_pattern(pattern_id):
+    """Lookup an error pattern by ID."""
+    for p in _ERROR_PATTERNS:
+        if p["id"] == pattern_id:
+            return p
+    return None
+
+
+def _fetch_github_file(cypress_path, source_rel, file_cache):
+    """Fetch a file from GitHub via `gh api`. Returns content string or None."""
+    if not cypress_path and not source_rel:
+        return None
+
+    # Build the full path to fetch
+    path = source_rel or cypress_path
+    if not path:
+        return None
+
+    # Normalize: strip leading /
+    path = path.lstrip("/")
+
+    if path in file_cache:
+        return file_cache[path]
+
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/styleseat/cypress/contents/{path}",
+             "--jq", ".content"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            content = base64.b64decode(result.stdout.strip()).decode("utf-8", errors="replace")
+            file_cache[path] = content
+            return content
+    except Exception:
+        pass
+
+    file_cache[path] = None
+    return None
+
+
+def _analyze_code_smells(content):
+    """Scan file content for code smell patterns. Returns list of smell dicts."""
+    if not content:
+        return []
+    found = []
+    lines = content.split("\n")
+    for smell in _CODE_SMELLS:
+        matches = []
+        for i, line in enumerate(lines, 1):
+            if re.search(smell["regex"], line, re.IGNORECASE):
+                matches.append({"line": i, "code": line.strip()[:120]})
+        if matches:
+            found.append({
+                "id": smell["id"],
+                "label": smell["label"],
+                "suggestion": smell["suggestion"],
+                "occurrences": len(matches),
+                "examples": matches[:3],
+            })
+
+    # Heuristic checks that need more context
+
+    # no_intercept: has cy.visit but no cy.intercept
+    visit_examples = [{"line": i, "code": line.strip()[:120]} for i, line in enumerate(lines, 1) if "cy.visit(" in line]
+    has_intercept = any("cy.intercept(" in l for l in lines)
+    if visit_examples and not has_intercept:
+        found.append({
+            "id": "no_intercept",
+            "label": "No Network Interception",
+            "suggestion": (
+                "Add cy.intercept() to mock/wait on API calls. Without it, tests depend "
+                "on real backend timing which varies wildly in nightly CI runs."
+            ),
+            "occurrences": len(visit_examples),
+            "examples": visit_examples[:3],
+        })
+
+    # shared_state: let/var declared outside beforeEach (at describe level)
+    shared_examples = []
+    in_describe = False
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if "describe(" in stripped:
+            in_describe = True
+        if in_describe and (stripped.startswith("let ") or stripped.startswith("var ")):
+            indent = len(line) - len(line.lstrip())
+            if indent <= 4:
+                shared_examples.append({"line": i, "code": stripped[:120]})
+    if shared_examples:
+        found.append({
+            "id": "shared_state",
+            "label": "Shared Mutable State",
+            "suggestion": (
+                "Move variable init inside beforeEach(). Shared state causes "
+                "order-dependent flakiness - tests pass solo but fail when run together."
+            ),
+            "occurrences": len(shared_examples),
+            "examples": shared_examples[:3],
+        })
+
+    # no_before_each: multiple it() but no beforeEach
+    it_examples = [{"line": i, "code": line.strip()[:120]} for i, line in enumerate(lines, 1) if re.search(r"\bit\s*\(", line)]
+    has_before_each = any("beforeEach(" in l for l in lines)
+    if len(it_examples) >= 2 and not has_before_each:
+        found.append({
+            "id": "no_before_each",
+            "label": "Missing beforeEach Setup",
+            "suggestion": (
+                "Add beforeEach() with cy.visit() and state reset. Without test isolation, "
+                "later tests inherit state from earlier ones, causing order-dependent flakes."
+            ),
+            "occurrences": len(it_examples),
+            "examples": it_examples[:3],
+        })
+
+    # no_cy_session: cy.visit('/login') in beforeEach without cy.session
+    has_login_visit = any(
+        "beforeeach" in l.lower() or ("cy.visit" in l and "login" in l.lower())
+        for l in lines
+    )
+    has_session = any("cy.session(" in l for l in lines)
+    if has_login_visit and not has_session:
+        found.append({
+            "id": "no_cy_session",
+            "label": "Missing cy.session()",
+            "suggestion": (
+                "Use cy.session() for auth setup to cache login state across tests. "
+                "Speeds up nightly suites and avoids login-related flakes."
+            ),
+            "occurrences": 1,
+            "examples": [],
+        })
+
+    return found
+
+
+def _compute_ewma_flip_rate(statuses, window_size=5, alpha=0.3):
+    """Compute EWMA-smoothed flip rate over windowed status sequences."""
+    if len(statuses) < 2:
+        return 0.0
+
+    # Divide into windows
+    windows = []
+    for i in range(0, len(statuses), window_size):
+        windows.append(statuses[i:i + window_size])
+
+    if not windows:
+        return 0.0
+
+    # Calculate flip rate per window
+    ewma = 0.0
+    first = True
+    for window in windows:
+        if len(window) < 2:
+            window_flip_rate = 0.0
+        else:
+            flips = sum(
+                1 for j in range(1, len(window))
+                if window[j] != window[j - 1]
+                and window[j] in ("Passed", "Failed")
+                and window[j - 1] in ("Passed", "Failed")
+            )
+            window_flip_rate = flips / (len(window) - 1)
+
+        if first:
+            ewma = window_flip_rate
+            first = False
+        else:
+            ewma = alpha * window_flip_rate + (1 - alpha) * ewma
+
+    return round(ewma, 4)
+
+
+@runs_bp.route("/projects/<int:project_id>/test-health", methods=["GET"])
+@jwt_required()
+def get_test_health(project_id):
+    """Analyze test health: detect flaky, failing, and regressed tests."""
+    Project.query.get_or_404(project_id)
+
+    suite_id = request.args.get("suite_id", type=int)
+    window = request.args.get("window", 30, type=int)
+    window = max(1, min(window, 90))
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window)
+
+    # Step 1: Get completed runs in window
+    run_query = TestRun.query.filter(
+        TestRun.project_id == project_id,
+        TestRun.is_completed == True,
+        TestRun.created_at >= cutoff,
+    )
+    if suite_id:
+        run_query = run_query.filter(TestRun.suite_id == suite_id)
+
+    MIN_RUNS_FOR_ANALYSIS = 5
+
+    runs = run_query.order_by(TestRun.created_at.asc()).all()
+
+    # Insufficient data gate — need at least MIN_RUNS_FOR_ANALYSIS completed runs
+    if len(runs) < MIN_RUNS_FOR_ANALYSIS:
+        return jsonify({
+            "summary": {
+                "flaky": 0, "always_failing": 0, "consistently_failing": 0,
+                "regression": 0, "healthy": 0, "total_analyzed": 0,
+            },
+            "error_pattern_summary": {},
+            "code_smell_summary": {},
+            "tests": [],
+            "runs_analyzed": len(runs),
+            "min_runs_required": MIN_RUNS_FOR_ANALYSIS,
+            "confidence": "insufficient",
+            "window_days": window,
+        }), 200
+
+    run_ids = [r.id for r in runs]
+    run_commit_map = {r.id: r.commit_sha for r in runs}
+
+    # Step 2: Batch-fetch all results for these runs
+    results = (
+        TestResult.query
+        .filter(
+            TestResult.run_id.in_(run_ids),
+            TestResult.status != "Untested",
+            TestResult.case_id.isnot(None),
+        )
+        .options(joinedload(TestResult.test_case).joinedload(TestCase.section))
+        .all()
+    )
+
+    # Group results by case_id, preserving run order
+    run_order = {rid: idx for idx, rid in enumerate(run_ids)}
+    case_results = defaultdict(list)
+    for r in results:
+        case_results[r.case_id].append(r)
+
+    # Sort each case's results by run order
+    for cid in case_results:
+        case_results[cid].sort(key=lambda r: run_order.get(r.run_id, 0))
+
+    # Prefetch suite + section info for all relevant cases
+    all_case_ids = list(case_results.keys())
+    case_map = {}
+    if all_case_ids:
+        cases = (
+            TestCase.query
+            .filter(TestCase.id.in_(all_case_ids))
+            .options(joinedload(TestCase.section))
+            .all()
+        )
+        for tc in cases:
+            case_map[tc.id] = tc
+
+    suite_map = {}
+    suite_ids = {tc.suite_id for tc in case_map.values() if tc.suite_id}
+    if suite_ids:
+        for s in Suite.query.filter(Suite.id.in_(suite_ids)).all():
+            suite_map[s.id] = s
+
+    # Step 3: Per-test metrics
+    test_entries = []
+    global_max_disruptions = 1  # avoid div-by-zero
+
+    for cid, res_list in case_results.items():
+        tc = case_map.get(cid)
+        if not tc:
+            continue
+
+        statuses = [r.status for r in res_list]
+        total = len(statuses)
+        pass_count = statuses.count("Passed")
+        fail_count = statuses.count("Failed")
+        block_count = statuses.count("Blocked")
+
+        failure_rate = fail_count / total if total > 0 else 0.0
+
+        # Flip rate
+        flips = 0
+        for i in range(1, len(statuses)):
+            prev_s, cur_s = statuses[i - 1], statuses[i]
+            if prev_s in ("Passed", "Failed") and cur_s in ("Passed", "Failed") and prev_s != cur_s:
+                flips += 1
+        raw_flip_rate = flips / (total - 1) if total > 1 else 0.0
+        disruption_count = flips
+
+        if disruption_count > global_max_disruptions:
+            global_max_disruptions = disruption_count
+
+        # EWMA flip rate
+        ewma_flip_rate = _compute_ewma_flip_rate(statuses)
+
+        # Same-commit flakiness
+        same_commit_flaky = False
+        commit_statuses = defaultdict(set)
+        for r in res_list:
+            commit = run_commit_map.get(r.run_id)
+            if commit:
+                commit_statuses[commit].add(r.status)
+        for commit, st_set in commit_statuses.items():
+            if "Passed" in st_set and "Failed" in st_set:
+                same_commit_flaky = True
+                break
+
+        # Streak
+        streak = 1
+        streak_status = statuses[-1] if statuses else "Untested"
+        for i in range(len(statuses) - 2, -1, -1):
+            if statuses[i] == streak_status:
+                streak += 1
+            else:
+                break
+
+        # Trend (last 10)
+        trend = statuses[-10:]
+
+        # Error analysis for failed results
+        error_msgs = [r.error_message for r in res_list if r.status == "Failed" and r.error_message]
+        error_freq = defaultdict(int)
+        for msg in error_msgs:
+            cat = _classify_error(msg)
+            if cat:
+                error_freq[cat] += 1
+
+        # Most recent failed result for error/artifacts
+        last_failed = None
+        for r in reversed(res_list):
+            if r.status == "Failed":
+                last_failed = r
+                break
+
+        # Source file info from preconditions
+        source_file = None
+        source_path = None
+        if tc.preconditions:
+            for line in tc.preconditions.split("\n"):
+                line = line.strip()
+                if line.startswith("Source:") or line.startswith("File:"):
+                    sp = line.split(":", 1)[1].strip()
+                    source_path = sp
+                    source_file = sp.split("/")[-1]
+                    break
+
+        entry = {
+            "case_id": cid,
+            "title": tc.title,
+            "suite_id": tc.suite_id,
+            "suite_name": suite_map.get(tc.suite_id, Suite()).name if tc.suite_id and tc.suite_id in suite_map else "Unknown",
+            "section_name": tc.section.name if tc.section else "Uncategorized",
+            "priority": tc.priority,
+            "total_runs": total,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "block_count": block_count,
+            "failure_rate": round(failure_rate, 4),
+            "flip_rate": round(raw_flip_rate, 4),
+            "ewma_flip_rate": ewma_flip_rate,
+            "disruption_count": disruption_count,
+            "same_commit_flaky": same_commit_flaky,
+            "last_status": statuses[-1] if statuses else "Untested",
+            "streak": streak,
+            "streak_status": streak_status,
+            "trend": trend,
+            "_error_freq": dict(error_freq),
+            "_error_msgs": error_msgs,
+            "_last_failed": last_failed,
+            "_source_file": source_file,
+            "_source_path": source_path,
+            "_statuses": statuses,
+        }
+        test_entries.append(entry)
+
+    # Step 4: Per-test confidence tier + classification
+    # Confidence is per-test because each test may appear in different numbers of runs
+    CATEGORY_ORDER = {"always_failing": 0, "flaky": 1, "consistently_failing": 2, "regression": 3, "healthy": 4}
+
+    for entry in test_entries:
+        statuses = entry["_statuses"]
+        total = entry["total_runs"]
+        failure_rate = entry["failure_rate"]
+        ewma = entry["ewma_flip_rate"]
+
+        # Per-test confidence tier based on how many runs this test appeared in
+        if total < 5:
+            entry["confidence"] = "low"
+        elif total < 10:
+            entry["confidence"] = "low"
+        elif total < 20:
+            entry["confidence"] = "medium"
+        else:
+            entry["confidence"] = "high"
+
+        # Classification — same-commit flaky is definitive regardless of run count
+        # For other categories, require minimum runs for the EWMA/rate-based classifications
+        if failure_rate == 1.0 and total >= 2:
+            entry["category"] = "always_failing"
+        elif entry["same_commit_flaky"]:
+            # Definitive signal — pass+fail on same commit proves flakiness
+            entry["category"] = "flaky"
+        elif ewma >= 0.3 and total >= 5:
+            # Need at least 5 runs for EWMA to have one full window of data
+            entry["category"] = "flaky"
+        elif failure_rate >= 0.8 and total >= 5:
+            entry["category"] = "consistently_failing"
+        elif len(statuses) >= 3 and all(s == "Failed" for s in statuses[-2:]) and any(s == "Passed" for s in statuses[:-2]):
+            entry["category"] = "regression"
+        else:
+            entry["category"] = "healthy"
+
+    # Step 5: Severity score
+    for entry in test_entries:
+        recency = 0.0
+        if entry["last_status"] == "Failed":
+            recency = 1.0
+        elif entry["fail_count"] > 0:
+            # Failed within last 3 runs?
+            last3 = entry["_statuses"][-3:]
+            if "Failed" in last3:
+                recency = 0.5
+
+        severity = (
+            entry["ewma_flip_rate"] * 0.4
+            + entry["failure_rate"] * 0.3
+            + (entry["disruption_count"] / global_max_disruptions) * 0.2
+            + recency * 0.1
+        )
+        entry["severity"] = round(severity, 4)
+
+    # Sort: category order, then severity desc
+    test_entries.sort(key=lambda e: (CATEGORY_ORDER.get(e["category"], 99), -e["severity"]))
+
+    # Step 6: Build diagnostics (only for unhealthy tests)
+    file_cache = {}
+    error_pattern_summary = defaultdict(int)
+    code_smell_summary = defaultdict(int)
+
+    output_tests = []
+    for entry in test_entries:
+        is_unhealthy = entry["category"] != "healthy"
+
+        diagnostics = None
+        if is_unhealthy:
+            # Error category
+            error_freq = entry["_error_freq"]
+            dominant_error = max(error_freq, key=error_freq.get) if error_freq else None
+            error_pattern = _get_error_pattern(dominant_error) if dominant_error else None
+
+            # Update global error pattern summary
+            for eid, count in error_freq.items():
+                error_pattern_summary[eid] += count
+
+            # Artifacts from last failed result
+            recent_artifacts = []
+            last_error = None
+            last_failed = entry["_last_failed"]
+            if last_failed:
+                last_error = last_failed.error_message
+                for art in last_failed.artifacts_list:
+                    if isinstance(art, dict):
+                        recent_artifacts.append(art)
+                    elif isinstance(art, str):
+                        recent_artifacts.append({"name": art.split("/")[-1], "url": art})
+                recent_artifacts = recent_artifacts[:3]
+
+            # Code smell analysis
+            code_smells = []
+            suite = suite_map.get(entry["suite_id"])
+            cypress_path = suite.cypress_path if suite else None
+            source_rel = entry["_source_path"]
+
+            file_content = _fetch_github_file(cypress_path, source_rel, file_cache)
+            if file_content:
+                code_smells = _analyze_code_smells(file_content)
+                for cs in code_smells:
+                    code_smell_summary[cs["id"]] += 1
+
+            suggestion = error_pattern["suggestion"] if error_pattern else None
+
+            # Build contextual error snippet from actual error messages
+            error_snippet = None
+            if last_error:
+                # Truncate to first meaningful line (up to 200 chars)
+                first_line = last_error.strip().split("\n")[0][:200]
+                error_snippet = first_line
+
+            # Build contextual prefix from actual data
+            error_msgs_list = entry.get("_error_msgs", [])
+            if suggestion and error_msgs_list:
+                unique_errors = len(set(_classify_error(m) for m in error_msgs_list if _classify_error(m)))
+                freq_count = error_freq.get(dominant_error, 0)
+                total_failures = entry["fail_count"]
+                ctx_prefix = f"Seen in {freq_count} of {total_failures} failures. "
+                if error_snippet:
+                    ctx_prefix += f'Latest: "{error_snippet}" — '
+                suggestion = ctx_prefix + suggestion
+
+            # Cross-reference: if timeout errors + hardcoded_wait smell, enhance suggestion
+            hardcoded_waits = [cs for cs in code_smells if cs["id"] == "hardcoded_wait"]
+            if dominant_error == "timeout" and hardcoded_waits:
+                wait_count = hardcoded_waits[0].get("occurrences", 0)
+                wait_examples = hardcoded_waits[0].get("examples", [])
+                wait_lines = ", ".join(f"L{ex['line']}" for ex in wait_examples[:3])
+                suggestion = (
+                    f"Found {wait_count} hardcoded cy.wait() call{'s' if wait_count != 1 else ''} "
+                    f"({wait_lines}) that {'are' if wait_count != 1 else 'is'} likely causing "
+                    f"the timeout errors in Electron/CI. "
+                    + (suggestion or "")
+                )
+
+            diagnostics = {
+                "error_category": dominant_error,
+                "error_label": error_pattern["label"] if error_pattern else None,
+                "suggestion": suggestion,
+                "last_error": last_error,
+                "error_frequency": dict(error_freq),
+                "recent_artifacts": recent_artifacts,
+                "code_smells": code_smells,
+                "source_file": entry["_source_file"],
+                "source_path": entry["_source_path"],
+            }
+
+        # Build output (strip internal fields)
+        out = {k: v for k, v in entry.items() if not k.startswith("_")}
+        out["diagnostics"] = diagnostics
+        output_tests.append(out)
+
+    # Summary counts
+    cat_counts = defaultdict(int)
+    for e in output_tests:
+        cat_counts[e["category"]] += 1
+
+    # Overall confidence based on total completed runs analyzed
+    num_runs = len(runs)
+    if num_runs < 10:
+        overall_confidence = "low"
+    elif num_runs < 20:
+        overall_confidence = "medium"
+    else:
+        overall_confidence = "high"
+
+    return jsonify({
+        "summary": {
+            "flaky": cat_counts.get("flaky", 0),
+            "always_failing": cat_counts.get("always_failing", 0),
+            "consistently_failing": cat_counts.get("consistently_failing", 0),
+            "regression": cat_counts.get("regression", 0),
+            "healthy": cat_counts.get("healthy", 0),
+            "total_analyzed": len(output_tests),
+        },
+        "error_pattern_summary": dict(error_pattern_summary),
+        "code_smell_summary": dict(code_smell_summary),
+        "tests": [t for t in output_tests if t["category"] != "healthy"],
+        "runs_analyzed": num_runs,
+        "min_runs_required": MIN_RUNS_FOR_ANALYSIS,
+        "confidence": overall_confidence,
+        "window_days": window,
+    }), 200
+
+
+# ─── Deep Analysis (on-demand per test) ─────────────────────────
+
+
+def _normalize_error_for_grouping(msg):
+    """Strip variable parts from error messages so similar errors group together."""
+    if not msg:
+        return ""
+    msg = re.sub(r'\x1b\[[0-9;]*m', '', msg)  # ANSI codes
+    msg = re.sub(r'after \d+ms', 'after Nms', msg)  # retry durations
+    msg = re.sub(r':\d+:\d+', ':N:N', msg)  # stack trace line numbers
+    msg = re.sub(r'\(attempt \d+\)', '(attempt N)', msg)  # retry attempts
+    first_line = msg.strip().split('\n')[0][:300]
+    return first_line.strip()
+
+
+def _group_error_messages(failed_results, run_map):
+    """Group error messages by normalized pattern to reveal distinct failure modes."""
+    groups = defaultdict(lambda: {"count": 0, "runs": [], "raw_messages": [],
+                                  "job_ids": [], "result_ids": []})
+
+    for r in failed_results:
+        if not r.error_message:
+            continue
+        key = _normalize_error_for_grouping(r.error_message)
+        run = run_map.get(r.run_id)
+        run_name = run.name if run else f"Run {r.run_id}"
+        g = groups[key]
+        g["count"] += 1
+        g["runs"].append(run_name)
+        g["raw_messages"].append(r.error_message[:800])
+        if r.circleci_job_id:
+            g["job_ids"].append(r.circleci_job_id)
+        g["result_ids"].append(r.id)
+
+    sorted_groups = sorted(groups.items(), key=lambda x: -x[1]["count"])
+
+    return {
+        "total_failures": len(failed_results),
+        "distinct_patterns": len(groups),
+        "groups": [
+            {
+                "pattern": k,
+                "count": v["count"],
+                "percentage": round(v["count"] / len(failed_results) * 100) if failed_results else 0,
+                "runs": v["runs"][:10],
+                "sample_message": v["raw_messages"][0] if v["raw_messages"] else None,
+                "job_ids": v["job_ids"][:5],
+            }
+            for k, v in sorted_groups
+        ],
+        "same_root_cause": len(groups) <= 1,
+    }
+
+
+def _extract_test_block(source_content, test_title):
+    """Extract the it() block and surrounding context for a specific test."""
+    if not source_content or not test_title:
+        return None
+
+    lines = source_content.split('\n')
+
+    # Find the it() line matching this test title
+    target_line = None
+    for i, line in enumerate(lines):
+        if re.search(r'\bit\s*\(', line) and test_title.lower() in line.lower():
+            target_line = i
+            break
+
+    if target_line is None:
+        # Fuzzy match by key words
+        title_words = set(re.findall(r'\w{4,}', test_title.lower()))
+        best_match, best_score = None, 0
+        for i, line in enumerate(lines):
+            if re.search(r'\bit\s*\(', line):
+                line_words = set(re.findall(r'\w{4,}', line.lower()))
+                overlap = len(title_words & line_words) / max(len(title_words), 1)
+                if overlap > best_score:
+                    best_match, best_score = i, overlap
+        if best_score > 0.5:
+            target_line = best_match
+
+    if target_line is None:
+        return None
+
+    # Find the end of the it() block by tracking braces
+    start = target_line
+    brace_count = 0
+    end = start
+    found_opening = False
+    for i in range(start, min(start + 150, len(lines))):
+        for ch in lines[i]:
+            if ch == '{':
+                brace_count += 1
+                found_opening = True
+            elif ch == '}':
+                brace_count -= 1
+                if found_opening and brace_count == 0:
+                    end = i
+                    break
+        if found_opening and brace_count == 0:
+            break
+
+    # Include a few lines of context before (e.g., beforeEach)
+    ctx_start = max(0, start - 5)
+    ctx_end = min(len(lines), end + 2)
+
+    block_lines = []
+    for i in range(ctx_start, ctx_end):
+        block_lines.append({
+            "line": i + 1,
+            "code": lines[i],
+            "is_test_start": i == target_line,
+        })
+
+    return {
+        "start_line": start + 1,
+        "end_line": end + 1,
+        "total_lines": end - start + 1,
+        "lines": block_lines,
+    }
+
+
+def _extract_selectors(error_messages, test_code_lines=None):
+    """Extract CSS selectors and data-testid values from errors and test code."""
+    selectors = []
+    seen = set()
+
+    def _add(sel, source):
+        if sel not in seen:
+            seen.add(sel)
+            selectors.append({"selector": sel, "source": source})
+
+    for msg in error_messages:
+        if not msg:
+            continue
+        # data-testid/data-cy selectors in brackets
+        for m in re.finditer(r'\[data-(?:testid|cy|test)=["\']([^"\']+)["\']', msg):
+            _add(m.group(1), "error_message")
+        # Backtick-quoted selectors like `[data-testid="foo"]`
+        for m in re.finditer(r'`(\[data-[^`]+\])`', msg):
+            _add(m.group(1), "error_message")
+        for m in re.finditer(r'`(\.[\w-]+(?:\s+\.[\w-]+)*)`', msg):
+            _add(m.group(1), "error_message")
+
+    if test_code_lines:
+        for line_info in test_code_lines:
+            code = line_info.get("code", "")
+            for m in re.finditer(r'cy\.(?:get|find|contains)\s*\(\s*["\']([^"\']+)["\']', code):
+                sel = m.group(1)
+                _add(sel, f"test_code:L{line_info.get('line', '?')}")
+
+    return selectors
+
+
+def _search_github_for_selectors(selectors, max_selectors=3):
+    """Search GitHub org for where selectors are defined in app repos."""
+    refs = []
+
+    for sel_info in selectors[:max_selectors]:
+        sel = sel_info["selector"]
+        # Extract the meaningful search term
+        m = re.search(r'data-(?:testid|cy|test)="([^"]+)"', sel)
+        search_term = m.group(1) if m else sel.strip('.#[]"\'')
+
+        if len(search_term) < 4:
+            continue
+
+        try:
+            result = subprocess.run(
+                ["gh", "api", "search/code",
+                 "-f", f"q={search_term}+org:styleseat",
+                 "--jq", '.items[:8] | .[] | {repo: .repository.full_name, path: .path, url: .html_url}'],
+                capture_output=True, text=True, timeout=20,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                for line in result.stdout.strip().split('\n'):
+                    try:
+                        ref = json.loads(line)
+                        repo = ref.get("repo", "")
+                        path = ref.get("path", "")
+                        # Skip the cypress repo (that's the test itself) and non-source files
+                        if "cypress" in repo.lower():
+                            continue
+                        if any(path.endswith(ext) for ext in
+                               ('.js', '.jsx', '.ts', '.tsx', '.html', '.erb',
+                                '.haml', '.slim', '.vue', '.svelte')):
+                            ref["selector"] = search_term
+                            refs.append(ref)
+                    except json.JSONDecodeError:
+                        pass
+        except Exception:
+            pass
+
+    # Deduplicate by (repo, path)
+    seen = set()
+    unique = []
+    for ref in refs:
+        key = (ref.get("repo"), ref.get("path"))
+        if key not in seen:
+            seen.add(key)
+            unique.append(ref)
+
+    return unique[:10]
+
+
+def _analyze_commit_correlation(results, run_map):
+    """Check if failures correlate with specific commits vs random (true flake)."""
+    commit_runs = defaultdict(lambda: {"passed": 0, "failed": 0, "blocked": 0})
+    passing_commits = set()
+    failing_commits = set()
+
+    for r in results:
+        run = run_map.get(r.run_id)
+        if not run or not run.commit_sha:
+            continue
+        sha = run.commit_sha
+        if r.status == "Passed":
+            commit_runs[sha]["passed"] += 1
+            passing_commits.add(sha)
+        elif r.status == "Failed":
+            commit_runs[sha]["failed"] += 1
+            failing_commits.add(sha)
+        elif r.status == "Blocked":
+            commit_runs[sha]["blocked"] += 1
+
+    only_failing = failing_commits - passing_commits
+    mixed = passing_commits & failing_commits  # same commit passes AND fails
+
+    breakdown = sorted(
+        [{"sha": sha[:8], "full_sha": sha, **counts}
+         for sha, counts in commit_runs.items()],
+        key=lambda x: -(x["failed"]),
+    )
+
+    return {
+        "total_commits": len(commit_runs),
+        "passing_commits": len(passing_commits),
+        "failing_commits": len(failing_commits),
+        "only_failing_commits": [s[:8] for s in only_failing][:5],
+        "mixed_commits": [s[:8] for s in mixed][:5],
+        "same_commit_flaky": len(mixed) > 0,
+        "commit_breakdown": breakdown[:8],
+    }
+
+
+def _build_deep_diagnosis(error_groups, test_source, selectors,
+                          app_refs, commit_analysis, code_smells):
+    """Generate a specific diagnosis from all collected evidence."""
+    findings = []
+    fix_suggestions = []
+
+    # 1. Error pattern findings
+    eg = error_groups
+    if eg["distinct_patterns"] == 1 and eg["total_failures"] > 1:
+        findings.append(
+            f"All {eg['total_failures']} failures produce the same error, "
+            f"pointing to a single root cause."
+        )
+    elif eg["distinct_patterns"] > 1:
+        findings.append(
+            f"{eg['distinct_patterns']} distinct error patterns found across "
+            f"{eg['total_failures']} failures — multiple issues may be contributing."
+        )
+        for g in eg["groups"]:
+            findings.append(f"  • {g['pattern'][:120]} ({g['count']}x, {g['percentage']}%)")
+
+    # 2. Selector analysis
+    if eg["groups"]:
+        primary_error = eg["groups"][0].get("sample_message", "")
+        sel_match = re.search(r'\[data-testid="([^"]+)"\]', primary_error)
+        if not sel_match:
+            sel_match = re.search(r'\[data-cy="([^"]+)"\]', primary_error)
+        if sel_match:
+            selector_name = sel_match.group(1)
+            if app_refs:
+                repos_found = set(r.get("repo", "") for r in app_refs)
+                paths = [r.get("path", "") for r in app_refs[:3]]
+                findings.append(
+                    f'Element `{selector_name}` found in {", ".join(repos_found)}: '
+                    f'{"; ".join(paths)}'
+                )
+            else:
+                findings.append(
+                    f'Element `{selector_name}` was NOT found in any app repo. '
+                    f'It may have been renamed, removed, or is dynamically generated.'
+                )
+                fix_suggestions.append(
+                    f'Verify that `data-testid="{selector_name}"` still exists '
+                    f'in the application. Search the relevant repo for this identifier.'
+                )
+
+    # 3. Code smell specifics
+    if code_smells:
+        for cs in code_smells:
+            examples = cs.get("examples", [])
+            if cs["id"] == "hardcoded_wait" and examples:
+                lines_str = ", ".join(f"L{ex['line']}" for ex in examples[:3])
+                findings.append(
+                    f'Found {cs["occurrences"]} hardcoded `cy.wait(ms)` '
+                    f'({lines_str}). This is the #1 cause of Cypress flakiness.'
+                )
+                # Generate a specific fix based on context
+                if test_source and test_source.get("lines"):
+                    for ex in examples[:1]:
+                        ex_line = ex["line"]
+                        # Find what comes after the wait in the test block
+                        next_action = None
+                        for tl in test_source["lines"]:
+                            if tl["line"] > ex_line:
+                                code = tl["code"].strip()
+                                if code and not code.startswith("//"):
+                                    next_action = code
+                                    break
+                        if next_action:
+                            # Detect if it's a cy.get() call
+                            get_match = re.search(r'cy\.get\(["\']([^"\']+)', next_action)
+                            if get_match:
+                                fix_suggestions.append(
+                                    f'Line {ex_line}: Replace `{ex["code"]}` with '
+                                    f'a `cy.intercept()` that waits for the API call '
+                                    f'that populates `{get_match.group(1)}`.'
+                                )
+                            else:
+                                fix_suggestions.append(
+                                    f'Line {ex_line}: Replace `{ex["code"]}` with '
+                                    f'`cy.intercept()` + `cy.wait(\'@alias\')` for '
+                                    f'the network request this delay is covering.'
+                                )
+            elif cs["id"] == "no_cy_session":
+                findings.append(
+                    'Test performs login without `cy.session()`. Each run repeats '
+                    'the full login flow, which is slow and flake-prone in CI.'
+                )
+                fix_suggestions.append(
+                    'Wrap the login flow in `cy.session()` to cache auth state '
+                    'across tests.'
+                )
+            elif cs["id"] == "force_click" and examples:
+                lines_str = ", ".join(f"L{ex['line']}" for ex in examples[:3])
+                findings.append(
+                    f'Using `force: true` on click ({lines_str}) hides element '
+                    f'visibility issues. The element may be covered by an overlay.'
+                )
+                fix_suggestions.append(
+                    'Remove `force: true` and instead wait for the element to be '
+                    'visible: `cy.get(selector).should("be.visible").click()`'
+                )
+            elif cs["id"] == "no_intercept":
+                findings.append(
+                    'No `cy.intercept()` found. Test relies on real API timing '
+                    'which varies significantly in CI containers.'
+                )
+                fix_suggestions.append(
+                    'Add `cy.intercept()` to wait for critical API responses '
+                    'before asserting on DOM elements.'
+                )
+
+    # 4. Commit correlation
+    ca = commit_analysis
+    if ca.get("same_commit_flaky"):
+        findings.append(
+            f'Test passes AND fails on the same commit SHA '
+            f'({", ".join(ca["mixed_commits"][:2])}). '
+            f'This is definitive proof of non-deterministic behavior.'
+        )
+    elif ca.get("only_failing_commits"):
+        findings.append(
+            f'Failures only appear on commit(s): '
+            f'{", ".join(ca["only_failing_commits"][:3])}. '
+            f'This looks more like a regression than a flake.'
+        )
+        fix_suggestions.append(
+            f'Check what changed in commit {ca["only_failing_commits"][0]}. '
+            f'The failure may be caused by an app change, not a test issue.'
+        )
+
+    # Build summary
+    summary_parts = []
+    if findings:
+        summary_parts.append(findings[0])
+    if fix_suggestions:
+        summary_parts.append(fix_suggestions[0])
+
+    return {
+        "findings": findings,
+        "fix_suggestions": fix_suggestions,
+        "summary": " ".join(summary_parts[:2]),
+    }
+
+
+@runs_bp.route("/test-health/<int:case_id>/analyze", methods=["POST"])
+@jwt_required()
+def deep_analyze_test(case_id):
+    """On-demand deep analysis for a specific flaky/failing test case.
+
+    Fetches all historical error messages, the actual test source code,
+    searches app repos for failing selectors, and correlates with commit SHAs
+    to produce a specific, actionable diagnosis.
+    """
+    tc = TestCase.query.get_or_404(case_id)
+    data = request.get_json(silent=True) or {}
+    project_id = data.get("project_id")
+    window = max(1, min(data.get("window", 30), 90))
+
+    if not project_id:
+        return jsonify({"error": "project_id is required"}), 400
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window)
+
+    # Get completed runs in window
+    runs = TestRun.query.filter(
+        TestRun.project_id == project_id,
+        TestRun.is_completed == True,
+        TestRun.completed_at >= cutoff,
+    ).order_by(TestRun.completed_at).all()
+    run_ids = [r.id for r in runs]
+    run_map = {r.id: r for r in runs}
+
+    if not run_ids:
+        return jsonify({"error": "No completed runs in this time window"}), 404
+
+    # Get all results for this case across runs
+    results = TestResult.query.filter(
+        TestResult.run_id.in_(run_ids),
+        TestResult.case_id == case_id,
+    ).all()
+
+    if not results:
+        return jsonify({"error": "No results found for this test case"}), 404
+
+    # Sort results by run order
+    run_order = {rid: idx for idx, rid in enumerate(run_ids)}
+    results.sort(key=lambda r: run_order.get(r.run_id, 0))
+
+    failed_results = [r for r in results if r.status == "Failed"]
+
+    # ── 1. Error grouping ──
+    error_groups = _group_error_messages(failed_results, run_map)
+
+    # ── 2. Fetch test source code ──
+    source_path = None
+    source_content = None
+    if tc.preconditions:
+        for line in tc.preconditions.split("\n"):
+            line = line.strip()
+            if line.startswith("Source:") or line.startswith("File:"):
+                source_path = line.split(":", 1)[1].strip()
+                break
+
+    suite = Suite.query.get(tc.suite_id) if tc.suite_id else None
+    cypress_path = suite.cypress_path if suite else None
+    file_cache = {}
+    source_content = _fetch_github_file(cypress_path, source_path, file_cache)
+
+    test_source = None
+    if source_content:
+        test_source = _extract_test_block(source_content, tc.title)
+
+    # ── 3. Extract selectors from errors and test code ──
+    error_msgs = [r.error_message for r in failed_results if r.error_message]
+    test_lines = test_source.get("lines") if test_source else None
+    selectors = _extract_selectors(error_msgs, test_lines)
+
+    # ── 4. Search app repos for selectors ──
+    app_refs = _search_github_for_selectors(selectors)
+
+    # ── 5. Commit correlation ──
+    commit_analysis = _analyze_commit_correlation(results, run_map)
+
+    # ── 6. Code smells (reuse existing) ──
+    code_smells = _analyze_code_smells(source_content) if source_content else []
+
+    # ── 7. Build diagnosis ──
+    diagnosis = _build_deep_diagnosis(
+        error_groups, test_source, selectors,
+        app_refs, commit_analysis, code_smells,
+    )
+
+    return jsonify({
+        "case_id": case_id,
+        "title": tc.title,
+        "suite_name": suite.name if suite else None,
+        "error_analysis": error_groups,
+        "test_source": {
+            "file": source_path or (cypress_path if cypress_path else None),
+            "repo": "styleseat/cypress",
+            "block": test_source,
+        } if source_content else None,
+        "selectors": selectors,
+        "app_references": app_refs,
+        "commit_analysis": commit_analysis,
+        "code_smells": code_smells,
+        "diagnosis": diagnosis,
+    }), 200
 
 
 @runs_bp.route("/circleci/job/<job_number>", methods=["GET"])
