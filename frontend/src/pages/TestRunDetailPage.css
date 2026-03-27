@@ -456,10 +456,13 @@ a.run-delta-commit:hover {
   gap: 16px;
   animation: slideUp 0.35s ease both;
   animation-delay: 0.08s;
+  background: #d0dfd4;
+  border-radius: var(--radius-lg);
+  padding: 16px;
 }
 
 .run-section-group {
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-white);
   box-shadow: var(--shadow-sm);
@@ -469,14 +472,15 @@ a.run-delta-commit:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 18px;
-  background: transparent;
-  border-bottom: 1px solid var(--border-light);
+  padding: 14px 18px;
+  background: #e8f0ea;
+  cursor: pointer;
+  user-select: none;
   transition: background var(--transition);
 }
 
 .run-section-header:hover {
-  background: var(--bg-subtle);
+  background: #dce8df;
 }
 
 .run-section-header:hover .run-section-chevron {
@@ -503,10 +507,10 @@ a.run-delta-commit:hover {
 }
 
 .run-section-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.1px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #222;
+  letter-spacing: -0.2px;
   user-select: text;
   cursor: text;
   white-space: nowrap;
@@ -609,13 +613,13 @@ a.run-delta-commit:hover {
 
 .run-section-count {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   background: var(--border-light);
   border-radius: var(--radius-full);
-  padding: 2px 8px;
-  min-width: 20px;
+  padding: 2px 9px;
+  min-width: 22px;
   text-align: center;
   cursor: pointer;
   margin-left: auto;
@@ -623,7 +627,7 @@ a.run-delta-commit:hover {
 
 /* ── Suite-level grouping (combined runs) ── */
 .run-suite-group {
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-white);
   box-shadow: var(--shadow-sm);
@@ -645,10 +649,10 @@ a.run-delta-commit:hover {
 }
 
 .run-suite-name {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.2px;
+  color: #111;
+  letter-spacing: -0.3px;
   flex: 1;
   min-width: 0;
 }
@@ -656,34 +660,39 @@ a.run-delta-commit:hover {
 .run-suite-sections {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: #d0dfd4;
 }
 
 .run-suite-sections .run-section-group {
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  border-bottom: 1px solid var(--border-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  background: var(--bg-white);
 }
 
 .run-suite-sections .run-section-group:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .run-suite-sections .run-section-header {
-  padding-left: 28px;
-  background: var(--bg-subtle);
+  padding: 14px 18px;
+  background-color: #e8f0ea;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: 1px solid #d5e2d8;
 }
 
 .run-suite-sections .run-section-header:hover {
-  background: var(--border-light);
+  background-color: #dce8df;
 }
 
 .run-suite-sections .run-case-row {
-  padding-left: 52px;
+  padding-left: 36px;
 }
 
 .run-suite-sections .run-select-all {
-  padding-left: 52px;
+  padding-left: 36px;
 }
 
 /* ── Case rows inside sections ── */
@@ -1167,16 +1176,21 @@ a.run-delta-commit:hover {
     width: 80px;
   }
 
+  .run-suite-sections {
+    gap: 8px;
+    padding: 8px;
+  }
+
   .run-suite-sections .run-section-header {
-    padding-left: 22px;
+    padding: 10px 14px;
   }
 
   .run-suite-sections .run-case-row {
-    padding-left: 36px;
+    padding-left: 28px;
   }
 
   .run-suite-sections .run-select-all {
-    padding-left: 36px;
+    padding-left: 28px;
   }
 
 
@@ -1243,7 +1257,7 @@ a.run-delta-commit:hover {
   }
 
   .run-section-name {
-    font-size: 12px;
+    font-size: 14px;
   }
 
 
