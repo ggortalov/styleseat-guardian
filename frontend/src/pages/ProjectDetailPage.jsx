@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -81,6 +81,60 @@ function formatTimeAgo(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function SuiteDropdown({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const label = value || 'All Suites';
+
+  return (
+    <div className="runs-suite-dropdown" ref={ref}>
+      <button
+        className="runs-suite-dropdown-btn"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Filter by suite"
+        type="button"
+      >
+        <span className="runs-suite-dropdown-label">{label}</span>
+        <svg className={`runs-suite-dropdown-chevron${open ? ' open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="runs-suite-dropdown-menu" role="listbox">
+          <li
+            className={`runs-suite-dropdown-item${!value ? ' runs-suite-dropdown-item--active' : ''}`}
+            role="option"
+            aria-selected={!value}
+            onClick={() => { onChange(''); setOpen(false); }}
+          >
+            All Suites
+          </li>
+          {options.map(name => (
+            <li
+              key={name}
+              className={`runs-suite-dropdown-item${value === name ? ' runs-suite-dropdown-item--active' : ''}`}
+              role="option"
+              aria-selected={value === name}
+              onClick={() => { onChange(name); setOpen(false); }}
+            >
+              {name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -101,6 +155,9 @@ export default function ProjectDetailPage() {
   // Runs tab: filter, search, selection state
   const [runStatusFilter, setRunStatusFilter] = useState('All');
   const [runSearchQuery, setRunSearchQuery] = useState('');
+  const [runSuiteFilter, setRunSuiteFilter] = useState('');
+  const [runDateFilter, setRunDateFilter] = useState('all');
+  const [runSort, setRunSort] = useState({ key: 'created_at', dir: 'desc' });
   const [selectedRuns, setSelectedRuns] = useState(new Set());
   const [showBulkDeleteRuns, setShowBulkDeleteRuns] = useState(false);
   const [apiError, setApiError] = useState(null);
@@ -166,8 +223,21 @@ export default function ProjectDetailPage() {
 
   const filteredRuns = useMemo(() => {
     let result = runs;
-    if (runStatusFilter === 'Active') result = result.filter(r => !r.is_completed);
-    else if (runStatusFilter === 'Completed') result = result.filter(r => r.is_completed);
+    // Status filter — Active = not locked (today), Completed = locked (older)
+    if (runStatusFilter === 'Active') result = result.filter(r => !r.is_locked);
+    else if (runStatusFilter === 'Completed') result = result.filter(r => r.is_locked);
+    // Suite filter
+    if (runSuiteFilter) {
+      result = result.filter(r => (r.suite_name || '') === runSuiteFilter);
+    }
+    // Date range filter
+    if (runDateFilter !== 'all') {
+      const days = parseInt(runDateFilter);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      result = result.filter(r => new Date(r.created_at) >= cutoff);
+    }
+    // Search filter
     if (runSearchQuery.trim()) {
       const q = runSearchQuery.toLowerCase();
       result = result.filter(r =>
@@ -175,14 +245,47 @@ export default function ProjectDetailPage() {
         (r.suite_name || '').toLowerCase().includes(q)
       );
     }
+    // Sort
+    result = [...result].sort((a, b) => {
+      let av, bv;
+      switch (runSort.key) {
+        case 'name':
+          av = a.name.toLowerCase(); bv = b.name.toLowerCase();
+          return runSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+        case 'suite_name':
+          av = (a.suite_name || '').toLowerCase(); bv = (b.suite_name || '').toLowerCase();
+          return runSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+        case 'pass_rate':
+          av = a.stats?.pass_rate ?? -1; bv = b.stats?.pass_rate ?? -1;
+          return runSort.dir === 'asc' ? av - bv : bv - av;
+        default: // created_at
+          av = new Date(a.created_at); bv = new Date(b.created_at);
+          return runSort.dir === 'asc' ? av - bv : bv - av;
+      }
+    });
     return result;
-  }, [runs, runStatusFilter, runSearchQuery]);
+  }, [runs, runStatusFilter, runSearchQuery, runSuiteFilter, runDateFilter, runSort]);
 
   const runFilterStats = useMemo(() => ({
     All: runs.length,
-    Active: runs.filter(r => !r.is_completed).length,
-    Completed: runs.filter(r => r.is_completed).length,
+    Active: runs.filter(r => !r.is_locked).length,
+    Completed: runs.filter(r => r.is_locked).length,
   }), [runs]);
+
+  const runSuiteNames = useMemo(() => {
+    const names = new Set(runs.map(r => r.suite_name).filter(n => n && n !== 'All Suites'));
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [runs]);
+
+  const handleRunSort = (key) => {
+    setRunSort(prev => prev.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: key === 'name' || key === 'suite_name' ? 'asc' : 'desc' }
+    );
+  };
+
+  const runSortChevron = (key) => runSort.key === key ? (runSort.dir === 'asc' ? '\u25B2' : '\u25BC') : '';
+  const runHasActiveFilters = runStatusFilter !== 'All' || runSearchQuery || runSuiteFilter || runDateFilter !== 'all';
 
   const toggleRunSelect = (id) => {
     setSelectedRuns(prev => {
@@ -528,6 +631,22 @@ export default function ProjectDetailPage() {
                   </button>
                 ))}
               </div>
+              <SuiteDropdown
+                value={runSuiteFilter}
+                options={runSuiteNames}
+                onChange={val => { setRunSuiteFilter(val); setSelectedRuns(new Set()); }}
+              />
+              <div className="runs-date-pills">
+                {[{ label: 'All', value: 'all' }, { label: '7d', value: '7' }, { label: '30d', value: '30' }, { label: '90d', value: '90' }].map(d => (
+                  <button
+                    key={d.value}
+                    className={`runs-filter-pill${runDateFilter === d.value ? ' runs-filter-pill--active' : ''}`}
+                    onClick={() => { setRunDateFilter(d.value); setSelectedRuns(new Set()); }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
               <div className="runs-search-wrapper">
                 <svg className="runs-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -551,10 +670,10 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Active filter indicator */}
-            {(runStatusFilter !== 'All' || runSearchQuery) && (
+            {runHasActiveFilters && (
               <div className="runs-active-filter">
                 Showing {filteredRuns.length} of {runs.length} runs
-                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
+                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setRunSuiteFilter(''); setRunDateFilter('all'); setSelectedRuns(new Set()); }}>
                   Clear filters
                 </button>
               </div>
@@ -573,7 +692,11 @@ export default function ProjectDetailPage() {
                           onChange={toggleRunSelectAll}
                         />
                       </th>
-                      <th scope="col">Name</th><th scope="col">Suite</th><th scope="col">Status</th><th scope="col">Pass Rate</th><th scope="col" className="runs-created-col">Created</th>
+                      <th scope="col" className="runs-col-sortable" onClick={() => handleRunSort('name')}>Name {runSortChevron('name') && <span className="runs-sort-chevron">{runSortChevron('name')}</span>}</th>
+                      <th scope="col" className="runs-col-sortable" onClick={() => handleRunSort('suite_name')}>Suite {runSortChevron('suite_name') && <span className="runs-sort-chevron">{runSortChevron('suite_name')}</span>}</th>
+                      <th scope="col">Status</th>
+                      <th scope="col" className="runs-col-sortable" onClick={() => handleRunSort('pass_rate')}>Pass Rate {runSortChevron('pass_rate') && <span className="runs-sort-chevron">{runSortChevron('pass_rate')}</span>}</th>
+                      <th scope="col" className="runs-col-sortable runs-created-col" onClick={() => handleRunSort('created_at')}>Created {runSortChevron('created_at') && <span className="runs-sort-chevron">{runSortChevron('created_at')}</span>}</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -467,16 +467,15 @@ export default function TestRunDetailPage() {
           </div>
         )}
         {delta?.has_previous && (() => {
-          const hasDetails = delta.added_count > 0 || delta.removed_count > 0;
+          const hasChanges = delta.added_count > 0 || delta.removed_count > 0;
           const prevTotal = delta.previous_run.total;
           const curTotal = delta.current_total;
           const diff = curTotal - prevTotal;
           const diffStr = diff > 0 ? `+${diff}` : diff === 0 ? '0' : `${diff}`;
-          const noChanges = !hasDetails && diff === 0;
           return (
             <div className="run-delta-section">
               <div className="run-delta-card">
-                {noChanges ? (
+                {!hasChanges ? (
                   <div className="run-delta-header">
                     <span className="run-delta-icon run-delta-icon--unchanged">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -484,7 +483,7 @@ export default function TestRunDetailPage() {
                       </svg>
                     </span>
                     <span className="run-delta-body">
-                      <span className="run-delta-title">No changes since{' '}
+                      <span className="run-delta-title">No changes compared to{' '}
                         <a
                           className="run-delta-link"
                           href={`/runs/${delta.previous_run.id}`}
@@ -494,7 +493,7 @@ export default function TestRunDetailPage() {
                         </a>
                       </span>
                       <span className="run-delta-meta">
-                        {curTotal} tests, identical to previous run
+                        {curTotal} tests{diff !== 0 ? ` (was ${prevTotal})` : ''}
                         {delta.current_run?.triggered_by && (
                           <>{' '}&middot; by <span className="run-delta-attribution">{delta.current_run.triggered_by}</span></>
                         )}
@@ -504,8 +503,8 @@ export default function TestRunDetailPage() {
                 ) : (
                   <>
                     <div
-                      className={`run-delta-header ${hasDetails ? 'run-delta-header--clickable' : ''}`}
-                      onClick={() => hasDetails && setDeltaExpanded(!deltaExpanded)}
+                      className="run-delta-header run-delta-header--clickable"
+                      onClick={() => setDeltaExpanded(!deltaExpanded)}
                     >
                       <span className="run-delta-icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -534,20 +533,18 @@ export default function TestRunDetailPage() {
                           )}
                         </span>
                       </span>
-                      {hasDetails && (
-                        <svg className={`run-delta-chevron ${deltaExpanded ? 'open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      )}
+                      <svg className={`run-delta-chevron ${deltaExpanded ? 'open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
                     </div>
-                    {deltaExpanded && hasDetails && (
+                    {deltaExpanded && (
                       <div className="run-delta-details">
                         {delta.added.length > 0 && (
                           <div className="run-delta-list">
                             <span className="run-delta-list-label run-delta-added">+ Added ({delta.added.length})</span>
                             {delta.added.map((c) => (
                               <div key={c.case_id} className="run-delta-list-item">
-                                <span className="run-delta-list-title">{c.title}</span>
+                                <span className="run-delta-list-title">{stripTestRailId(c.title)}</span>
                                 {c.section_name && <span className="run-delta-list-section">{c.section_name}</span>}
                               </div>
                             ))}
@@ -558,7 +555,7 @@ export default function TestRunDetailPage() {
                             <span className="run-delta-list-label run-delta-removed">- Removed ({delta.removed.length})</span>
                             {delta.removed.map((c) => (
                               <div key={c.case_id} className="run-delta-list-item">
-                                <span className="run-delta-list-title">{c.title}</span>
+                                <span className="run-delta-list-title">{stripTestRailId(c.title)}</span>
                                 {c.section_name && <span className="run-delta-list-section">{c.section_name}</span>}
                               </div>
                             ))}

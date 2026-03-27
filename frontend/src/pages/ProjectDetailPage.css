@@ -843,6 +843,113 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Suite filter custom dropdown (runs tab) */
+.runs-suite-dropdown {
+  position: relative;
+}
+
+.runs-suite-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  background: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+  white-space: nowrap;
+}
+
+.runs-suite-dropdown-btn:hover,
+.runs-suite-dropdown-btn:focus-visible {
+  border-color: var(--sidebar-bg);
+}
+
+.runs-suite-dropdown-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runs-suite-dropdown-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.runs-suite-dropdown-chevron.open {
+  transform: rotate(180deg);
+}
+
+.runs-suite-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  animation: fadeIn 0.12s ease;
+}
+
+.runs-suite-dropdown-item {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.runs-suite-dropdown-item:hover {
+  background: var(--primary-light, #f0f7f3);
+}
+
+.runs-suite-dropdown-item--active {
+  font-weight: 700;
+  color: var(--sidebar-bg);
+  background: var(--primary-light, #f0f7f3);
+}
+
+/* Date range pills */
+.runs-date-pills {
+  display: flex;
+  gap: 4px;
+}
+
+/* Sortable column headers */
+.runs-col-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.runs-col-sortable:hover {
+  color: var(--sidebar-bg);
+}
+
+.runs-sort-chevron {
+  font-size: 10px;
+  margin-left: 2px;
+  vertical-align: middle;
+  color: var(--sidebar-bg);
+}
+
 /* Search input */
 .runs-search-wrapper {
   position: relative;
@@ -1049,6 +1156,28 @@
 
   .runs-search-wrapper {
     max-width: none;
+  }
+
+  .runs-suite-dropdown {
+    width: 100%;
+  }
+
+  .runs-suite-dropdown-btn {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .runs-suite-dropdown-menu {
+    width: 100%;
+  }
+
+  .runs-date-pills {
+    width: 100%;
+  }
+
+  .runs-date-pills .runs-filter-pill {
+    flex: 1;
+    justify-content: center;
   }
 }
 
@@ -2384,6 +2513,9 @@
   .runs-search-clear,
   .tab,
   .runs-status-btn,
+  .runs-col-sortable,
+  .runs-suite-dropdown-btn,
+  .runs-suite-dropdown-chevron,
   .th-category-pill,
   .th-window-pill,
   .th-suite-select,

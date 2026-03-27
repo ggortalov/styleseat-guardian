@@ -26,6 +26,44 @@ _import_output_lines = []
 
 VALID_STATUSES = {"Passed", "Failed", "Blocked", "Retest", "Untested"}
 
+# Middle dot separator used in CircleCI-imported run names: "P0 · Mon, Mar 23, 2026"
+_MIDDOT_SEP = " \u00b7 "
+
+
+def _derive_suite_name(run_name, suite_names):
+    """Derive suite name from a run name for runs without suite_id.
+
+    Splits on the ' · ' separator used by CircleCI imports, then matches
+    the prefix against known suite names (longest first to handle
+    "P0 Devices" vs "P0").  Falls back to "All Suites" if no match.
+    """
+    if _MIDDOT_SEP not in run_name:
+        return "All Suites"
+    prefix = run_name.split(_MIDDOT_SEP, 1)[0].strip()
+    if not prefix:
+        return "All Suites"
+    # Try exact match first
+    if prefix in suite_names:
+        return prefix
+    # Try case-insensitive + dash-normalized match (run may use '-' while suite uses '–')
+    prefix_lower = prefix.lower().replace("\u2013", "-").replace("-", "-")
+    for sn in suite_names:
+        sn_lower = sn.lower().replace("\u2013", "-").replace("-", "-")
+        if prefix_lower == sn_lower:
+            return sn
+    # Strip branch/variant suffixes and retry: "P0 gem5240wallet · date" → "P0"
+    parts = prefix.split()
+    for length in range(len(parts) - 1, 0, -1):
+        candidate = " ".join(parts[:length])
+        if candidate in suite_names:
+            return candidate
+        candidate_lower = candidate.lower().replace("\u2013", "-").replace("-", "-")
+        for sn in suite_names:
+            sn_lower = sn.lower().replace("\u2013", "-").replace("-", "-")
+            if candidate_lower == sn_lower:
+                return sn
+    return prefix  # use the raw prefix as-is (better than "All Suites")
+
 
 def _get_user_tz():
     """Return the user's timezone from the X-Timezone header, falling back to UTC."""
@@ -102,11 +140,22 @@ def list_all_runs():
         )
         for rid, status, cnt in rows:
             all_run_stats.setdefault(rid, {})[status] = cnt
+    # Collect suite names per project for derivation
+    project_ids = {r.project_id for r in runs if r.project_id}
+    _all_suites = Suite.query.filter(Suite.project_id.in_(project_ids)).all() if project_ids else []
+    _suite_names_by_project = {}
+    for s in _all_suites:
+        _suite_names_by_project.setdefault(s.project_id, set()).add(s.name)
     result = []
     for run in runs:
         d = run.to_dict()
         d["project_name"] = run.project.name if run.project else None
-        d["suite_name"] = run.suite.name if run.suite else "All Suites"
+        if run.suite:
+            d["suite_name"] = run.suite.name
+        else:
+            d["suite_name"] = _derive_suite_name(
+                run.name, _suite_names_by_project.get(run.project_id, set())
+            )
         counts = all_run_stats.get(run.id, {})
         d["stats"] = {
             "Passed": counts.get("Passed", 0),
@@ -149,10 +198,20 @@ def list_runs(project_id):
         )
         for rid, status, cnt in rows:
             all_run_stats.setdefault(rid, {})[status] = cnt
+    # Collect known suite names for derivation of runs without suite_id
+    project_suite_names = {s.name for s in Suite.query.filter_by(project_id=project_id).all()}
     result = []
     for run in runs:
         d = run.to_dict()
-        d["suite_name"] = run.suite.name if run.suite else "All Suites"
+        if run.suite:
+            d["suite_name"] = run.suite.name
+        else:
+            d["suite_name"] = _derive_suite_name(run.name, project_suite_names)
+        locked = _is_run_date_locked(run)
+        d["is_locked"] = locked
+        if locked:
+            completed_at = get_run_completed_at(run.id)
+            d["completed_at"] = completed_at.isoformat() if completed_at else None
         counts = all_run_stats.get(run.id, {})
         d["stats"] = {
             "Passed": counts.get("Passed", 0),
@@ -213,7 +272,13 @@ def create_run(project_id):
 def get_run(run_id):
     run = TestRun.query.get_or_404(run_id)
     d = run.to_dict()
-    d["suite_name"] = run.suite.name if run.suite else "All Suites"
+    if run.suite:
+        d["suite_name"] = run.suite.name
+    else:
+        project_suite_names = set()
+        if run.project_id:
+            project_suite_names = {s.name for s in Suite.query.filter_by(project_id=run.project_id).all()}
+        d["suite_name"] = _derive_suite_name(run.name, project_suite_names)
     d["cypress_path"] = run.suite.cypress_path if run.suite else None
     project = Project.query.get(run.project_id) if run.project_id else None
     d["project_name"] = project.name if project else None
@@ -252,35 +317,31 @@ def get_run_delta(run_id):
     current_effective = run.run_date or run.created_at
     current_results = TestResult.query.filter_by(run_id=run.id).all()
 
-    if run.suite_id:
-        # Suite-scoped run: match by suite_id
-        match_filter = TestRun.suite_id == run.suite_id
-    else:
-        # Combined run (no suite_id): find which suites this run's results belong to,
-        # then find the most recent prior run whose results share the same suite(s).
-        current_suite_ids = {
-            r.test_case.suite_id for r in current_results
-            if r.test_case and r.test_case.suite_id
-        }
-        if not current_suite_ids:
-            return jsonify({"has_previous": False}), 200
+    # Determine which suite(s) this run covers — either from run.suite_id or from its results
+    current_suite_ids = {run.suite_id} if run.suite_id else {
+        r.test_case.suite_id for r in current_results
+        if r.test_case and r.test_case.suite_id
+    }
+    if not current_suite_ids:
+        return jsonify({"has_previous": False}), 200
 
-        # Find run IDs (other than current) whose results reference the same suite(s)
-        candidate_run_ids = (
-            db.session.query(TestResult.run_id)
-            .join(TestCase, TestResult.case_id == TestCase.id)
-            .filter(
-                TestResult.run_id != run.id,
-                TestCase.suite_id.in_(current_suite_ids),
-            )
-            .distinct()
-            .all()
+    # Find the most recent prior run (by date/time) whose results share the same suite(s).
+    # This works regardless of whether the prior run has suite_id set or is a combined run.
+    candidate_run_ids = (
+        db.session.query(TestResult.run_id)
+        .join(TestCase, TestResult.case_id == TestCase.id)
+        .filter(
+            TestResult.run_id != run.id,
+            TestCase.suite_id.in_(current_suite_ids),
         )
-        candidate_ids = [row[0] for row in candidate_run_ids]
-        if not candidate_ids:
-            return jsonify({"has_previous": False}), 200
+        .distinct()
+        .all()
+    )
+    candidate_ids = [row[0] for row in candidate_run_ids]
+    if not candidate_ids:
+        return jsonify({"has_previous": False}), 200
 
-        match_filter = TestRun.id.in_(candidate_ids)
+    match_filter = TestRun.id.in_(candidate_ids)
 
     prev_run = (
         TestRun.query
@@ -300,8 +361,8 @@ def get_run_delta(run_id):
         return jsonify({"has_previous": False}), 200
     prev_results = TestResult.query.filter_by(run_id=prev_run.id).all()
 
-    current_case_ids = {r.case_id for r in current_results}
-    prev_case_ids = {r.case_id for r in prev_results}
+    current_case_ids = {r.case_id for r in current_results if r.case_id is not None}
+    prev_case_ids = {r.case_id for r in prev_results if r.case_id is not None}
 
     added_ids = current_case_ids - prev_case_ids
     removed_ids = prev_case_ids - current_case_ids
@@ -387,7 +448,7 @@ def get_run_delta(run_id):
             "id": prev_run.id,
             "name": prev_run.name,
             "date": prev_date.isoformat() if prev_date else None,
-            "total": len(prev_results),
+            "total": len(prev_case_ids),
             "triggered_by": prev_run.triggered_by,
             "commit_sha": prev_run.commit_sha,
         },
@@ -395,7 +456,7 @@ def get_run_delta(run_id):
             "triggered_by": run.triggered_by,
             "commit_sha": run.commit_sha,
         },
-        "current_total": len(current_results),
+        "current_total": len(current_case_ids),
         "added": added,
         "removed": removed,
         "added_count": len(added),
