@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -19,7 +19,14 @@ function SyncLogCard({ log }) {
 
   return (
     <div className={`sync-log-card ${log.status === 'error' ? 'sync-log-card--error' : ''}`}>
-      <div className="sync-log-header" onClick={() => log.new_case_names?.length > 0 && setExpanded(!expanded)}>
+      <div
+        className="sync-log-header"
+        onClick={() => log.new_case_names?.length > 0 && setExpanded(!expanded)}
+        role={log.new_case_names?.length > 0 ? 'button' : undefined}
+        tabIndex={log.new_case_names?.length > 0 ? 0 : undefined}
+        aria-expanded={log.new_case_names?.length > 0 ? expanded : undefined}
+        onKeyDown={log.new_case_names?.length > 0 ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } } : undefined}
+      >
         <div className="sync-log-icon">
           {isSync ? (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -87,13 +94,75 @@ export default function ProjectDetailPage() {
   const tab = searchParams.get('tab') || 'overview';
   const setTab = (t) => setSearchParams(t === 'overview' ? {} : { tab: t }, { replace: true });
 
+  // Suites tab: search, sort
+  const [suiteSearch, setSuiteSearch] = useState('');
+  const [suiteSort, setSuiteSort] = useState('name');
+
   // Runs tab: filter, search, selection state
   const [runStatusFilter, setRunStatusFilter] = useState('All');
   const [runSearchQuery, setRunSearchQuery] = useState('');
-  const [runDateFrom, setRunDateFrom] = useState('');
-  const [runDateTo, setRunDateTo] = useState('');
   const [selectedRuns, setSelectedRuns] = useState(new Set());
   const [showBulkDeleteRuns, setShowBulkDeleteRuns] = useState(false);
+  const [apiError, setApiError] = useState(null);
+
+  // Test Health tab state
+  const [healthData, setHealthData] = useState(null);
+  const [healthLoading2, setHealthLoading2] = useState(false);
+  const [healthSuiteFilter, setHealthSuiteFilter] = useState(null);
+  const [healthWindow, setHealthWindow] = useState(30);
+  const [healthCategoryFilter, setHealthCategoryFilter] = useState('all');
+  const [healthSortCol, setHealthSortCol] = useState('severity');
+  const [healthSortDir, setHealthSortDir] = useState('desc');
+  const [healthExpandedRow, setHealthExpandedRow] = useState(null);
+
+  // Deep analysis state: { [caseId]: { loading, data, error, minimized } }
+  const [deepAnalysis, setDeepAnalysis] = useState({});
+
+  const startDeepAnalysis = useCallback(async (caseId) => {
+    setDeepAnalysis(prev => ({
+      ...prev,
+      [caseId]: { loading: true, data: null, error: null, minimized: false },
+    }));
+    try {
+      const data = await runService.analyzeTest(caseId, {
+        project_id: Number(projectId),
+        window: healthWindow,
+      });
+      setDeepAnalysis(prev => ({
+        ...prev,
+        [caseId]: { loading: false, data, error: null, minimized: false },
+      }));
+      // Play sound notification
+      try {
+        const { playConfirmation } = await import('../services/soundService.js');
+        playConfirmation();
+      } catch {}
+    } catch (err) {
+      setDeepAnalysis(prev => ({
+        ...prev,
+        [caseId]: { loading: false, data: null, error: err?.response?.data?.error || 'Analysis failed', minimized: false },
+      }));
+      try {
+        const { playError } = await import('../services/soundService.js');
+        playError();
+      } catch {}
+    }
+  }, [projectId, healthWindow]);
+
+  const toggleDeepMinimize = useCallback((caseId) => {
+    setDeepAnalysis(prev => ({
+      ...prev,
+      [caseId]: { ...prev[caseId], minimized: !prev[caseId]?.minimized },
+    }));
+  }, []);
+
+  const dismissDeepAnalysis = useCallback((caseId) => {
+    setDeepAnalysis(prev => {
+      const next = { ...prev };
+      delete next[caseId];
+      return next;
+    });
+  }, []);
 
   const filteredRuns = useMemo(() => {
     let result = runs;
@@ -106,16 +175,8 @@ export default function ProjectDetailPage() {
         (r.suite_name || '').toLowerCase().includes(q)
       );
     }
-    if (runDateFrom) {
-      const from = new Date(runDateFrom + 'T00:00:00');
-      result = result.filter(r => new Date(r.created_at) >= from);
-    }
-    if (runDateTo) {
-      const to = new Date(runDateTo + 'T23:59:59');
-      result = result.filter(r => new Date(r.created_at) <= to);
-    }
     return result;
-  }, [runs, runStatusFilter, runSearchQuery, runDateFrom, runDateTo]);
+  }, [runs, runStatusFilter, runSearchQuery]);
 
   const runFilterStats = useMemo(() => ({
     All: runs.length,
@@ -147,7 +208,7 @@ export default function ProjectDetailPage() {
       setSelectedRuns(new Set());
       setShowBulkDeleteRuns(false);
       fetchAll();
-    } catch { /* ignore */ }
+    } catch { setApiError('Failed to delete runs. Please try again.'); }
   };
 
   const fetchAll = async () => {
@@ -197,8 +258,20 @@ export default function ProjectDetailPage() {
         suite_stats: dash.suite_stats,
         run_dates: dash.run_dates,
       }));
-    } catch { /* ignore */ }
+    } catch { setApiError('Failed to load suite health data.'); }
     setHealthLoading(false);
+  }, [projectId]);
+
+  const fetchTestHealth = useCallback(async (suiteId, windowDays) => {
+    setHealthLoading2(true);
+    try {
+      const data = await runService.getTestHealth(projectId, {
+        suite_id: suiteId || undefined,
+        window: windowDays,
+      });
+      setHealthData(data);
+    } catch { setApiError('Failed to load test health data.'); }
+    setHealthLoading2(false);
   }, [projectId]);
 
   const navigateDate = (direction) => {
@@ -229,7 +302,12 @@ export default function ProjectDetailPage() {
     return idx > 0;
   })();
 
-  useEffect(() => { fetchAll(); }, [projectId]);
+  useEffect(() => { fetchAll(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (tab === 'health' && !healthData && !healthLoading2) {
+      fetchTestHealth(healthSuiteFilter, healthWindow);
+    }
+  }, [tab, healthData, healthLoading2, fetchTestHealth, healthSuiteFilter, healthWindow]);
 
   if (loading) return <><Header breadcrumbs={[{ label: 'Guardian' }]} /><LoadingSpinner /></>;
 
@@ -244,44 +322,180 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
-        <div className="tabs">
-          <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>
+        <div className="tabs" role="tablist" aria-label="Project sections">
+          <button className={`tab ${tab === 'overview' ? 'active' : ''}`} role="tab" aria-selected={tab === 'overview'} aria-controls="panel-overview" onClick={() => setTab('overview')}>
             Overview
           </button>
-          <button className={`tab ${tab === 'suites' ? 'active' : ''}`} onClick={() => setTab('suites')}>
+          <button className={`tab ${tab === 'suites' ? 'active' : ''}`} role="tab" aria-selected={tab === 'suites'} aria-controls="panel-suites" onClick={() => setTab('suites')}>
             Test Suites ({suites.length})
           </button>
-          <button className={`tab ${tab === 'runs' ? 'active' : ''}`} onClick={() => setTab('runs')}>
+          <button className={`tab ${tab === 'runs' ? 'active' : ''}`} role="tab" aria-selected={tab === 'runs'} aria-controls="panel-runs" onClick={() => setTab('runs')}>
             Test Runs ({runs.length})
+          </button>
+          <button className={`tab ${tab === 'health' ? 'active' : ''}`} role="tab" aria-selected={tab === 'health'} aria-controls="panel-health" onClick={() => setTab('health')}>
+            Test Health
           </button>
         </div>
 
-        {tab === 'suites' && (() => {
+        {apiError && (
+          <div className="api-error-banner" role="alert">
+            <span>{apiError}</span>
+            <button className="api-error-dismiss" aria-label="Dismiss error" onClick={() => setApiError(null)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {tab === 'suites' && (<div id="panel-suites" role="tabpanel" aria-labelledby="panel-suites">{(() => {
           const activeRunsBySuite = {};
           runs.filter(r => !r.is_completed && r.suite_id).forEach(r => {
             activeRunsBySuite[r.suite_id] = (activeRunsBySuite[r.suite_id] || 0) + 1;
           });
+
+          // Derive latest run stats per suite from runs data
+          const latestRunBySuite = {};
+          [...runs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).forEach(r => {
+            if (r.suite_id && !latestRunBySuite[r.suite_id]) {
+              latestRunBySuite[r.suite_id] = r;
+            }
+          });
+
+          // Filter suites by search
+          let displaySuites = suites;
+          if (suiteSearch.trim()) {
+            const q = suiteSearch.toLowerCase();
+            displaySuites = displaySuites.filter(s => s.name.toLowerCase().includes(q));
+          }
+
+          // Sort suites
+          displaySuites = [...displaySuites].sort((a, b) => {
+            if (suiteSort === 'name') return a.name.localeCompare(b.name);
+            if (suiteSort === 'cases') return (b.case_count || 0) - (a.case_count || 0);
+            if (suiteSort === 'pass_rate') {
+              const rateA = latestRunBySuite[a.id]?.stats?.pass_rate ?? -1;
+              const rateB = latestRunBySuite[b.id]?.stats?.pass_rate ?? -1;
+              return rateA - rateB; // worst first
+            }
+            if (suiteSort === 'last_run') {
+              const dateA = latestRunBySuite[a.id]?.created_at || '';
+              const dateB = latestRunBySuite[b.id]?.created_at || '';
+              return dateB.localeCompare(dateA); // most recent first
+            }
+            return 0;
+          });
+
           return (
             <div>
-              {suites.length > 0 ? (
+              {/* Toolbar */}
+              <div className="suites-filter-toolbar">
+                <div className="runs-search-wrapper">
+                  <svg className="runs-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    className="runs-search-input"
+                    type="text"
+                    placeholder="Search suites..."
+                    aria-label="Search suites"
+                    value={suiteSearch}
+                    onChange={e => setSuiteSearch(e.target.value)}
+                  />
+                  {suiteSearch && (
+                    <button className="runs-search-clear" aria-label="Clear suite search" onClick={() => setSuiteSearch('')}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="suites-sort">
+                  <label className="suites-sort-label" htmlFor="suites-sort">Sort by</label>
+                  <select id="suites-sort" className="suites-sort-select" value={suiteSort} onChange={e => setSuiteSort(e.target.value)}>
+                    <option value="name">Name</option>
+                    <option value="cases">Most Cases</option>
+                    <option value="pass_rate">Worst Pass Rate</option>
+                    <option value="last_run">Last Tested</option>
+                  </select>
+                </div>
+              </div>
+
+              {suiteSearch && (
+                <div className="runs-active-filter">
+                  Showing {displaySuites.length} of {suites.length} suites
+                  <button className="runs-clear-filters" onClick={() => setSuiteSearch('')}>Clear</button>
+                </div>
+              )}
+
+              {displaySuites.length > 0 ? (
                 <div className="suite-list">
-                  {suites.map((s) => {
+                  {displaySuites.map((s) => {
                     const activeCount = activeRunsBySuite[s.id] || 0;
+                    const latestRun = latestRunBySuite[s.id];
+                    const passRate = latestRun?.stats?.pass_rate;
+                    const total = latestRun?.stats?.total || 0;
+                    const passRateColor = passRate >= 80 ? 'var(--status-passed)' : passRate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
                     return (
                       <div key={s.id} className="suite-card">
                         <div className="suite-card-icon">
-                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                          </svg>
+                          {passRate != null ? (
+                            <span className="suite-card-rate" style={{ color: passRateColor }}>{passRate}%</span>
+                          ) : (
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                          )}
                         </div>
                         <div className="suite-card-body">
                           <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-name">{s.name}</Link>
                           <div className="suite-card-summary">
-                            Has {s.section_count || 0} section{(s.section_count || 0) !== 1 ? 's' : ''} with {s.case_count || 0} test case{(s.case_count || 0) !== 1 ? 's' : ''}.{' '}
+                            {s.case_count || 0} cases &middot; {s.section_count || 0} sections
                             {activeCount > 0
-                              ? <strong>{activeCount} active test run{activeCount !== 1 ? 's' : ''}.</strong>
-                              : 'No active test runs.'}
+                              ? <> &middot; <strong>{activeCount} active run{activeCount !== 1 ? 's' : ''}</strong></>
+                              : null}
+                            {latestRun && (
+                              <> &middot; tested {(() => {
+                                const d = new Date(latestRun.created_at);
+                                const now = new Date();
+                                const diff = now - d;
+                                const mins = Math.floor(diff / 60000);
+                                if (mins < 60) return `${mins}m ago`;
+                                const hours = Math.floor(mins / 60);
+                                if (hours < 24) return `${hours}h ago`;
+                                const days = Math.floor(hours / 24);
+                                if (days < 7) return `${days}d ago`;
+                                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                              })()}</>
+                            )}
                           </div>
+                          {latestRun && total > 0 && (
+                            <div className="suite-card-bar-row">
+                              <div className="suite-card-bar">
+                                {STATUS_ORDER.map((st) =>
+                                  latestRun.stats[st] > 0 ? (
+                                    <div
+                                      key={st}
+                                      style={{
+                                        width: `${(latestRun.stats[st] / total) * 100}%`,
+                                        backgroundColor: `var(--status-${st.toLowerCase()})`,
+                                      }}
+                                      title={`${st}: ${latestRun.stats[st]}`}
+                                    />
+                                  ) : null
+                                )}
+                              </div>
+                              <div className="suite-card-stat-badges">
+                                {STATUS_ORDER.map((st) =>
+                                  latestRun.stats[st] > 0 ? (
+                                    <span key={st} className="suite-card-stat-badge" style={{ color: `var(--status-${st.toLowerCase()})` }}>
+                                      {latestRun.stats[st]}
+                                    </span>
+                                  ) : null
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-chevron" title="Open suite">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -293,14 +507,14 @@ export default function ProjectDetailPage() {
                   })}
                 </div>
               ) : (
-                <p className="empty-message">No test suites yet.</p>
+                <p className="empty-message">{suites.length > 0 ? 'No suites match your search.' : 'No test suites yet.'}</p>
               )}
             </div>
           );
-        })()}
+        })()}</div>)}
 
         {tab === 'runs' && (
-          <div>
+          <div id="panel-runs" role="tabpanel" aria-labelledby="panel-runs">
             {/* Filter toolbar */}
             <div className="runs-filter-toolbar">
               <div className="runs-filter-pills">
@@ -322,34 +536,12 @@ export default function ProjectDetailPage() {
                   className="runs-search-input"
                   type="text"
                   placeholder="Search runs..."
+                  aria-label="Search runs"
                   value={runSearchQuery}
                   onChange={e => { setRunSearchQuery(e.target.value); setSelectedRuns(new Set()); }}
                 />
                 {runSearchQuery && (
-                  <button className="runs-search-clear" onClick={() => { setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              <div className="runs-date-filter">
-                <label className="runs-date-label">From</label>
-                <input
-                  type="date"
-                  className="runs-date-input"
-                  value={runDateFrom}
-                  onChange={e => { setRunDateFrom(e.target.value); setSelectedRuns(new Set()); }}
-                />
-                <label className="runs-date-label">To</label>
-                <input
-                  type="date"
-                  className="runs-date-input"
-                  value={runDateTo}
-                  onChange={e => { setRunDateTo(e.target.value); setSelectedRuns(new Set()); }}
-                />
-                {(runDateFrom || runDateTo) && (
-                  <button className="runs-date-clear" onClick={() => { setRunDateFrom(''); setRunDateTo(''); setSelectedRuns(new Set()); }}>
+                  <button className="runs-search-clear" aria-label="Clear run search" onClick={() => { setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
@@ -359,10 +551,10 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Active filter indicator */}
-            {(runStatusFilter !== 'All' || runSearchQuery || runDateFrom || runDateTo) && (
+            {(runStatusFilter !== 'All' || runSearchQuery) && (
               <div className="runs-active-filter">
                 Showing {filteredRuns.length} of {runs.length} runs
-                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setRunDateFrom(''); setRunDateTo(''); setSelectedRuns(new Set()); }}>
+                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
                   Clear filters
                 </button>
               </div>
@@ -376,19 +568,21 @@ export default function ProjectDetailPage() {
                       <th className="runs-checkbox-col">
                         <input
                           type="checkbox"
+                          aria-label="Select all runs"
                           checked={filteredRuns.length > 0 && filteredRuns.every(r => selectedRuns.has(r.id))}
                           onChange={toggleRunSelectAll}
                         />
                       </th>
-                      <th>Name</th><th>Suite</th><th>Status</th><th>Pass Rate</th><th className="runs-created-col">Created</th>
+                      <th scope="col">Name</th><th scope="col">Suite</th><th scope="col">Status</th><th scope="col">Pass Rate</th><th scope="col" className="runs-created-col">Created</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRuns.map((r) => (
-                      <tr key={r.id} className={`clickable-row${selectedRuns.has(r.id) ? ' runs-row--selected' : ''}`} onClick={() => navigate(`/runs/${r.id}`)}>
+                      <tr key={r.id} className={`clickable-row${selectedRuns.has(r.id) ? ' runs-row--selected' : ''}`} onClick={() => navigate(`/runs/${r.id}`)} tabIndex={0} role="link" onKeyDown={e => { if (e.key === 'Enter') navigate(`/runs/${r.id}`); }}>
                         <td className="runs-checkbox-col" onClick={e => e.stopPropagation()}>
                           <input
                             type="checkbox"
+                            aria-label={`Select run ${r.name}`}
                             checked={selectedRuns.has(r.id)}
                             onChange={() => toggleRunSelect(r.id)}
                           />
@@ -436,7 +630,587 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {tab === 'overview' && (() => {
+        {tab === 'health' && (<div id="panel-health" role="tabpanel" aria-labelledby="panel-health">{(() => {
+          const CATEGORY_COLORS = {
+            flaky: '#FF9800', always_failing: '#d32f2f', consistently_failing: '#F44336', regression: '#9C27B0',
+          };
+          const CATEGORY_LABELS = {
+            flaky: 'Flaky', always_failing: 'Always Failing', consistently_failing: 'Consistently Failing', regression: 'Regression',
+          };
+          const CONFIDENCE_LABELS = { low: 'Low Confidence', medium: 'Medium Confidence', high: 'High Confidence' };
+          const CONFIDENCE_COLORS = { low: '#FF9800', medium: '#5f6d64', high: '#4CAF50' };
+          const CONFIDENCE_BGS = { low: '#FFF3E0', medium: '#f0f4f1', high: '#E8F5E9' };
+          const STATUS_DOT_COLORS = { Passed: '#4CAF50', Failed: '#F44336', Blocked: '#FF9800', Retest: '#00897B', Untested: '#9E9E9E' };
+
+          const hd = healthData;
+          const summary = hd?.summary || {};
+          const tests = hd?.tests || [];
+          const hasIssues = tests.length > 0;
+          const totalIssues = (summary.flaky || 0) + (summary.always_failing || 0) + (summary.consistently_failing || 0) + (summary.regression || 0);
+
+          // Apply category filter
+          const filteredTests = healthCategoryFilter === 'all'
+            ? tests
+            : tests.filter(t => t.category === healthCategoryFilter);
+
+          // Apply sorting
+          const sortedTests = [...filteredTests].sort((a, b) => {
+            let av, bv;
+            switch (healthSortCol) {
+              case 'title': av = a.title.toLowerCase(); bv = b.title.toLowerCase(); return healthSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+              case 'suite': av = a.suite_name; bv = b.suite_name; return healthSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+              case 'category': av = a.category; bv = b.category; return healthSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+              case 'ewma': av = a.ewma_flip_rate; bv = b.ewma_flip_rate; break;
+              case 'fail_rate': av = a.failure_rate; bv = b.failure_rate; break;
+              case 'disruptions': av = a.disruption_count; bv = b.disruption_count; break;
+              default: av = a.severity; bv = b.severity;
+            }
+            return healthSortDir === 'asc' ? av - bv : bv - av;
+          });
+
+          const handleSort = (col) => {
+            if (healthSortCol === col) {
+              setHealthSortDir(d => d === 'asc' ? 'desc' : 'asc');
+            } else {
+              setHealthSortCol(col);
+              setHealthSortDir('desc');
+            }
+          };
+
+          const sortIcon = (col) => healthSortCol === col ? (healthSortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+          const ariaSort = (col) => healthSortCol === col ? (healthSortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+
+          return (
+            <div className="th-container">
+              {/* Controls toolbar */}
+              <div className="th-toolbar">
+                <div className="th-toolbar-left">
+                  <select
+                    className="th-suite-select"
+                    aria-label="Filter by suite"
+                    value={healthSuiteFilter || ''}
+                    onChange={e => {
+                      const val = e.target.value ? parseInt(e.target.value) : null;
+                      setHealthSuiteFilter(val);
+                      setHealthData(null);
+                      fetchTestHealth(val, healthWindow);
+                    }}
+                  >
+                    <option value="">All Suites</option>
+                    {suites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <div className="th-window-pills">
+                    {[7, 14, 30].map(d => (
+                      <button
+                        key={d}
+                        className={`th-window-pill${healthWindow === d ? ' th-window-pill--active' : ''}`}
+                        onClick={() => {
+                          setHealthWindow(d);
+                          setHealthData(null);
+                          fetchTestHealth(healthSuiteFilter, d);
+                        }}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {hd && hd.confidence !== 'insufficient' && (
+                  <div className="th-toolbar-right">
+                    <span className="th-runs-analyzed">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-2px', marginRight: 4 }}>
+                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      {hd.runs_analyzed} runs &middot; {summary.total_analyzed || 0} tests analyzed
+                    </span>
+                    {hd.confidence && (
+                      <span className="th-confidence-badge" style={{ color: CONFIDENCE_COLORS[hd.confidence], borderColor: CONFIDENCE_COLORS[hd.confidence], background: CONFIDENCE_BGS[hd.confidence] }}>
+                        {CONFIDENCE_LABELS[hd.confidence]}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {healthLoading2 ? (
+                <LoadingSpinner />
+              ) : hd?.confidence === 'insufficient' ? (
+                /* Insufficient data state */
+                <div className="th-insufficient">
+                  <div className="th-insufficient-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  </div>
+                  <h3 className="th-insufficient-title">Not Enough Data Yet</h3>
+                  <p className="th-insufficient-text">
+                    Test health analysis requires at least <strong>{hd.min_runs_required} completed runs</strong> to reliably
+                    detect flaky and failing patterns.
+                  </p>
+                  <div className="th-insufficient-progress">
+                    <div className="th-insufficient-bar">
+                      <div className="th-insufficient-bar-fill" style={{ width: `${Math.min((hd.runs_analyzed / hd.min_runs_required) * 100, 100)}%` }} />
+                    </div>
+                    <span className="th-insufficient-bar-label">{hd.runs_analyzed} / {hd.min_runs_required} runs</span>
+                  </div>
+                  <p className="th-insufficient-sub">Import more CircleCI results or try a wider time window.</p>
+                </div>
+              ) : hd ? (
+                <>
+                  {hasIssues ? (
+                    <>
+                      {/* Summary tiles — only shown when there are issues */}
+                      <div className="th-tiles">
+                        {[
+                          { key: 'flaky', iconEl: (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                          )},
+                          { key: 'always_failing', iconEl: (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                            </svg>
+                          )},
+                          { key: 'consistently_failing', iconEl: (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                          )},
+                          { key: 'regression', iconEl: (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
+                            </svg>
+                          )},
+                        ].map(({ key, iconEl }) => {
+                          const count = summary[key] || 0;
+                          const total = (summary.flaky || 0) + (summary.always_failing || 0) + (summary.consistently_failing || 0) + (summary.regression || 0);
+                          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                          return (
+                          <button
+                            key={key}
+                            className={`th-tile${healthCategoryFilter === key ? ' th-tile--active' : ''}${count === 0 ? ' th-tile--zero' : ''}`}
+                            style={{ '--tile-accent': CATEGORY_COLORS[key] }}
+                            onClick={() => setHealthCategoryFilter(f => f === key ? 'all' : key)}
+                          >
+                            <div className="th-tile-icon-wrap">{iconEl}</div>
+                            <div className="th-tile-body">
+                              <span className="th-tile-count">{count}</span>
+                              <span className="th-tile-label">{CATEGORY_LABELS[key]}</span>
+                            </div>
+                            {count > 0 && <div className="th-tile-bar"><div className="th-tile-bar-fill" style={{ width: `${pct}%` }} /></div>}
+                            {count > 0 && <span className="th-tile-pct">{pct}% of issues</span>}
+                          </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Category filter pills */}
+                      <div className="th-filter-pills">
+                        {['all', 'flaky', 'always_failing', 'consistently_failing', 'regression'].map(f => {
+                          const count = f === 'all' ? tests.length : tests.filter(t => t.category === f).length;
+                          if (f !== 'all' && count === 0) return null;
+                          return (
+                            <button
+                              key={f}
+                              className={`th-filter-pill${healthCategoryFilter === f ? ' th-filter-pill--active' : ''}`}
+                              onClick={() => setHealthCategoryFilter(f)}
+                            >
+                              {f === 'all' ? `All Issues` : CATEGORY_LABELS[f]}
+                              <span className="th-filter-pill-count">{count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Test table */}
+                      {sortedTests.length > 0 && (
+                        <div className="th-table-wrap">
+                          <table className="th-table">
+                            <thead>
+                              <tr>
+                                <th className="th-col-name" scope="col" aria-sort={ariaSort('title')} onClick={() => handleSort('title')}>Test Name{sortIcon('title')}</th>
+                                <th className="th-col-suite" scope="col" aria-sort={ariaSort('suite')} onClick={() => handleSort('suite')}>Suite{sortIcon('suite')}</th>
+                                <th className="th-col-cat" scope="col" aria-sort={ariaSort('category')} onClick={() => handleSort('category')}>Category{sortIcon('category')}</th>
+                                <th className="th-col-ewma" scope="col" aria-sort={ariaSort('ewma')} onClick={() => handleSort('ewma')}>Flakiness{sortIcon('ewma')}</th>
+                                <th className="th-col-fail" scope="col" aria-sort={ariaSort('fail_rate')} onClick={() => handleSort('fail_rate')}>Fail Rate{sortIcon('fail_rate')}</th>
+                                <th className="th-col-disruptions" scope="col" aria-sort={ariaSort('disruptions')} onClick={() => handleSort('disruptions')}>Disruptions{sortIcon('disruptions')}</th>
+                                <th className="th-col-root" scope="col">Root Cause</th>
+                                <th className="th-col-trend" scope="col">Trend</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sortedTests.map(t => {
+                                const isExpanded = healthExpandedRow === t.case_id;
+                                const d = t.diagnostics;
+                                return (
+                                  <React.Fragment key={t.case_id}>
+                                    <tr
+                                      className={`th-row${isExpanded ? ' th-row--expanded' : ''}`}
+                                      onClick={() => setHealthExpandedRow(isExpanded ? null : t.case_id)}
+                                      tabIndex={0}
+                                      role="button"
+                                      aria-expanded={isExpanded}
+                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHealthExpandedRow(isExpanded ? null : t.case_id); } }}
+                                    >
+                                      <td className="th-col-name">
+                                        <div className="th-test-name">{t.title}</div>
+                                        <div className="th-test-section">{t.section_name}</div>
+                                      </td>
+                                      <td className="th-col-suite">{t.suite_name}</td>
+                                      <td className="th-col-cat">
+                                        <span className="th-cat-badge" style={{ color: CATEGORY_COLORS[t.category], backgroundColor: CATEGORY_COLORS[t.category] + '18' }}>
+                                          {CATEGORY_LABELS[t.category]}
+                                        </span>
+                                      </td>
+                                      <td className="th-col-ewma">
+                                        <div className="th-ewma-bar-wrap">
+                                          <div className="th-ewma-bar" style={{ width: `${Math.min(t.ewma_flip_rate * 100, 100)}%` }} />
+                                        </div>
+                                        <span className="th-ewma-val">{Math.round(t.ewma_flip_rate * 100)}%</span>
+                                      </td>
+                                      <td className="th-col-fail">{Math.round(t.failure_rate * 100)}%</td>
+                                      <td className="th-col-disruptions">{t.disruption_count}</td>
+                                      <td className="th-col-root">
+                                        {d?.error_label ? (
+                                          <span className="th-root-badge">{d.error_label}</span>
+                                        ) : <span className="th-root-none">--</span>}
+                                      </td>
+                                      <td className="th-col-trend">
+                                        <div className="th-trend-dots" aria-label={`Last ${t.trend.length}: ${Object.entries(t.trend.reduce((acc, s) => { acc[s] = (acc[s] || 0) + 1; return acc; }, {})).map(([k, v]) => `${v} ${k}`).join(', ')}`}>
+                                          {t.trend.map((s, i) => (
+                                            <span key={i} className="th-trend-dot" style={{ backgroundColor: STATUS_DOT_COLORS[s] || '#9E9E9E' }} title={s} aria-hidden="true" />
+                                          ))}
+                                        </div>
+                                      </td>
+                                    </tr>
+
+                                    {/* Expanded diagnostics row */}
+                                    {isExpanded && (
+                                      <tr className="th-detail-row">
+                                        <td colSpan="8">
+                                          <div className="th-detail">
+                                            {/* Stats summary */}
+                                            <div className="th-detail-stats">
+                                              <span>{t.total_runs} runs</span>
+                                              <span className="th-dot">&middot;</span>
+                                              <span style={{ color: '#4CAF50' }}>{t.pass_count} passed</span>
+                                              <span className="th-dot">&middot;</span>
+                                              <span style={{ color: '#F44336' }}>{t.fail_count} failed</span>
+                                              {t.block_count > 0 && <><span className="th-dot">&middot;</span><span style={{ color: '#FF9800' }}>{t.block_count} blocked</span></>}
+                                              <span className="th-dot">&middot;</span>
+                                              <span>Streak: {t.streak} {t.streak_status}</span>
+                                              {t.confidence && t.confidence !== 'high' && (
+                                                <>
+                                                  <span className="th-dot">&middot;</span>
+                                                  <span className="th-confidence-inline" style={{ color: CONFIDENCE_COLORS[t.confidence] }}>
+                                                    {CONFIDENCE_LABELS[t.confidence]}
+                                                  </span>
+                                                </>
+                                              )}
+                                            </div>
+
+                                            {/* Same-commit flaky badge */}
+                                            {t.same_commit_flaky && (
+                                              <div className="th-same-commit">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF9800" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                                                </svg>
+                                                Same-Commit Flaky — passed and failed on the same commit SHA
+                                              </div>
+                                            )}
+
+                                            <div className="th-detail-grid">
+                                              {/* Root Cause panel */}
+                                              {d?.suggestion && (
+                                                <div className="th-detail-panel">
+                                                  <div className="th-detail-panel-title">Root Cause Analysis</div>
+                                                  {d.error_label && <span className="th-root-badge" style={{ marginBottom: 8, display: 'inline-block' }}>{d.error_label}</span>}
+                                                  <p className="th-detail-suggestion">{d.suggestion}</p>
+                                                </div>
+                                              )}
+
+                                              {/* Code Quality panel */}
+                                              {d?.code_smells?.length > 0 && (
+                                                <div className="th-detail-panel">
+                                                  <div className="th-detail-panel-title">
+                                                    Code Quality
+                                                    {d.source_file && <span className="th-source-file">{d.source_file}</span>}
+                                                  </div>
+                                                  <div className="th-smell-list">
+                                                    {d.code_smells.map((cs, i) => (
+                                                      <div key={i} className="th-smell-item">
+                                                        <span className="th-smell-badge">{cs.label}{cs.occurrences > 1 ? ` (×${cs.occurrences})` : ''}</span>
+                                                        <span className="th-smell-suggestion">{cs.suggestion}</span>
+                                                        {cs.examples?.length > 0 && (
+                                                          <div className="th-smell-examples">
+                                                            {cs.examples.map((ex, j) => (
+                                                              <code key={j} className="th-smell-code">L{ex.line}: {ex.code}</code>
+                                                            ))}
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            {/* Latest error message */}
+                                            {d?.last_error && (
+                                              <div className="th-detail-panel">
+                                                <div className="th-detail-panel-title">Latest Error</div>
+                                                <pre className="th-error-pre">{d.last_error}</pre>
+                                              </div>
+                                            )}
+
+                                            {/* Artifacts */}
+                                            {d?.recent_artifacts?.length > 0 && (
+                                              <div className="th-detail-panel">
+                                                <div className="th-detail-panel-title">Artifacts</div>
+                                                <div className="th-artifacts">
+                                                  {d.recent_artifacts.map((art, i) => (
+                                                    <a key={i} href={art.url} target="_blank" rel="noopener noreferrer" className="th-artifact-link">
+                                                      {art.name || 'Artifact'}
+                                                    </a>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            <div className="th-detail-actions">
+                                              <Link to={`/cases/${t.case_id}`} className="th-view-case">View Test Case</Link>
+                                              {!deepAnalysis[t.case_id] && (
+                                                <button
+                                                  className="th-investigate-btn"
+                                                  onClick={(e) => { e.stopPropagation(); startDeepAnalysis(t.case_id); }}
+                                                >
+                                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                                  </svg>
+                                                  Investigate
+                                                </button>
+                                              )}
+                                            </div>
+
+                                            {/* Deep analysis panel */}
+                                            {deepAnalysis[t.case_id] && (() => {
+                                              const da = deepAnalysis[t.case_id];
+                                              return (
+                                                <div className={`th-deep-analysis${da.minimized ? ' th-deep-analysis--minimized' : ''}`}>
+                                                  <div className="th-deep-header">
+                                                    <div className="th-deep-header-left">
+                                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                                      </svg>
+                                                      <span className="th-deep-header-title">Deep Analysis</span>
+                                                      {da.loading && <span className="th-deep-status th-deep-status--loading">Researching...</span>}
+                                                      {da.data && <span className="th-deep-status th-deep-status--done">Complete</span>}
+                                                      {da.error && <span className="th-deep-status th-deep-status--error">Failed</span>}
+                                                    </div>
+                                                    <div className="th-deep-header-actions">
+                                                      <button className="th-deep-minimize" onClick={(e) => { e.stopPropagation(); toggleDeepMinimize(t.case_id); }} title={da.minimized ? 'Expand' : 'Minimize'}>
+                                                        {da.minimized ? (
+                                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                                                        ) : (
+                                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15" /></svg>
+                                                        )}
+                                                      </button>
+                                                      <button className="th-deep-dismiss" onClick={(e) => { e.stopPropagation(); dismissDeepAnalysis(t.case_id); }} title="Dismiss">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                                      </button>
+                                                    </div>
+                                                  </div>
+
+                                                  {da.loading && !da.minimized && (
+                                                    <div className="th-deep-loading">
+                                                      <div className="th-deep-loading-bar" />
+                                                      <p>Analyzing error patterns across all runs, fetching test source code, searching app repos for selectors, correlating commits...</p>
+                                                    </div>
+                                                  )}
+
+                                                  {da.error && !da.minimized && (
+                                                    <div className="th-deep-error">
+                                                      <p>{da.error}</p>
+                                                      <button className="th-investigate-btn" onClick={(e) => { e.stopPropagation(); startDeepAnalysis(t.case_id); }}>Retry</button>
+                                                    </div>
+                                                  )}
+
+                                                  {da.data && !da.minimized && (() => {
+                                                    const { error_analysis, test_source, selectors, app_references, commit_analysis, code_smells, diagnosis } = da.data;
+                                                    return (
+                                                      <div className="th-deep-body">
+                                                        {/* Diagnosis summary */}
+                                                        {diagnosis && (
+                                                          <div className="th-deep-section th-deep-diagnosis">
+                                                            <div className="th-deep-section-title">Diagnosis</div>
+                                                            {diagnosis.findings?.map((f, i) => (
+                                                              <p key={i} className="th-deep-finding">{f}</p>
+                                                            ))}
+                                                            {diagnosis.fix_suggestions?.length > 0 && (
+                                                              <div className="th-deep-fixes">
+                                                                <strong>Suggested Fixes:</strong>
+                                                                {diagnosis.fix_suggestions.map((s, i) => (
+                                                                  <p key={i} className="th-deep-fix">{s}</p>
+                                                                ))}
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        )}
+
+                                                        {/* Error patterns */}
+                                                        {error_analysis && error_analysis.distinct_patterns > 0 && (
+                                                          <div className="th-deep-section">
+                                                            <div className="th-deep-section-title">
+                                                              Error Patterns
+                                                              <span className="th-deep-badge">{error_analysis.distinct_patterns} distinct across {error_analysis.total_failures} failures</span>
+                                                            </div>
+                                                            {error_analysis.groups?.map((g, i) => (
+                                                              <div key={i} className="th-deep-error-group">
+                                                                <div className="th-deep-error-group-header">
+                                                                  <span className="th-deep-error-pct">{g.percentage}%</span>
+                                                                  <span className="th-deep-error-count">({g.count}x)</span>
+                                                                </div>
+                                                                <pre className="th-deep-error-pattern">{g.pattern}</pre>
+                                                                {g.runs?.length > 0 && (
+                                                                  <div className="th-deep-error-runs">Runs: {g.runs.join(', ')}</div>
+                                                                )}
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                        )}
+
+                                                        {/* Test source code */}
+                                                        {test_source?.block && (
+                                                          <div className="th-deep-section">
+                                                            <div className="th-deep-section-title">
+                                                              Test Source
+                                                              {test_source.file && <span className="th-source-file">{test_source.file.split('/').pop()}</span>}
+                                                            </div>
+                                                            <pre className="th-deep-code">{test_source.block.lines?.map(l =>
+                                                              `${String(l.line).padStart(4)}  ${l.code}`
+                                                            ).join('\n')}</pre>
+                                                          </div>
+                                                        )}
+
+                                                        {/* App references */}
+                                                        {app_references?.length > 0 && (
+                                                          <div className="th-deep-section">
+                                                            <div className="th-deep-section-title">
+                                                              App Code References
+                                                              <span className="th-deep-badge">{app_references.length} files</span>
+                                                            </div>
+                                                            <div className="th-deep-refs">
+                                                              {app_references.map((ref, i) => (
+                                                                <a key={i} href={ref.url} target="_blank" rel="noopener noreferrer" className="th-deep-ref">
+                                                                  <span className="th-deep-ref-repo">{ref.repo}</span>
+                                                                  <span className="th-deep-ref-path">{ref.path}</span>
+                                                                </a>
+                                                              ))}
+                                                            </div>
+                                                          </div>
+                                                        )}
+
+                                                        {/* Commit correlation */}
+                                                        {commit_analysis && commit_analysis.total_commits > 0 && (
+                                                          <div className="th-deep-section">
+                                                            <div className="th-deep-section-title">Commit Correlation</div>
+                                                            {commit_analysis.same_commit_flaky && (
+                                                              <p className="th-deep-finding" style={{ color: '#FF9800' }}>
+                                                                Passes AND fails on the same commit — confirmed non-deterministic (true flake).
+                                                              </p>
+                                                            )}
+                                                            <div className="th-deep-commits">
+                                                              {commit_analysis.commit_breakdown?.map((c, i) => (
+                                                                <div key={i} className="th-deep-commit">
+                                                                  <code className="th-deep-commit-sha">{c.sha}</code>
+                                                                  {c.passed > 0 && <span className="th-deep-commit-pass">{c.passed}P</span>}
+                                                                  {c.failed > 0 && <span className="th-deep-commit-fail">{c.failed}F</span>}
+                                                                  {c.blocked > 0 && <span className="th-deep-commit-block">{c.blocked}B</span>}
+                                                                </div>
+                                                              ))}
+                                                            </div>
+                                                          </div>
+                                                        )}
+
+                                                        {/* Code smells (from deep analysis) */}
+                                                        {code_smells?.length > 0 && (
+                                                          <div className="th-deep-section">
+                                                            <div className="th-deep-section-title">Code Quality Issues</div>
+                                                            <div className="th-smell-list">
+                                                              {code_smells.map((cs, i) => (
+                                                                <div key={i} className="th-smell-item">
+                                                                  <span className="th-smell-badge">{cs.label}{cs.occurrences > 1 ? ` (x${cs.occurrences})` : ''}</span>
+                                                                  <span className="th-smell-suggestion">{cs.suggestion}</span>
+                                                                  {cs.examples?.length > 0 && (
+                                                                    <div className="th-smell-examples">
+                                                                      {cs.examples.map((ex, j) => (
+                                                                        <code key={j} className="th-smell-code">L{ex.line}: {ex.code}</code>
+                                                                      ))}
+                                                                    </div>
+                                                                  )}
+                                                                </div>
+                                                              ))}
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })()}
+                                                </div>
+                                              );
+                                            })()}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* All healthy — clean summary card */
+                    <div className="th-healthy">
+                      <div className="th-healthy-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                        </svg>
+                      </div>
+                      <h3 className="th-healthy-title">All Tests Are Healthy</h3>
+                      <p className="th-healthy-text">
+                        No flaky, failing, or regressed tests detected across <strong>{summary.total_analyzed || 0}</strong> tests
+                        in <strong>{hd.runs_analyzed}</strong> runs over the last {healthWindow} days.
+                      </p>
+                      <div className="th-healthy-stats">
+                        <div className="th-healthy-stat">
+                          <span className="th-healthy-stat-val">{summary.total_analyzed || 0}</span>
+                          <span className="th-healthy-stat-label">Tests Analyzed</span>
+                        </div>
+                        <div className="th-healthy-stat-divider" />
+                        <div className="th-healthy-stat">
+                          <span className="th-healthy-stat-val">{hd.runs_analyzed}</span>
+                          <span className="th-healthy-stat-label">Runs Checked</span>
+                        </div>
+                        <div className="th-healthy-stat-divider" />
+                        <div className="th-healthy-stat">
+                          <span className="th-healthy-stat-val">0</span>
+                          <span className="th-healthy-stat-label">Issues Found</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          );
+        })()}</div>)}
+
+        {tab === 'overview' && (<div id="panel-overview" role="tabpanel" aria-labelledby="panel-overview">{(() => {
           const totalCases = suites.reduce((sum, s) => sum + (s.case_count || 0), 0);
           const totalSections = suites.reduce((sum, s) => sum + (s.section_count || 0), 0);
 
@@ -563,8 +1337,6 @@ export default function ProjectDetailPage() {
               </div>
 
               {/* Sync Reports */}
-              {(() => {
-                return (
               <div className="ov-sync">
                 <h3 className="ov-section-title">Sync Changes</h3>
                 {syncLogs.length > 0 ? (
@@ -577,11 +1349,9 @@ export default function ProjectDetailPage() {
                   <p className="empty-message">No syncs recorded yet.</p>
                 )}
               </div>
-                );
-              })()}
             </div>
           );
-        })()}
+        })()}</div>)}
       </div>
     </div>
   );
