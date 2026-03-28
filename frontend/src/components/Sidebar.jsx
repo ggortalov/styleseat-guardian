@@ -268,7 +268,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
                     <circle cx="12" cy="12" r="10" />
                     <polygon points="10 8 16 12 10 16 10 8" />
                   </svg>
-                  <span className="sidebar-run-name">{r.name?.split(' · ')[0] || r.suite_name || r.name}</span>
+                  <span className="sidebar-run-name">{(r.name?.includes(' \u00b7 ') ? r.name.split(' \u00b7 ')[0] : r.name?.replace(/ - Manual Run .*$/, '')) || r.suite_name || r.name}</span>
                   <span className="sidebar-suite-item-count">{r.stats?.total || 0}</span>
                 </NavLink>
               ))}

@@ -42,7 +42,7 @@ import runService from '../services/runService';
 import dashboardService from '../services/dashboardService';
 
 // ── Fixtures ──────────────────────────────────────────
-const PROJECT = { id: 1, name: 'Cypress Automation', description: 'Test project', case_count: 100 };
+const PROJECT = { id: 1, name: 'Automation Overview', description: 'Test project', case_count: 100 };
 
 const SUITES = [
   { id: 1, name: 'P1 Common', case_count: 40, section_count: 10 },
@@ -67,7 +67,7 @@ const SUITE_STATS = {
   2: { Passed: 50, Failed: 5, Blocked: 3, Retest: 0, Untested: 2, total: 60, run_id: 2 },
 };
 
-const todayStr = new Date().toISOString().slice(0, 10);
+const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 
 const DASHBOARD_DATA = {
   overall_stats: { Passed: 80, Failed: 10, Blocked: 5, Retest: 1, Untested: 4, pass_rate: 80 },
@@ -127,14 +127,14 @@ describe('ProjectDetailPage', () => {
   it('renders project name in header after load', async () => {
     renderPage();
     await waitForPageLoad();
-    expect(screen.getByTestId('header')).toHaveTextContent('Cypress Automation');
+    expect(screen.getByTestId('header')).toHaveTextContent('Automation Overview');
   });
 
   it('renders project name in page heading after load', async () => {
     renderPage();
     await waitForPageLoad();
     const heading = screen.getByRole('heading', { level: 2 });
-    expect(heading).toHaveTextContent('Cypress Automation');
+    expect(heading).toHaveTextContent('Automation Overview');
   });
 
   it('renders project description', async () => {

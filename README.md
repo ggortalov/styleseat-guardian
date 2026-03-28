@@ -373,7 +373,7 @@ cd frontend && npm run dev
 |---------|-------|-----|
 | `gh: command not found` | GitHub CLI not installed | Install via `brew install gh` |
 | `gh: Not logged in` / 401 error | GitHub CLI not authenticated | Run `gh auth login` (needs `repo` scope for `styleseat/cypress`) |
-| `'Cypress Automation' project not found` | Database not seeded | Run `python seed.py` first, or use `npm run demo` |
+| `'Automation Overview' project not found` | Database not seeded | Run `python seed.py` first, or use `npm run demo` |
 
 ### Database issues
 
