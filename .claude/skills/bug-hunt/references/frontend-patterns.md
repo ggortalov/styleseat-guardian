@@ -19,6 +19,8 @@ Guardian's established design system rules. Every finding should be checked agai
 
 **Rule**: All interactive elements use the green palette. No blue, no purple, no generic gray buttons.
 
+**Accent Rule — Unified Primary Green**: Decorative accents on structural UI (stat tiles, KPI cards, section icons, card borders) must all use the **same primary green palette** (`--sidebar-bg` / `--primary-light`). Never assign per-element accent colors for decoration — status colors are reserved **strictly for data meaning**. No rainbow accent bars, no per-tile color theming.
+
 **Status colors**: Passed=#2e7d32, Failed=#c62828, Blocked=#e65100, Retest=#00695c, Untested=#78909c
 
 ## Typography
@@ -36,6 +38,11 @@ Guardian's established design system rules. Every finding should be checked agai
 - Secondary: white bg, green border, fills green on hover
 - Active: `scale(0.97)` press effect
 - Every button must be a `<button>` element, not a `<div>` with onClick
+
+### Cards & Stat Tiles
+- Cards use uniform `border: 1px solid var(--border-light)` — no per-card colored accent borders
+- Stat tile icon circles: `background: var(--primary-light); color: var(--sidebar-bg)` — same for all tiles
+- Flag as a bug: per-element colored `border-left`, `border-top`, or `::before` accent bars that vary color across tiles/cards
 
 ### Status Badges (Tinted Pills)
 - Colored text on matching light background

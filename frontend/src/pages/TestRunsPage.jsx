@@ -162,8 +162,9 @@ export default function TestRunsPage() {
     fetchRuns(runs.length, true);
   };
 
-  const openRuns = runs.filter(r => !r.is_locked);
-  const completedRuns = runs.filter(r => r.is_locked);
+  const sortNewest = (a, b) => b.id - a.id;
+  const openRuns = runs.filter(r => !r.is_locked).sort(sortNewest);
+  const completedRuns = runs.filter(r => r.is_locked).sort(sortNewest);
 
   // Group completed runs by run date
   const completedByDate = completedRuns.reduce((groups, run) => {

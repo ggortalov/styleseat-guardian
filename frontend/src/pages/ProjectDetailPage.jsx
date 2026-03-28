@@ -83,7 +83,11 @@ function formatTimeAgo(date) {
 
 function SuiteDropdown({ value, options, onChange }) {
   const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(-1);
   const ref = useRef(null);
+  const listRef = useRef(null);
+
+  const allOptions = ['', ...options];
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -91,16 +95,73 @@ function SuiteDropdown({ value, options, onChange }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    if (open && listRef.current) {
+      const active = listRef.current.querySelector('[aria-selected="true"]');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+      const idx = allOptions.indexOf(value || '');
+      setFocusIdx(idx >= 0 ? idx : 0);
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open && listRef.current && focusIdx >= 0) {
+      const items = listRef.current.querySelectorAll('[role="option"]');
+      if (items[focusIdx]) items[focusIdx].scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusIdx, open]);
+
+  const handleKeyDown = (e) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusIdx(i => Math.min(i + 1, allOptions.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusIdx(i => Math.max(i - 1, 0));
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (focusIdx >= 0) { onChange(allOptions[focusIdx]); setOpen(false); }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setOpen(false);
+        break;
+      case 'Home':
+        e.preventDefault();
+        setFocusIdx(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        setFocusIdx(allOptions.length - 1);
+        break;
+      default: break;
+    }
+  };
+
   const label = value || 'All Suites';
+  const activeDescendant = open && focusIdx >= 0 ? `suite-opt-${focusIdx}` : undefined;
 
   return (
     <div className="runs-suite-dropdown" ref={ref}>
       <button
         className="runs-suite-dropdown-btn"
         onClick={() => setOpen(o => !o)}
+        onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Filter by suite"
+        aria-activedescendant={activeDescendant}
         type="button"
       >
         <span className="runs-suite-dropdown-label">{label}</span>
@@ -109,19 +170,21 @@ function SuiteDropdown({ value, options, onChange }) {
         </svg>
       </button>
       {open && (
-        <ul className="runs-suite-dropdown-menu" role="listbox">
+        <ul className="runs-suite-dropdown-menu" role="listbox" ref={listRef} aria-label="Suite filter options">
           <li
-            className={`runs-suite-dropdown-item${!value ? ' runs-suite-dropdown-item--active' : ''}`}
+            id="suite-opt-0"
+            className={`runs-suite-dropdown-item${!value ? ' runs-suite-dropdown-item--active' : ''}${focusIdx === 0 ? ' runs-suite-dropdown-item--focus' : ''}`}
             role="option"
             aria-selected={!value}
             onClick={() => { onChange(''); setOpen(false); }}
           >
             All Suites
           </li>
-          {options.map(name => (
+          {options.map((name, i) => (
             <li
               key={name}
-              className={`runs-suite-dropdown-item${value === name ? ' runs-suite-dropdown-item--active' : ''}`}
+              id={`suite-opt-${i + 1}`}
+              className={`runs-suite-dropdown-item${value === name ? ' runs-suite-dropdown-item--active' : ''}${focusIdx === i + 1 ? ' runs-suite-dropdown-item--focus' : ''}`}
               role="option"
               aria-selected={value === name}
               onClick={() => { onChange(name); setOpen(false); }}
@@ -130,6 +193,174 @@ function SuiteDropdown({ value, options, onChange }) {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_LABELS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+function DateRangePicker({ startDate, endDate, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = startDate || new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+  const [picking, setPicking] = useState(null); // null | Date (first click stored)
+  const wrapRef = useRef(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open]);
+
+  // Build calendar grid for current viewMonth
+  const calendarDays = useMemo(() => {
+    const { year, month } = viewMonth;
+    const firstDay = new Date(year, month, 1);
+    // Monday=0 offset
+    let startOffset = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    const days = [];
+    // Previous month trailing days
+    for (let i = startOffset - 1; i >= 0; i--) {
+      days.push({ date: new Date(year, month - 1, prevMonthDays - i), outside: true });
+    }
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push({ date: new Date(year, month, d), outside: false });
+    }
+    // Next month leading days to fill 6 rows
+    const remaining = 42 - days.length;
+    for (let d = 1; d <= remaining; d++) {
+      days.push({ date: new Date(year, month + 1, d), outside: true });
+    }
+    return days;
+  }, [viewMonth]);
+
+  const today = useMemo(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }, []);
+
+  const isSameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  const isInRange = (date) => {
+    if (!startDate || !endDate) return false;
+    return date >= startDate && date <= endDate;
+  };
+
+  const handleDayClick = (date) => {
+    if (!picking) {
+      // First click: set start
+      setPicking(date);
+    } else {
+      // Second click: determine range order and apply
+      let s = picking, e = date;
+      if (s > e) { [s, e] = [e, s]; }
+      setPicking(null);
+      onChange(s, e);
+      setOpen(false);
+    }
+  };
+
+  const handleClear = () => {
+    setPicking(null);
+    onChange(null, null);
+    setOpen(false);
+  };
+
+  const prevMonth = () => setViewMonth(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 });
+  const nextMonth = () => setViewMonth(v => v.month === 11 ? { year: v.year + 1, month: 0 } : { year: v.year, month: v.month + 1 });
+
+  const formatLabel = () => {
+    if (!startDate && !endDate) return 'All dates';
+    if (startDate && endDate) {
+      const s = `${SHORT_MONTHS[startDate.getMonth()]} ${startDate.getDate()}`;
+      const e = `${SHORT_MONTHS[endDate.getMonth()]} ${endDate.getDate()}`;
+      if (startDate.getFullYear() !== endDate.getFullYear()) {
+        return `${s}, ${startDate.getFullYear()} – ${e}, ${endDate.getFullYear()}`;
+      }
+      return `${s} – ${e}`;
+    }
+    if (startDate) return `From ${SHORT_MONTHS[startDate.getMonth()]} ${startDate.getDate()}`;
+    return `Until ${SHORT_MONTHS[endDate.getMonth()]} ${endDate.getDate()}`;
+  };
+
+  return (
+    <div className="drp-wrap" ref={wrapRef}>
+      <button
+        className="drp-btn"
+        onClick={() => { setOpen(o => !o); if (!open) setPicking(null); }}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <span className="drp-label">{formatLabel()}</span>
+        <svg className={`drp-chevron${open ? ' open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div className="drp-panel" role="dialog" aria-label="Date range picker">
+          <div className="drp-month-nav">
+            <button className="drp-nav-arrow" onClick={prevMonth} aria-label="Previous month">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+            <span className="drp-month-label">{MONTH_NAMES[viewMonth.month]} {viewMonth.year}</span>
+            <button className="drp-nav-arrow" onClick={nextMonth} aria-label="Next month">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
+          </div>
+          <div className="drp-weekdays">
+            {DAY_LABELS.map(d => <span key={d} className="drp-weekday">{d}</span>)}
+          </div>
+          <div className="drp-grid">
+            {calendarDays.map(({ date, outside }, i) => {
+              const isToday = isSameDay(date, today);
+              const isSelected = isSameDay(date, startDate) || isSameDay(date, endDate);
+              const isPicking = isSameDay(date, picking);
+              const inRange = isInRange(date);
+              return (
+                <button
+                  key={i}
+                  className={[
+                    'drp-day',
+                    outside && 'drp-day--outside',
+                    isToday && 'drp-day--today',
+                    (isSelected || isPicking) && 'drp-day--selected',
+                    inRange && !isSelected && 'drp-day--in-range',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => handleDayClick(date)}
+                  aria-label={`${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="drp-footer">
+            <button className="drp-clear" onClick={handleClear}>Clear</button>
+            {picking && <span className="drp-hint">Select end date</span>}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -156,7 +387,8 @@ export default function ProjectDetailPage() {
   const [runStatusFilter, setRunStatusFilter] = useState('All');
   const [runSearchQuery, setRunSearchQuery] = useState('');
   const [runSuiteFilter, setRunSuiteFilter] = useState('');
-  const [runDateFilter, setRunDateFilter] = useState('all');
+  const [runDateStart, setRunDateStart] = useState(null);  // Date | null
+  const [runDateEnd, setRunDateEnd] = useState(null);      // Date | null
   const [runSort, setRunSort] = useState({ key: 'created_at', dir: 'desc' });
   const [selectedRuns, setSelectedRuns] = useState(new Set());
   const [showBulkDeleteRuns, setShowBulkDeleteRuns] = useState(false);
@@ -231,11 +463,13 @@ export default function ProjectDetailPage() {
       result = result.filter(r => (r.suite_name || '') === runSuiteFilter);
     }
     // Date range filter
-    if (runDateFilter !== 'all') {
-      const days = parseInt(runDateFilter);
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      result = result.filter(r => new Date(r.created_at) >= cutoff);
+    if (runDateStart) {
+      result = result.filter(r => new Date(r.created_at) >= runDateStart);
+    }
+    if (runDateEnd) {
+      const endOfDay = new Date(runDateEnd);
+      endOfDay.setHours(23, 59, 59, 999);
+      result = result.filter(r => new Date(r.created_at) <= endOfDay);
     }
     // Search filter
     if (runSearchQuery.trim()) {
@@ -264,7 +498,7 @@ export default function ProjectDetailPage() {
       }
     });
     return result;
-  }, [runs, runStatusFilter, runSearchQuery, runSuiteFilter, runDateFilter, runSort]);
+  }, [runs, runStatusFilter, runSearchQuery, runSuiteFilter, runDateStart, runDateEnd, runSort]);
 
   const runFilterStats = useMemo(() => ({
     All: runs.length,
@@ -285,7 +519,9 @@ export default function ProjectDetailPage() {
   };
 
   const runSortChevron = (key) => runSort.key === key ? (runSort.dir === 'asc' ? '\u25B2' : '\u25BC') : '';
-  const runHasActiveFilters = runStatusFilter !== 'All' || runSearchQuery || runSuiteFilter || runDateFilter !== 'all';
+  const runAriaSort = (key) => runSort.key === key ? (runSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const handleRunSortKeyDown = (key, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRunSort(key); } };
+  const runHasActiveFilters = runStatusFilter !== 'All' || runSearchQuery || runSuiteFilter || runDateStart || runDateEnd;
 
   const toggleRunSelect = (id) => {
     setSelectedRuns(prev => {
@@ -426,16 +662,16 @@ export default function ProjectDetailPage() {
         </div>
 
         <div className="tabs" role="tablist" aria-label="Project sections">
-          <button className={`tab ${tab === 'overview' ? 'active' : ''}`} role="tab" aria-selected={tab === 'overview'} aria-controls="panel-overview" onClick={() => setTab('overview')}>
+          <button className={`tab ${tab === 'overview' ? 'active' : ''}`} role="tab" id="tab-overview" aria-selected={tab === 'overview'} aria-controls={tab === 'overview' ? 'panel-overview' : undefined} onClick={() => setTab('overview')}>
             Overview
           </button>
-          <button className={`tab ${tab === 'suites' ? 'active' : ''}`} role="tab" aria-selected={tab === 'suites'} aria-controls="panel-suites" onClick={() => setTab('suites')}>
+          <button className={`tab ${tab === 'suites' ? 'active' : ''}`} role="tab" id="tab-suites" aria-selected={tab === 'suites'} aria-controls={tab === 'suites' ? 'panel-suites' : undefined} onClick={() => setTab('suites')}>
             Test Suites ({suites.length})
           </button>
-          <button className={`tab ${tab === 'runs' ? 'active' : ''}`} role="tab" aria-selected={tab === 'runs'} aria-controls="panel-runs" onClick={() => setTab('runs')}>
+          <button className={`tab ${tab === 'runs' ? 'active' : ''}`} role="tab" id="tab-runs" aria-selected={tab === 'runs'} aria-controls={tab === 'runs' ? 'panel-runs' : undefined} onClick={() => setTab('runs')}>
             Test Runs ({runs.length})
           </button>
-          <button className={`tab ${tab === 'health' ? 'active' : ''}`} role="tab" aria-selected={tab === 'health'} aria-controls="panel-health" onClick={() => setTab('health')}>
+          <button className={`tab ${tab === 'health' ? 'active' : ''}`} role="tab" id="tab-health" aria-selected={tab === 'health'} aria-controls={tab === 'health' ? 'panel-health' : undefined} onClick={() => setTab('health')}>
             Test Health
           </button>
         </div>
@@ -451,7 +687,7 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {tab === 'suites' && (<div id="panel-suites" role="tabpanel" aria-labelledby="panel-suites">{(() => {
+        {tab === 'suites' && (<div id="panel-suites" role="tabpanel" aria-labelledby="tab-suites">{(() => {
           const activeRunsBySuite = {};
           runs.filter(r => !r.is_completed && r.suite_id).forEach(r => {
             activeRunsBySuite[r.suite_id] = (activeRunsBySuite[r.suite_id] || 0) + 1;
@@ -545,8 +781,8 @@ export default function ProjectDetailPage() {
                           {passRate != null ? (
                             <span className="suite-card-rate" style={{ color: passRateColor }}>{passRate}%</span>
                           ) : (
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polygon points="5 3 19 12 5 21 5 3" />
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--sidebar-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                             </svg>
                           )}
                         </div>
@@ -591,7 +827,7 @@ export default function ProjectDetailPage() {
                               <div className="suite-card-stat-badges">
                                 {STATUS_ORDER.map((st) =>
                                   latestRun.stats[st] > 0 ? (
-                                    <span key={st} className="suite-card-stat-badge" style={{ color: `var(--status-${st.toLowerCase()})` }}>
+                                    <span key={st} className="suite-card-stat-badge" style={{ '--badge-bg': `var(--status-${st.toLowerCase()}-bg)`, '--badge-color': `var(--status-${st.toLowerCase()})` }}>
                                       {latestRun.stats[st]}
                                     </span>
                                   ) : null
@@ -617,7 +853,7 @@ export default function ProjectDetailPage() {
         })()}</div>)}
 
         {tab === 'runs' && (
-          <div id="panel-runs" role="tabpanel" aria-labelledby="panel-runs">
+          <div id="panel-runs" role="tabpanel" aria-labelledby="tab-runs">
             {/* Filter toolbar */}
             <div className="runs-filter-toolbar">
               <div className="runs-filter-pills">
@@ -636,17 +872,11 @@ export default function ProjectDetailPage() {
                 options={runSuiteNames}
                 onChange={val => { setRunSuiteFilter(val); setSelectedRuns(new Set()); }}
               />
-              <div className="runs-date-pills">
-                {[{ label: 'All', value: 'all' }, { label: '7d', value: '7' }, { label: '30d', value: '30' }, { label: '90d', value: '90' }].map(d => (
-                  <button
-                    key={d.value}
-                    className={`runs-filter-pill${runDateFilter === d.value ? ' runs-filter-pill--active' : ''}`}
-                    onClick={() => { setRunDateFilter(d.value); setSelectedRuns(new Set()); }}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
+              <DateRangePicker
+                startDate={runDateStart}
+                endDate={runDateEnd}
+                onChange={(s, e) => { setRunDateStart(s); setRunDateEnd(e); setSelectedRuns(new Set()); }}
+              />
               <div className="runs-search-wrapper">
                 <svg className="runs-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -673,7 +903,7 @@ export default function ProjectDetailPage() {
             {runHasActiveFilters && (
               <div className="runs-active-filter">
                 Showing {filteredRuns.length} of {runs.length} runs
-                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setRunSuiteFilter(''); setRunDateFilter('all'); setSelectedRuns(new Set()); }}>
+                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setRunSuiteFilter(''); setRunDateStart(null); setRunDateEnd(null); setSelectedRuns(new Set()); }}>
                   Clear filters
                 </button>
               </div>
@@ -682,6 +912,7 @@ export default function ProjectDetailPage() {
             <div className="card">
               {filteredRuns.length > 0 ? (
                 <table className="data-table">
+                  <caption className="sr-only">Test runs for {project?.name}</caption>
                   <thead>
                     <tr>
                       <th className="runs-checkbox-col">
@@ -692,16 +923,16 @@ export default function ProjectDetailPage() {
                           onChange={toggleRunSelectAll}
                         />
                       </th>
-                      <th scope="col" className="runs-col-sortable" onClick={() => handleRunSort('name')}>Name {runSortChevron('name') && <span className="runs-sort-chevron">{runSortChevron('name')}</span>}</th>
-                      <th scope="col" className="runs-col-sortable" onClick={() => handleRunSort('suite_name')}>Suite {runSortChevron('suite_name') && <span className="runs-sort-chevron">{runSortChevron('suite_name')}</span>}</th>
+                      <th scope="col" className="runs-col-sortable" role="columnheader" aria-sort={runAriaSort('name')} tabIndex={0} onClick={() => handleRunSort('name')} onKeyDown={e => handleRunSortKeyDown('name', e)}>Name {runSortChevron('name') && <span className="runs-sort-chevron">{runSortChevron('name')}</span>}</th>
+                      <th scope="col" className="runs-col-sortable" role="columnheader" aria-sort={runAriaSort('suite_name')} tabIndex={0} onClick={() => handleRunSort('suite_name')} onKeyDown={e => handleRunSortKeyDown('suite_name', e)}>Suite {runSortChevron('suite_name') && <span className="runs-sort-chevron">{runSortChevron('suite_name')}</span>}</th>
                       <th scope="col">Status</th>
-                      <th scope="col" className="runs-col-sortable" onClick={() => handleRunSort('pass_rate')}>Pass Rate {runSortChevron('pass_rate') && <span className="runs-sort-chevron">{runSortChevron('pass_rate')}</span>}</th>
-                      <th scope="col" className="runs-col-sortable runs-created-col" onClick={() => handleRunSort('created_at')}>Created {runSortChevron('created_at') && <span className="runs-sort-chevron">{runSortChevron('created_at')}</span>}</th>
+                      <th scope="col" className="runs-col-sortable" role="columnheader" aria-sort={runAriaSort('pass_rate')} tabIndex={0} onClick={() => handleRunSort('pass_rate')} onKeyDown={e => handleRunSortKeyDown('pass_rate', e)}>Pass Rate {runSortChevron('pass_rate') && <span className="runs-sort-chevron">{runSortChevron('pass_rate')}</span>}</th>
+                      <th scope="col" className="runs-col-sortable runs-created-col" role="columnheader" aria-sort={runAriaSort('created_at')} tabIndex={0} onClick={() => handleRunSort('created_at')} onKeyDown={e => handleRunSortKeyDown('created_at', e)}>Created {runSortChevron('created_at') && <span className="runs-sort-chevron">{runSortChevron('created_at')}</span>}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRuns.map((r) => (
-                      <tr key={r.id} className={`clickable-row${selectedRuns.has(r.id) ? ' runs-row--selected' : ''}`} onClick={() => navigate(`/runs/${r.id}`)} tabIndex={0} role="link" onKeyDown={e => { if (e.key === 'Enter') navigate(`/runs/${r.id}`); }}>
+                      <tr key={r.id} className={`clickable-row${selectedRuns.has(r.id) ? ' runs-row--selected' : ''}`} onClick={() => navigate(`/runs/${r.id}`)} tabIndex={0} role="row" onKeyDown={e => { if (e.key === 'Enter') navigate(`/runs/${r.id}`); }}>
                         <td className="runs-checkbox-col" onClick={e => e.stopPropagation()}>
                           <input
                             type="checkbox"
@@ -712,7 +943,7 @@ export default function ProjectDetailPage() {
                         </td>
                         <td className="text-primary-bold">{r.name}</td>
                         <td>{r.suite_name}</td>
-                        <td>{r.is_completed ? <StatusBadge status="Passed" size="sm" /> : <span className="badge-active">Active</span>}</td>
+                        <td>{r.is_locked ? <span className="badge-completed">Completed</span> : <span className="badge-active">Active</span>}</td>
                         <td>
                           <div className="mini-bar">
                             {['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'].map((s) => (
@@ -753,7 +984,7 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {tab === 'health' && (<div id="panel-health" role="tabpanel" aria-labelledby="panel-health">{(() => {
+        {tab === 'health' && (<div id="panel-health" role="tabpanel" aria-labelledby="tab-health">{(() => {
           const CATEGORY_COLORS = {
             flaky: '#FF9800', always_failing: '#d32f2f', consistently_failing: '#F44336', regression: '#9C27B0',
           };
@@ -1333,7 +1564,7 @@ export default function ProjectDetailPage() {
           );
         })()}</div>)}
 
-        {tab === 'overview' && (<div id="panel-overview" role="tabpanel" aria-labelledby="panel-overview">{(() => {
+        {tab === 'overview' && (<div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">{(() => {
           const totalCases = suites.reduce((sum, s) => sum + (s.case_count || 0), 0);
           const totalSections = suites.reduce((sum, s) => sum + (s.section_count || 0), 0);
 
@@ -1346,18 +1577,38 @@ export default function ProjectDetailPage() {
               <div className="ov-stats">
                 <div className="ov-tiles">
                   <div className="ov-stat-tile">
+                    <div className="ov-stat-tile-icon" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+                      </svg>
+                    </div>
                     <span className="ov-stat-tile-count">{totalCases}</span>
                     <span className="ov-stat-tile-label">Test Cases</span>
                   </div>
                   <div className="ov-stat-tile">
+                    <div className="ov-stat-tile-icon" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+                      </svg>
+                    </div>
                     <span className="ov-stat-tile-count">{suites.length}</span>
                     <span className="ov-stat-tile-label">Suites</span>
                   </div>
                   <div className="ov-stat-tile">
+                    <div className="ov-stat-tile-icon" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                    </div>
                     <span className="ov-stat-tile-count">{runs.length}</span>
                     <span className="ov-stat-tile-label">Test Runs</span>
                   </div>
                   <div className="ov-stat-tile">
+                    <div className="ov-stat-tile-icon" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                      </svg>
+                    </div>
                     <span className="ov-stat-tile-count">{totalSections}</span>
                     <span className="ov-stat-tile-label">Sections</span>
                   </div>
@@ -1365,9 +1616,16 @@ export default function ProjectDetailPage() {
               </div>
 
               {/* Suite Health Grid */}
-              <div className="ov-suites">
+              <div className="ov-suites ov-section-wrap">
                 <div className="ov-health-header">
-                  <h3 className="ov-section-title">Suite Health</h3>
+                  <h3 className="ov-section-title">
+                    <span className="ov-section-title-icon" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                      </svg>
+                    </span>
+                    Suite Health
+                  </h3>
                   <div className="ov-date-nav">
                     <button
                       className="ov-date-nav-btn"
@@ -1438,7 +1696,7 @@ export default function ProjectDetailPage() {
                               <div className="ov-suite-card-counts">
                                 {STATUS_ORDER.map((st) =>
                                   ss[st] > 0 ? (
-                                    <span key={st} className="ov-suite-card-count">
+                                    <span key={st} className="ov-suite-card-count" style={{ '--count-bg': `var(--status-${st.toLowerCase()}-bg)`, '--count-color': `var(--status-${st.toLowerCase()})` }}>
                                       <span className="ov-suite-card-count-dot" style={{ backgroundColor: `var(--status-${st.toLowerCase()})` }} />
                                       {ss[st]}
                                     </span>
@@ -1460,8 +1718,16 @@ export default function ProjectDetailPage() {
               </div>
 
               {/* Sync Reports */}
-              <div className="ov-sync">
-                <h3 className="ov-section-title">Sync Changes</h3>
+              <div className="ov-sync ov-section-wrap">
+                <h3 className="ov-section-title">
+                  <span className="ov-section-title-icon" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                    </svg>
+                  </span>
+                  Sync Changes
+                </h3>
                 {syncLogs.length > 0 ? (
                   <div className="sync-log-list">
                     {syncLogs.map((log) => (

@@ -105,9 +105,9 @@ def get_section_path(file_path):
 
 app = create_app()
 with app.app_context():
-    project = Project.query.filter_by(name='Cypress Automation').first()
+    project = Project.query.filter_by(name='Automation Overview').first()
     if not project:
-        print("ERROR: Cypress Automation project not found. Run start demo first.")
+        print("ERROR: Automation Overview project not found. Run start demo first.")
         exit(1)
 
     print("Fetching test files from Cypress repo...")
