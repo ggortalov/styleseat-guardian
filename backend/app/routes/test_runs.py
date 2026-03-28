@@ -116,14 +116,10 @@ def list_all_runs():
     limit = min(request.args.get("limit", 30, type=int), 200)
     offset = max(request.args.get("offset", 0, type=int), 0)
     total_count = TestRun.query.count()
-    effective_date = case(
-        (TestRun.run_date.isnot(None), TestRun.run_date),
-        else_=TestRun.created_at,
-    )
     runs = (
         TestRun.query
         .options(joinedload(TestRun.project), joinedload(TestRun.suite))
-        .order_by(effective_date.desc())
+        .order_by(TestRun.id.desc())
         .offset(offset)
         .limit(limit)
         .all()

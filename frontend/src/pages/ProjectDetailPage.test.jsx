@@ -42,7 +42,7 @@ import runService from '../services/runService';
 import dashboardService from '../services/dashboardService';
 
 // ── Fixtures ──────────────────────────────────────────
-const PROJECT = { id: 1, name: 'Cypress Automation', description: 'Test project', case_count: 100 };
+const PROJECT = { id: 1, name: 'Automation Overview', description: 'Test project', case_count: 100 };
 
 const SUITES = [
   { id: 1, name: 'P1 Common', case_count: 40, section_count: 10 },
@@ -127,14 +127,14 @@ describe('ProjectDetailPage', () => {
   it('renders project name in header after load', async () => {
     renderPage();
     await waitForPageLoad();
-    expect(screen.getByTestId('header')).toHaveTextContent('Cypress Automation');
+    expect(screen.getByTestId('header')).toHaveTextContent('Automation Overview');
   });
 
   it('renders project name in page heading after load', async () => {
     renderPage();
     await waitForPageLoad();
     const heading = screen.getByRole('heading', { level: 2 });
-    expect(heading).toHaveTextContent('Cypress Automation');
+    expect(heading).toHaveTextContent('Automation Overview');
   });
 
   it('renders project description', async () => {

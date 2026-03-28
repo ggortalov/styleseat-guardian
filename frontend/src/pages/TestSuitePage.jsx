@@ -191,7 +191,7 @@ export default function TestSuitePage() {
     if (creatingRun) return;
     setCreatingRun(true);
     try {
-      const date = new Date().toLocaleDateString();
+      const date = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
       const run = await runService.create(projectId, {
         name: `${suite.name} - Manual Run ${date}`,
         suite_id: parseInt(suiteId),

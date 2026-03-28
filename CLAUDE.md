@@ -71,7 +71,7 @@ guardian/
 │   ├── run.py                  # Entry point (port 5001, creates tables, lightweight migrations)
 │   ├── sync_cypress.py         # CLI: sync test cases from Cypress repo (blob API, baseline diffing)
 │   ├── import_circleci.py      # CLI: import CircleCI workflow results into a test run
-│   ├── seed.py                 # Bootstrap: creates demo user + Cypress Automation project
+│   ├── seed.py                 # Bootstrap: creates demo user + Automation Overview project
 │   ├── backup_db.py            # Export app.db to JSON
 │   ├── restore_db.py           # Restore database from JSON backup
 │   ├── requirements.txt
@@ -278,6 +278,7 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 
 ### Design System
 - **Color scheme**: Green-themed — buttons, focus rings, tabs all use `--sidebar-bg` (#1a3a2a). Outlined button style (white bg + border) fills on hover
+- **Unified accent rule**: Decorative accents on structural UI (stat tiles, KPI cards, section icons, card borders) use the **same primary green** (`--sidebar-bg` / `--primary-light`). No per-element color theming. Status colors reserved strictly for data meaning (pass/fail results).
 - **Typography**: DM Sans via `--font-sans`; sidebar brand: "StyleSeat" (semibold) + "Guardian" (light)
 - **CSS architecture**: Tokens in `styles/variables.css`, component-scoped CSS, globals in `index.css`
 - **Status badges**: Tinted pills — colored text on light background

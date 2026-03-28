@@ -440,9 +440,9 @@ def import_workflow(workflow_id):
     app = create_app()
     with app.app_context():
       try:
-        project = Project.query.filter_by(name='Cypress Automation').first()
+        project = Project.query.filter_by(name='Automation Overview').first()
         if not project:
-            print("ERROR: Project 'Cypress Automation' not found.")
+            print("ERROR: Project 'Automation Overview' not found.")
             sys.exit(1)
 
         # Duplicate detection at workflow level (exact match on dedicated column)

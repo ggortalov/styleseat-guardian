@@ -337,20 +337,32 @@ export default function TestRunDetailPage() {
 
   const toggleSection = (name) => setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
 
+  const _splitRunName = (name) => {
+    if (!name) return ['', ''];
+    // Imported runs use " · " (middot) — split on that first
+    const midIdx = name.indexOf(' \u00b7 ');
+    if (midIdx !== -1) return [name.slice(0, midIdx), name.slice(midIdx + 3)];
+    // Manual runs use " - Manual Run ..." — strip that suffix
+    const manualIdx = name.indexOf(' - Manual Run ');
+    if (manualIdx !== -1) return [name.slice(0, manualIdx), name.slice(manualIdx + 3)];
+    return [name, ''];
+  };
+
   const startRename = () => {
-    setDraftName(run?.name?.split(' · ')[0] || run?.name || '');
+    setDraftName(_splitRunName(run?.name)[0] || run?.name || '');
     setEditingName(true);
     setTimeout(() => nameInputRef.current?.select(), 50);
   };
 
   const saveRename = async () => {
     const trimmed = draftName.trim();
-    if (!trimmed || trimmed === (run?.name?.split(' · ')[0])) {
+    const [namePart, datePart] = _splitRunName(run?.name);
+    if (!trimmed || trimmed === namePart) {
       setEditingName(false);
       return;
     }
-    const datePart = run?.name?.includes(' · ') ? run.name.split(' · ').slice(1).join(' · ') : '';
-    const newName = datePart ? `${trimmed} · ${datePart}` : trimmed;
+    const sep = run?.name?.includes(' · ') ? ' · ' : ' - ';
+    const newName = datePart ? `${trimmed}${sep}${datePart}` : trimmed;
     try {
       const updated = await runService.update(runId, { name: newName });
       setRun(updated);
@@ -362,9 +374,7 @@ export default function TestRunDetailPage() {
   const copyRow = (r, e) => {
     e.stopPropagation();
     const title = stripTestRailId(r.case_title);
-    const file = r.source_file || r.section_name || '';
-    const text = `${file}\t${title}`;
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(title).then(() => {
       setCopiedRowId(r.id);
       setTimeout(() => setCopiedRowId(null), 1500);
     });
@@ -397,7 +407,7 @@ export default function TestRunDetailPage() {
               </div>
             ) : (
               <h2 className="page-heading run-heading-editable" onClick={startRename} title="Click to rename">
-                {run?.name?.split(' · ')[0] || run?.suite_name} &middot; {formatRunDate(run?.run_date || run?.created_at)}
+                {_splitRunName(run?.name)[0] || run?.suite_name} &middot; {formatRunDate(run?.run_date || run?.created_at)}
                 <svg className="run-edit-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -623,7 +633,7 @@ export default function TestRunDetailPage() {
                           <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
                             <StatusDropdown status={r.status} onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)} locked={r.is_locked} />
                           </span>
-                          <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test ID, file, and title">
+                          <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test name">
                             {copiedRowId === r.id ? (
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                             ) : (
@@ -699,7 +709,7 @@ export default function TestRunDetailPage() {
                                   <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
                                     <StatusDropdown status={r.status} onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)} locked={r.is_locked} />
                                   </span>
-                                  <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test ID, file, and title">
+                                  <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test name">
                                     {copiedRowId === r.id ? (
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                                     ) : (
@@ -770,7 +780,7 @@ export default function TestRunDetailPage() {
                           <span className="run-case-status" onClick={(e) => e.stopPropagation()}>
                             <StatusDropdown status={r.status} onChangeStatus={(newStatus) => handleStatusChange(r.id, newStatus)} locked={r.is_locked} />
                           </span>
-                          <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test ID, file, and title">
+                          <button className={`run-case-copy ${copiedRowId === r.id ? 'run-case-copy--copied' : ''}`} onClick={(e) => copyRow(r, e)} title="Copy test name">
                             {copiedRowId === r.id ? (
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                             ) : (

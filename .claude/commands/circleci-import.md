@@ -221,10 +221,10 @@ app = create_app()
 with app.app_context():
     cypress_path = workflow_name_to_cypress_path(workflow_name)
     suite_name = cypress_path_to_name(cypress_path)
-    project = Project.query.filter_by(name='Cypress Automation').first()
+    project = Project.query.filter_by(name='Automation Overview').first()
 
     if not project:
-        print(f"ERROR: Project 'Cypress Automation' not found.")
+        print(f"ERROR: Project 'Automation Overview' not found.")
         exit(1)
 
     suite = Suite.query.filter_by(project_id=project.id, cypress_path=cypress_path).first()

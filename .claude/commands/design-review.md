@@ -20,6 +20,7 @@ When applying design changes or building new UI components for this project, fol
 - **Text on dark**: `#fff` for primary, `rgba(255, 255, 255, 0.7)` for secondary
 - **Text on light**: `var(--text-primary)` for headings, `var(--text-muted)` for secondary
 - **Never use blue** for interactive elements — all focus rings, buttons, and accents use the green palette
+- **Unified accent rule**: Decorative accents on structural UI (stat tiles, KPI cards, section icons, card borders) must all use the **same primary green palette** (`--sidebar-bg` / `--primary-light`). Never assign per-element accent colors (orange, teal, red) for decoration — this creates a rainbow effect. Status colors are reserved **strictly for data-driven meaning** (pass/fail indicators, severity badges).
 
 ### Color Contrast Requirements (WCAG 2.2 AA)
 
@@ -378,6 +379,8 @@ When building or reviewing a new UI component:
 - [ ] Hover effects on all clickable elements
 - [ ] Consistent border-radius using CSS variables
 - [ ] No icon libraries — use inline SVG with `currentColor`
+- [ ] Decorative accents (tile bars, card borders, icon backgrounds) use unified primary green — no per-element color theming
+- [ ] Status colors used only for data meaning (pass/fail), never as decorative accent colors on structural UI
 
 ### Accessibility (WCAG 2.2 AA)
 - [ ] Semantic HTML elements used (`<button>`, `<nav>`, `<table>`, `<form>`, not `<div>` with handlers)

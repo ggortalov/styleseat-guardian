@@ -32,6 +32,8 @@ Before writing any code, internalize these constraints. They are not suggestions
 
 **Rule**: All interactive elements use the green palette. No blue anywhere. No purple. No generic gray buttons.
 
+**Accent Rule — Unified Primary Green**: Decorative accents on structural UI (stat tiles, KPI cards, section icons, wrapper borders) must all use the **same primary green palette** (`--sidebar-bg` / `--primary-light`). Never assign different accent colors (orange, teal, red, etc.) to individual tiles or cards for decoration — this creates a distracting rainbow effect. Status colors (`--status-passed`, `--status-failed`, etc.) are reserved **strictly for data-driven meaning** (pass/fail results, health indicators, severity badges) and must not be repurposed as decorative tile accents. Icon circles on stat tiles use `background: var(--primary-light); color: var(--sidebar-bg)` uniformly.
+
 ### Typography
 
 | Role | Font | Weight | Size |
@@ -85,6 +87,8 @@ Before coding, answer:
 - Empty states that just say "No data" with no guidance
 - SVGs with complex `<path d="">` that are really multi-element drawings — break them into proper `<circle>`, `<line>`, `<polyline>`, `<rect>` elements
 - `color-mix()` and other CSS functions with spotty browser support — use explicit hex/rgba
+- **Rainbow accent patterns** — never assign different colored top/left borders or accent bars to individual tiles, cards, or sections for decoration. Use a single unified primary green. Status colors are for data meaning only.
+- **Per-tile color theming** via CSS variables like `--tile-accent` that differ per element — this creates visual clutter. Use one consistent accent color across all tiles.
 
 ## Component Patterns
 
@@ -134,6 +138,30 @@ Before coding, answer:
   transform: translateY(-1px);
 }
 ```
+
+**No per-card colored accent borders.** Do not add `border-left` or `border-top` colored accents that vary per card (e.g., green for healthy, orange for warning, red for failing). This creates visual noise. If a card contains status data, communicate it through the content inside (status bars, badges, percentage text) — not through structural border decoration.
+
+### KPI / Stat Tiles
+
+```css
+.stat-tile {
+  background: #fff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+.stat-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.stat-tile-icon {
+  background: var(--primary-light);  /* always primary green */
+  color: var(--sidebar-bg);          /* always primary green */
+  border-radius: 50%;
+}
+```
+
+All stat tile icons use the same `--primary-light` background + `--sidebar-bg` icon color. Never assign per-tile accent colors. The icon shape (document, folder, play, grid) already differentiates each tile — color variation is unnecessary and distracting.
 
 ### Status Badges (tinted pills)
 

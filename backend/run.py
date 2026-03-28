@@ -116,6 +116,35 @@ with app.app_context():
         conn.execute("ALTER TABLE test_runs ADD COLUMN triggered_by VARCHAR(100)")
         conn.commit()
         print("Added CircleCI attribution columns to test_runs.")
+    # Reformat manual run names from "M/D/YYYY" to "Fri, Mar 27, 2026" style
+    import re
+    from datetime import datetime as _dt
+    rows = conn.execute(
+        "SELECT id, name FROM test_runs WHERE name LIKE '%Manual Run %'"
+    ).fetchall()
+    _date_pat = re.compile(r'(\d{1,2}/\d{1,2}/\d{4})')
+    updated = 0
+    for row_id, name in rows:
+        m = _date_pat.search(name)
+        if m:
+            try:
+                parsed = _dt.strptime(m.group(1), '%m/%d/%Y')
+                new_date = parsed.strftime('%a, %b %d, %Y')
+                new_name = name[:m.start()] + new_date + name[m.end():]
+                conn.execute("UPDATE test_runs SET name = ? WHERE id = ?", (new_name, row_id))
+                updated += 1
+            except ValueError:
+                pass
+    if updated:
+        conn.commit()
+        print(f"Reformatted {updated} manual run name(s) to long date format.")
+    # Rename project "Cypress Automation" → "Automation Overview"
+    renamed = conn.execute(
+        "UPDATE projects SET name = 'Automation Overview', description = 'Test cases synced from the StyleSeat E2E test repository' WHERE name = 'Cypress Automation'"
+    ).rowcount
+    if renamed:
+        conn.commit()
+        print("Renamed project 'Cypress Automation' → 'Automation Overview'.")
     conn.close()
 
 if __name__ == "__main__":

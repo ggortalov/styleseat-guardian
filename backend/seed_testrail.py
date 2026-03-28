@@ -6,7 +6,7 @@ Usage:
     python seed_testrail.py
 
 Fetches all data live from the TestRail API, maps it to the Guardian schema,
-and inserts it under a "Cypress Automation" project.  Skips suites that have
+and inserts it under a "Automation Overview" project.  Skips suites that have
 zero active test cases.
 """
 
@@ -166,20 +166,20 @@ def main():
             db.session.flush()
 
         # Create or find the project
-        project = Project.query.filter_by(name="Cypress Automation").first()
+        project = Project.query.filter_by(name="Automation Overview").first()
         if project:
-            print(f"Project 'Cypress Automation' already exists (id={project.id}). Skipping import.")
+            print(f"Project 'Automation Overview' already exists (id={project.id}). Skipping import.")
             print("To re-import, delete the project first or rename it.")
             sys.exit(0)
 
         project = Project(
-            name="Cypress Automation",
+            name="Automation Overview",
             description="Imported from TestRail project 23 — StyleSeat Cypress automation suites.",
             created_by=user.id,
         )
         db.session.add(project)
         db.session.flush()
-        print(f"Created project: Cypress Automation (id={project.id})")
+        print(f"Created project: Automation Overview (id={project.id})")
 
         # Fetch suites from TestRail
         print("\nFetching suites from TestRail...")
@@ -293,7 +293,7 @@ def main():
 
         print("\n" + "=" * 50)
         print("TestRail import complete!")
-        print(f"  Project:  Cypress Automation")
+        print(f"  Project:  Automation Overview")
         print(f"  Suites:   {Suite.query.filter_by(project_id=project.id).count()}")
         print(f"  Sections: {total_sections}")
         print(f"  Cases:    {total_cases}")

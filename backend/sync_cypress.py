@@ -99,9 +99,9 @@ def main():
     app = create_app()
     with app.app_context():
         db.create_all()  # Ensure new tables (e.g. sync_baselines) exist
-        project = Project.query.filter_by(name='Cypress Automation').first()
+        project = Project.query.filter_by(name='Automation Overview').first()
         if not project:
-            print("ERROR: 'Cypress Automation' project not found. Run 'npm run demo' first.")
+            print("ERROR: 'Automation Overview' project not found. Run 'npm run demo' first.")
             sys.exit(1)
 
         print("Fetching test files from Cypress repo...")
