@@ -583,7 +583,7 @@ export default function ProjectDetailPage() {
   };
 
   // Date filter for Suite Health — defaults to today
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
   const [healthDate, setHealthDate] = useState(todayStr);
   const [healthLoading, setHealthLoading] = useState(false);
   const availableDates = dashboardData?.run_dates || [];
@@ -1639,7 +1639,7 @@ export default function ProjectDetailPage() {
                       </svg>
                     </button>
                     <span className="ov-date-nav-label">
-                      {new Date(healthDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {(() => { const [y, m, d] = healthDate.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}
                       {healthDate === todayStr && <span className="ov-date-today">Today</span>}
                     </span>
                     <button
