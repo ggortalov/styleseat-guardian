@@ -67,7 +67,7 @@ const SUITE_STATS = {
   2: { Passed: 50, Failed: 5, Blocked: 3, Retest: 0, Untested: 2, total: 60, run_id: 2 },
 };
 
-const todayStr = new Date().toISOString().slice(0, 10);
+const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 
 const DASHBOARD_DATA = {
   overall_stats: { Passed: 80, Failed: 10, Blocked: 5, Retest: 1, Untested: 4, pass_rate: 80 },
