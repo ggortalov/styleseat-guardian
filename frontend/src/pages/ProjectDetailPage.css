@@ -1549,6 +1549,8 @@
 
 .th-container {
   animation: slideUp 0.3s ease both;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 /* ── Toolbar ── */
@@ -1572,25 +1574,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.th-suite-select {
-  padding: 6px 28px 6px 10px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-full);
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 600;
-  color: var(--text-primary);
-  background: #fff url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
-  appearance: none;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.th-suite-select:focus {
-  border-color: var(--sidebar-bg);
 }
 
 .th-window-pills {
@@ -1838,58 +1821,6 @@
 }
 
 /* ── Filter pills ── */
-.th-filter-pills {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.th-filter-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-full);
-  background: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.th-filter-pill:hover {
-  border-color: var(--sidebar-bg);
-  color: var(--sidebar-bg);
-}
-
-.th-filter-pill--active {
-  background: var(--sidebar-bg);
-  border-color: var(--sidebar-bg);
-  color: #fff;
-}
-
-.th-filter-pill--active:hover {
-  background: var(--sidebar-hover);
-  border-color: var(--sidebar-hover);
-  color: #fff;
-}
-
-.th-filter-pill-count {
-  font-size: 11px;
-  font-weight: 700;
-  background: rgba(0, 0, 0, 0.08);
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
-}
-
-.th-filter-pill--active .th-filter-pill-count {
-  background: rgba(255, 255, 255, 0.2);
-}
-
 /* ── Table ── */
 .th-table-wrap {
   overflow-x: auto;
@@ -1901,6 +1832,7 @@
 
 .th-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -1947,34 +1879,36 @@
 }
 
 .th-col-name {
-  min-width: 200px;
+  width: auto;
+  overflow: hidden;
 }
 
 .th-test-name {
   font-weight: 600;
   color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 320px;
+  line-height: 1.4;
 }
 
 .th-test-section {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.th-col-suite { width: 140px; }
-.th-col-cat { width: 140px; }
-.th-col-ewma { width: 120px; }
-.th-col-fail { width: 80px; }
-.th-col-disruptions { width: 90px; }
-.th-col-root { width: 140px; }
-.th-col-trend { width: 120px; }
+.th-col-suite { width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-col-cat { width: 110px; }
+.th-col-ewma { width: 100px; }
+.th-col-fail { width: 70px; }
+.th-col-disruptions { width: 85px; }
+.th-col-root { width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-col-trend { width: 110px; }
 
 /* Category badge */
 .th-cat-badge {
@@ -2014,6 +1948,7 @@
 /* Root cause badge */
 .th-root-badge {
   display: inline-block;
+  max-width: 100%;
   padding: 2px 8px;
   background: var(--border-light);
   border-radius: var(--radius-full);
@@ -2021,6 +1956,8 @@
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .th-root-none {
@@ -2030,13 +1967,14 @@
 /* Trend dots */
 .th-trend-dots {
   display: flex;
-  gap: 3px;
+  gap: 2px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .th-trend-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -2758,10 +2696,6 @@
   .th-tile-count {
     font-size: 24px;
   }
-
-  .th-test-name {
-    max-width: 220px;
-  }
 }
 
 /* ── Responsive: 768px ── */
@@ -2786,15 +2720,6 @@
 
   .th-detail-grid {
     grid-template-columns: 1fr;
-  }
-
-  .th-filter-pills {
-    gap: 4px;
-  }
-
-  .th-filter-pill {
-    padding: 5px 10px;
-    font-size: 12px;
   }
 
   .th-healthy-stats {
@@ -2837,10 +2762,6 @@
     padding: 4px 8px;
     font-size: 11px;
   }
-
-  .th-test-name {
-    max-width: 160px;
-  }
 }
 
 /* Reduced motion preference */
@@ -2861,7 +2782,6 @@
   .drp-day,
   .th-category-pill,
   .th-window-pill,
-  .th-suite-select,
   .th-row,
   .sync-log-card,
   .clickable-row,

@@ -1063,6 +1063,21 @@ def get_test_health(project_id):
     )
     if suite_id:
         run_query = run_query.filter(TestRun.suite_id == suite_id)
+    else:
+        # Exclude suites that are not relevant for health analysis
+        excluded_paths = ['cypress/e2e/abTest/', 'cypress/e2e/devices/p0/']
+        excluded_names = ['AB Test', 'P0 Devices']
+        excluded_suite_ids = [
+            s.id for s in Suite.query.filter(
+                Suite.project_id == project_id,
+                db.or_(
+                    Suite.cypress_path.in_(excluded_paths),
+                    Suite.name.in_(excluded_names),
+                ),
+            ).all()
+        ]
+        if excluded_suite_ids:
+            run_query = run_query.filter(TestRun.suite_id.notin_(excluded_suite_ids))
 
     MIN_RUNS_FOR_ANALYSIS = 5
 
@@ -1300,9 +1315,10 @@ def get_test_health(project_id):
     test_entries.sort(key=lambda e: (CATEGORY_ORDER.get(e["category"], 99), -e["severity"]))
 
     # Step 6: Build diagnostics (only for unhealthy tests)
-    file_cache = {}
+    # NOTE: Code smell analysis (GitHub file fetching) is NOT done here — it's
+    # too slow for the listing endpoint (hundreds of subprocess calls).  Use the
+    # per-test deep-analysis endpoint POST /test-health/<case_id>/analyze instead.
     error_pattern_summary = defaultdict(int)
-    code_smell_summary = defaultdict(int)
 
     output_tests = []
     for entry in test_entries:
@@ -1332,18 +1348,6 @@ def get_test_health(project_id):
                         recent_artifacts.append({"name": art.split("/")[-1], "url": art})
                 recent_artifacts = recent_artifacts[:3]
 
-            # Code smell analysis
-            code_smells = []
-            suite = suite_map.get(entry["suite_id"])
-            cypress_path = suite.cypress_path if suite else None
-            source_rel = entry["_source_path"]
-
-            file_content = _fetch_github_file(cypress_path, source_rel, file_cache)
-            if file_content:
-                code_smells = _analyze_code_smells(file_content)
-                for cs in code_smells:
-                    code_smell_summary[cs["id"]] += 1
-
             suggestion = error_pattern["suggestion"] if error_pattern else None
 
             # Build contextual error snippet from actual error messages
@@ -1356,26 +1360,12 @@ def get_test_health(project_id):
             # Build contextual prefix from actual data
             error_msgs_list = entry.get("_error_msgs", [])
             if suggestion and error_msgs_list:
-                unique_errors = len(set(_classify_error(m) for m in error_msgs_list if _classify_error(m)))
                 freq_count = error_freq.get(dominant_error, 0)
                 total_failures = entry["fail_count"]
                 ctx_prefix = f"Seen in {freq_count} of {total_failures} failures. "
                 if error_snippet:
                     ctx_prefix += f'Latest: "{error_snippet}" — '
                 suggestion = ctx_prefix + suggestion
-
-            # Cross-reference: if timeout errors + hardcoded_wait smell, enhance suggestion
-            hardcoded_waits = [cs for cs in code_smells if cs["id"] == "hardcoded_wait"]
-            if dominant_error == "timeout" and hardcoded_waits:
-                wait_count = hardcoded_waits[0].get("occurrences", 0)
-                wait_examples = hardcoded_waits[0].get("examples", [])
-                wait_lines = ", ".join(f"L{ex['line']}" for ex in wait_examples[:3])
-                suggestion = (
-                    f"Found {wait_count} hardcoded cy.wait() call{'s' if wait_count != 1 else ''} "
-                    f"({wait_lines}) that {'are' if wait_count != 1 else 'is'} likely causing "
-                    f"the timeout errors in Electron/CI. "
-                    + (suggestion or "")
-                )
 
             diagnostics = {
                 "error_category": dominant_error,
@@ -1384,7 +1374,6 @@ def get_test_health(project_id):
                 "last_error": last_error,
                 "error_frequency": dict(error_freq),
                 "recent_artifacts": recent_artifacts,
-                "code_smells": code_smells,
                 "source_file": entry["_source_file"],
                 "source_path": entry["_source_path"],
             }
@@ -1418,7 +1407,6 @@ def get_test_health(project_id):
             "total_analyzed": len(output_tests),
         },
         "error_pattern_summary": dict(error_pattern_summary),
-        "code_smell_summary": dict(code_smell_summary),
         "tests": [t for t in output_tests if t["category"] != "healthy"],
         "runs_analyzed": num_runs,
         "min_runs_required": MIN_RUNS_FOR_ANALYSIS,
