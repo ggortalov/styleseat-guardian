@@ -1039,20 +1039,17 @@ export default function ProjectDetailPage() {
               {/* Controls toolbar */}
               <div className="th-toolbar">
                 <div className="th-toolbar-left">
-                  <select
-                    className="th-suite-select"
-                    aria-label="Filter by suite"
-                    value={healthSuiteFilter || ''}
-                    onChange={e => {
-                      const val = e.target.value ? parseInt(e.target.value) : null;
+                  <SuiteDropdown
+                    value={healthSuiteFilter ? (suites.find(s => s.id === healthSuiteFilter)?.name || '') : ''}
+                    options={suites.filter(s => !['AB Test', 'P0 Devices'].includes(s.name)).map(s => s.name)}
+                    onChange={name => {
+                      const suite = suites.find(s => s.name === name);
+                      const val = suite ? suite.id : null;
                       setHealthSuiteFilter(val);
                       setHealthData(null);
                       fetchTestHealth(val, healthWindow);
                     }}
-                  >
-                    <option value="">All Suites</option>
-                    {suites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  />
                   <div className="th-window-pills">
                     {[7, 14, 30].map(d => (
                       <button
@@ -1156,24 +1153,6 @@ export default function ProjectDetailPage() {
                             {count > 0 && <div className="th-tile-bar"><div className="th-tile-bar-fill" style={{ width: `${pct}%` }} /></div>}
                             {count > 0 && <span className="th-tile-pct">{pct}% of issues</span>}
                           </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Category filter pills */}
-                      <div className="th-filter-pills">
-                        {['all', 'flaky', 'always_failing', 'consistently_failing', 'regression'].map(f => {
-                          const count = f === 'all' ? tests.length : tests.filter(t => t.category === f).length;
-                          if (f !== 'all' && count === 0) return null;
-                          return (
-                            <button
-                              key={f}
-                              className={`th-filter-pill${healthCategoryFilter === f ? ' th-filter-pill--active' : ''}`}
-                              onClick={() => setHealthCategoryFilter(f)}
-                            >
-                              {f === 'all' ? `All Issues` : CATEGORY_LABELS[f]}
-                              <span className="th-filter-pill-count">{count}</span>
-                            </button>
                           );
                         })}
                       </div>
