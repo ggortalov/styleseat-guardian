@@ -12,6 +12,7 @@ Or imported by seed.py / seed_local.py:
 import hashlib
 import os
 import random
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 
@@ -132,18 +133,22 @@ def generate_runs(project_id, target=TARGET_COMPLETED_RUNS):
             db, existing_runs, flaky_ids, always_fail_ids, user_id,
         )
 
-        # Build a slug for run naming
+        # Build a slug for run naming — collapse multi-underscores
         suite_slug = suite.name.lower().replace(" ", "_").replace("-", "_")
+        suite_slug = re.sub(r'_+', '_', suite_slug).strip('_')
 
         # Space runs evenly across the last SPREAD_DAYS days
         interval = SPREAD_DAYS / max(needed, 1)
+        # Per-suite hour offset so runs from different suites don't share
+        # the exact same timestamp on a given day
+        suite_hour_offset = (suite.id * 37) % 12  # 0-11h deterministic jitter
 
         for i in range(needed):
             # run_index counts across ALL runs (existing + new) so flaky
             # alternation is continuous
             run_index = existing + i
             days_ago = SPREAD_DAYS - (i * interval)
-            run_ts = now - timedelta(days=days_ago)
+            run_ts = now - timedelta(days=days_ago, hours=-suite_hour_offset)
 
             run = TestRun(
                 project_id=project_id,
