@@ -12,7 +12,7 @@ from app.models import (
 )
 
 
-def backup_database(output_file="db_backup.json"):
+def backup_database(output_file="seed_data.json"):
     app = create_app()
 
     with app.app_context():
@@ -85,5 +85,5 @@ def backup_database(output_file="db_backup.json"):
 
 
 if __name__ == "__main__":
-    output = sys.argv[1] if len(sys.argv) > 1 else "db_backup.json"
+    output = sys.argv[1] if len(sys.argv) > 1 else "seed_data.json"
     backup_database(output)

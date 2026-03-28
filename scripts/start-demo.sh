@@ -2,7 +2,7 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DEMO_DATA="$ROOT_DIR/backend/demo_data.json"
+SEED_DATA="$ROOT_DIR/backend/seed_data.json"
 
 echo "=== StyleSeat Guardian Demo ==="
 
@@ -11,16 +11,16 @@ echo "Stopping existing servers..."
 lsof -ti:5001 -ti:5173 -ti:5174 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# 2. Fresh database from demo snapshot
+# 2. Fresh database from seed snapshot
 cd "$ROOT_DIR/backend"
 source venv/bin/activate
 rm -f app.db app.db-shm app.db-wal
 
-if [ -f "$DEMO_DATA" ]; then
-  echo "Restoring database from demo snapshot..."
-  python restore_db.py "$DEMO_DATA"
+if [ -f "$SEED_DATA" ]; then
+  echo "Restoring database from seed snapshot..."
+  python restore_db.py "$SEED_DATA"
 else
-  echo "No demo_data.json found — seeding fresh database..."
+  echo "No seed_data.json found — seeding fresh database..."
   python seed.py
   echo ""
   echo "  NOTE: Run 'npm run sync' to populate test cases from Cypress repo."
