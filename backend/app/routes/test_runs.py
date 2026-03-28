@@ -1080,11 +1080,12 @@ def get_test_health(project_id):
             run_query = run_query.filter(TestRun.suite_id.notin_(excluded_suite_ids))
 
     MIN_RUNS_FOR_ANALYSIS = 5
+    MAX_RUNS_PER_SUITE = 10
 
-    runs = run_query.order_by(TestRun.created_at.asc()).all()
+    all_runs = run_query.order_by(TestRun.created_at.asc()).all()
 
     # Insufficient data gate — need at least MIN_RUNS_FOR_ANALYSIS completed runs
-    if len(runs) < MIN_RUNS_FOR_ANALYSIS:
+    if len(all_runs) < MIN_RUNS_FOR_ANALYSIS:
         return jsonify({
             "summary": {
                 "flaky": 0, "always_failing": 0, "consistently_failing": 0,
@@ -1093,11 +1094,20 @@ def get_test_health(project_id):
             "error_pattern_summary": {},
             "code_smell_summary": {},
             "tests": [],
-            "runs_analyzed": len(runs),
+            "runs_analyzed": len(all_runs),
             "min_runs_required": MIN_RUNS_FOR_ANALYSIS,
             "confidence": "insufficient",
             "window_days": window,
         }), 200
+
+    # Per-suite: keep only the last MAX_RUNS_PER_SUITE runs
+    runs_by_suite = defaultdict(list)
+    for r in all_runs:
+        runs_by_suite[r.suite_id].append(r)
+
+    runs = []
+    for suite_runs in runs_by_suite.values():
+        runs.extend(suite_runs[-MAX_RUNS_PER_SUITE:])  # last N (already asc)
 
     run_ids = [r.id for r in runs]
     run_commit_map = {r.id: r.commit_sha for r in runs}

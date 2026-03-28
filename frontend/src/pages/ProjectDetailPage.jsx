@@ -1142,7 +1142,6 @@ export default function ProjectDetailPage() {
                           <button
                             key={key}
                             className={`th-tile${healthCategoryFilter === key ? ' th-tile--active' : ''}${count === 0 ? ' th-tile--zero' : ''}`}
-                            style={{ '--tile-accent': CATEGORY_COLORS[key] }}
                             onClick={() => setHealthCategoryFilter(f => f === key ? 'all' : key)}
                           >
                             <div className="th-tile-icon-wrap">{iconEl}</div>
@@ -1150,8 +1149,7 @@ export default function ProjectDetailPage() {
                               <span className="th-tile-count">{count}</span>
                               <span className="th-tile-label">{CATEGORY_LABELS[key]}</span>
                             </div>
-                            {count > 0 && <div className="th-tile-bar"><div className="th-tile-bar-fill" style={{ width: `${pct}%` }} /></div>}
-                            {count > 0 && <span className="th-tile-pct">{pct}% of issues</span>}
+                            <span className="th-tile-pct">{count > 0 && pct > 0 ? `${pct}% of issues` : '\u00A0'}</span>
                           </button>
                           );
                         })}
@@ -1199,7 +1197,7 @@ export default function ProjectDetailPage() {
                                       </td>
                                       <td className="th-col-ewma">
                                         <div className="th-ewma-bar-wrap">
-                                          <div className="th-ewma-bar" style={{ width: `${Math.min(t.ewma_flip_rate * 100, 100)}%` }} />
+                                          <div className="th-ewma-bar" style={{ width: `${Math.min(t.ewma_flip_rate * 100, 100)}%`, background: t.ewma_flip_rate >= 0.6 ? 'var(--status-failed)' : t.ewma_flip_rate >= 0.3 ? '#FF9800' : 'var(--status-passed)' }} />
                                         </div>
                                         <span className="th-ewma-val">{Math.round(t.ewma_flip_rate * 100)}%</span>
                                       </td>
