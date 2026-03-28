@@ -56,7 +56,7 @@ Pulls test case definitions from the `styleseat/cypress` GitHub repository and s
 ### Prerequisites
 
 - **GitHub CLI** (`gh`) must be installed and authenticated on the server (`gh auth login`)
-- The `Cypress Automation` project must exist in the database (created by `seed.py` / `npm run demo`)
+- The `Automation Overview` project must exist in the database (created by `seed.py` / `npm run demo`)
 
 ### Manual Trigger
 

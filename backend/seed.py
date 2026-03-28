@@ -35,8 +35,8 @@ else:
         db.session.flush()
 
         project = Project(
-            name="Cypress Automation",
-            description="Test cases synced from the StyleSeat Cypress repository",
+            name="Automation Overview",
+            description="Test cases synced from the StyleSeat E2E test repository",
             created_by=user.id,
         )
         db.session.add(project)

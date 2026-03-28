@@ -130,7 +130,7 @@ def import_circleci_workflow(workflow_id, suite_map, user_id):
     # Determine suite
     suite_id = suite_map.get(workflow_name, 4)
     suite = db.session.get(Suite, suite_id)
-    project = Project.query.filter_by(name='Cypress Automation').first()
+    project = Project.query.filter_by(name='Automation Overview').first()
 
     # Create test run
     run = TestRun(
@@ -242,7 +242,7 @@ def seed_testrail_data(user_id):
     """Import test suites and cases from TestRail."""
     # Create project
     project = Project(
-        name='Cypress Automation',
+        name='Automation Overview',
         description='Imported from TestRail - Cypress test automation project',
         created_by=user_id
     )
@@ -392,7 +392,7 @@ def main():
                 print(f"  Error importing workflow {workflow_id}: {e}")
 
         # Final summary
-        project = Project.query.filter_by(name='Cypress Automation').first()
+        project = Project.query.filter_by(name='Automation Overview').first()
         suites = Suite.query.filter_by(project_id=project.id).count() if project else 0
         cases = TestCase.query.count()
         runs = TestRun.query.count()
@@ -403,7 +403,7 @@ def main():
         print("=" * 60)
         print(f"\nCredentials: demo / DemoStyleSeat22@")
         print(f"\nData summary:")
-        print(f"  Projects:    1 (Cypress Automation)")
+        print(f"  Projects:    1 (Automation Overview)")
         print(f"  Suites:      {suites}")
         print(f"  Test Cases:  {cases}")
         print(f"  Test Runs:   {runs}")

@@ -20,6 +20,15 @@ const runService = {
   getImportStatus: () => api.get('/runs/import-status').then(r => r.data),
   getDelta: (id) => api.get(`/runs/${id}/delta`).then(r => r.data),
   bulkDelete: (ids) => api.post('/runs/bulk-delete', { ids }).then(r => r.data),
+  getTestHealth: (projectId, { suite_id, window } = {}) => {
+    const params = {};
+    if (suite_id != null) params.suite_id = suite_id;
+    if (window != null) params.window = window;
+    return api.get(`/projects/${projectId}/test-health`, { params }).then(r => r.data);
+  },
+  analyzeTest: (caseId, { project_id, window } = {}) => {
+    return api.post(`/test-health/${caseId}/analyze`, { project_id, window }).then(r => r.data);
+  },
 };
 
 export default runService;

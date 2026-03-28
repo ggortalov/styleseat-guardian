@@ -125,7 +125,7 @@
   opacity: 0.7;
   display: block;
   font-size: 11px;
-  letter-spacing: 1.2px;
+  letter-spacing: 3.8px;
   text-transform: uppercase;
 }
 
@@ -453,8 +453,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 16px;
-  margin-right: 12px;
+  padding: 5px 4px 5px 16px;
+  margin-right: 0;
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
   font-size: 14px;
@@ -500,8 +500,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 16px;
-  margin-right: 12px;
+  padding: 5px 4px 5px 16px;
+  margin-right: 0;
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
   font-size: 14px;
@@ -533,6 +533,7 @@
 
 .sidebar-suite-item-count {
   flex-shrink: 0;
+  margin-left: auto;
   font-size: 12px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.4);
