@@ -5,6 +5,12 @@ import { playConfirmation, playError } from '../services/soundService';
 
 const ImportContext = createContext(null);
 
+/** Extract workflow UUID from a CircleCI URL or bare ID. */
+function extractWorkflowId(url) {
+  const match = url.match(/workflows\/([a-f0-9-]+)/i);
+  return match ? match[1].toLowerCase() : url.trim().toLowerCase();
+}
+
 export function ImportProvider({ children }) {
   const [importState, setImportState] = useState('idle'); // idle | submitting | running | done | error | duplicate
   const [importOutput, setImportOutput] = useState('');
@@ -12,6 +18,7 @@ export function ImportProvider({ children }) {
   const [importQueue, setImportQueue] = useState([]);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importedRunId, setImportedRunId] = useState(null);
+  const [activeUrl, setActiveUrl] = useState(null);
   const pollRef = useRef(null);
   const queueRef = useRef([]);
 
@@ -43,6 +50,7 @@ export function ImportProvider({ children }) {
             setImportError(status.output || 'Import failed. Check server logs.');
             setImportQueue([]);
             queueRef.current = [];
+            setActiveUrl(null);
             playError();
             return;
           }
@@ -57,12 +65,14 @@ export function ImportProvider({ children }) {
             queueRef.current = rest;
             setImportQueue(rest);
             setImportOutput('');
+            setActiveUrl(next);
             runService.importFromCircleCI(next)
               .then(() => { pollUntilDone(); })
               .catch(() => { pollUntilDone(); });
           } else {
             const finalState = status.exit_code === 2 ? 'duplicate' : 'done';
             setImportState(finalState);
+            setActiveUrl(null);
             if (finalState === 'done') playConfirmation();
             if (finalState === 'duplicate') playError();
           }
@@ -71,6 +81,7 @@ export function ImportProvider({ children }) {
         stopPolling();
         setImportState('error');
         setImportError('Lost connection while checking import status.');
+        setActiveUrl(null);
         playError();
       }
     }, 2000);
@@ -79,6 +90,18 @@ export function ImportProvider({ children }) {
   const startImport = useCallback(async (url) => {
     if (!url.trim()) return;
     const trimmed = url.trim();
+    const newWfId = extractWorkflowId(trimmed);
+
+    // Deduplicate: reject if already importing or queued
+    if (activeUrl && extractWorkflowId(activeUrl) === newWfId) {
+      setImportError('This workflow is already being imported.');
+      return;
+    }
+    if (queueRef.current.some(u => extractWorkflowId(u) === newWfId)) {
+      setImportError('This workflow is already queued.');
+      return;
+    }
+
     if (importState === 'running') {
       queueRef.current = [...queueRef.current, trimmed];
       setImportQueue(queueRef.current);
@@ -88,16 +111,27 @@ export function ImportProvider({ children }) {
     setImportError('');
     setImportOutput('');
     setImportedRunId(null);
+    setActiveUrl(trimmed);
     try {
       await runService.importFromCircleCI(trimmed);
       setImportState('running');
       pollUntilDone();
     } catch (err) {
+      // If backend says an import is already running, queue this URL and poll
+      if (err.response?.status === 409) {
+        setActiveUrl(null); // unknown what backend is running
+        queueRef.current = [...queueRef.current, trimmed];
+        setImportQueue(queueRef.current);
+        setImportState('running');
+        pollUntilDone();
+        return;
+      }
       setImportState('error');
       setImportError(err.response?.data?.error || 'Failed to start import.');
+      setActiveUrl(null);
       playError();
     }
-  }, [importState, pollUntilDone]);
+  }, [importState, activeUrl, pollUntilDone]);
 
   const openModal = useCallback(() => {
     if (importState !== 'running') {
@@ -123,6 +157,7 @@ export function ImportProvider({ children }) {
     queueRef.current = [];
     setImportModalOpen(false);
     setImportedRunId(null);
+    setActiveUrl(null);
   }, [stopPolling]);
 
   const dismissToast = useCallback(() => {
@@ -139,6 +174,7 @@ export function ImportProvider({ children }) {
       importQueue,
       importModalOpen,
       importedRunId,
+      activeUrl,
       startImport,
       openModal,
       closeModal,

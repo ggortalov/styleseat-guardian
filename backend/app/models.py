@@ -184,7 +184,7 @@ class TestRun(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-    run_date = db.Column(db.DateTime, nullable=True)
+    run_date = db.Column(db.String(10), nullable=True)  # "YYYY-MM-DD" in local calendar date
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
     is_completed = db.Column(db.Boolean, default=False)
@@ -204,7 +204,7 @@ class TestRun(db.Model):
             "name": self.name,
             "description": self.description,
             "created_by": self.created_by,
-            "run_date": _utc_iso(self.run_date),
+            "run_date": self.run_date,
             "created_at": _utc_iso(self.created_at),
             "completed_at": _utc_iso(self.completed_at),
             "is_completed": self.is_completed,

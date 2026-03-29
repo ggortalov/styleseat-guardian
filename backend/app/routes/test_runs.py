@@ -77,15 +77,24 @@ def _get_user_tz():
 
 
 def _is_run_date_locked(run):
-    """Check if a run is locked — editable only on the same calendar day in the user's timezone."""
-    run_dt = run.run_date or run.created_at
-    if not run_dt:
-        return False
-    run_dt = run_dt if run_dt.tzinfo else run_dt.replace(tzinfo=timezone.utc)
+    """Check if a run is locked — editable only on the same calendar day in the user's timezone.
+
+    run_date is stored as a plain 'YYYY-MM-DD' local calendar date string,
+    so comparison is a simple string/date check with no timezone conversion.
+    Falls back to created_at (UTC) converted to user timezone if run_date is missing.
+    """
     user_tz = _get_user_tz()
-    run_local = run_dt.astimezone(user_tz).date()
-    today_local = datetime.now(user_tz).date()
-    return run_local < today_local
+    today_str = datetime.now(user_tz).strftime("%Y-%m-%d")
+
+    if run.run_date:
+        return run.run_date < today_str
+
+    # Legacy fallback for runs without run_date
+    if run.created_at:
+        dt = run.created_at if run.created_at.tzinfo else run.created_at.replace(tzinfo=timezone.utc)
+        return dt.astimezone(user_tz).date().isoformat() < today_str
+
+    return False
 
 
 def is_result_locked(result):
@@ -115,11 +124,15 @@ def get_run_completed_at(run_id):
 def list_all_runs():
     limit = min(request.args.get("limit", 30, type=int), 200)
     offset = max(request.args.get("offset", 0, type=int), 0)
+    effective_date = case(
+        (TestRun.run_date.isnot(None), TestRun.run_date),
+        else_=TestRun.created_at,
+    )
     total_count = TestRun.query.count()
     runs = (
         TestRun.query
         .options(joinedload(TestRun.project), joinedload(TestRun.suite))
-        .order_by(TestRun.id.desc())
+        .order_by(effective_date.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -164,9 +177,10 @@ def list_all_runs():
         d["stats"]["total"] = total
         d["stats"]["pass_rate"] = round(d["stats"]["Passed"] / total * 100, 1) if total > 0 else 0
         d["is_locked"] = is_run_locked(run.id)
-        if d["is_locked"]:
+        if d["is_locked"] or run.is_completed:
             completed_at = get_run_completed_at(run.id)
-            d["completed_at"] = completed_at.isoformat() if completed_at else None
+            if completed_at:
+                d["completed_at"] = completed_at.isoformat()
         result.append(d)
     return jsonify({"items": result, "total": total_count, "limit": limit, "offset": offset}), 200
 
@@ -205,9 +219,10 @@ def list_runs(project_id):
             d["suite_name"] = _derive_suite_name(run.name, project_suite_names)
         locked = _is_run_date_locked(run)
         d["is_locked"] = locked
-        if locked:
+        if locked or run.is_completed:
             completed_at = get_run_completed_at(run.id)
-            d["completed_at"] = completed_at.isoformat() if completed_at else None
+            if completed_at:
+                d["completed_at"] = completed_at.isoformat()
         counts = all_run_stats.get(run.id, {})
         d["stats"] = {
             "Passed": counts.get("Passed", 0),
@@ -431,7 +446,8 @@ def get_run_delta(run_id):
     regressions = [_case_detail(cid) for cid in sorted(regression_ids)]
     fixes = [_case_detail(cid) for cid in sorted(fix_ids)]
 
-    prev_date = prev_run.run_date or prev_run.created_at
+    # run_date is already a "YYYY-MM-DD" string; created_at needs .isoformat()
+    prev_date = prev_run.run_date or (prev_run.created_at.isoformat() if prev_run.created_at else None)
 
     # Derive GitHub repo URL from CIRCLECI_PROJECT_SLUG (e.g. "gh/styleseat/cypress" → "styleseat/cypress")
     slug = os.environ.get('CIRCLECI_PROJECT_SLUG', '')
@@ -443,7 +459,7 @@ def get_run_delta(run_id):
         "previous_run": {
             "id": prev_run.id,
             "name": prev_run.name,
-            "date": prev_date.isoformat() if prev_date else None,
+            "date": prev_date,
             "total": len(prev_case_ids),
             "triggered_by": prev_run.triggered_by,
             "commit_sha": prev_run.commit_sha,
@@ -1055,11 +1071,12 @@ def get_test_health(project_id):
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=window)
 
-    # Step 1: Get completed runs in window
+    # Step 1: Get completed runs in window (exclude manual runs — only imported/CI runs)
     run_query = TestRun.query.filter(
         TestRun.project_id == project_id,
         TestRun.is_completed == True,
         TestRun.created_at >= cutoff,
+        TestRun.circleci_workflow_id.isnot(None),
     )
     if suite_id:
         run_query = run_query.filter(TestRun.suite_id == suite_id)
@@ -1084,8 +1101,21 @@ def get_test_health(project_id):
 
     all_runs = run_query.order_by(TestRun.created_at.asc()).all()
 
-    # Insufficient data gate — need at least MIN_RUNS_FOR_ANALYSIS completed runs
-    if len(all_runs) < MIN_RUNS_FOR_ANALYSIS:
+    # Group by suite — each suite needs MIN_RUNS_FOR_ANALYSIS consecutive runs
+    runs_by_suite = defaultdict(list)
+    for r in all_runs:
+        runs_by_suite[r.suite_id].append(r)
+
+    # Only include suites that have enough runs for meaningful analysis
+    qualified_suites = {
+        sid: suite_runs for sid, suite_runs in runs_by_suite.items()
+        if len(suite_runs) >= MIN_RUNS_FOR_ANALYSIS
+    }
+    skipped_suite_count = len(runs_by_suite) - len(qualified_suites)
+
+    # Insufficient data gate — no suite has enough runs
+    if not qualified_suites:
+        max_runs_any_suite = max((len(v) for v in runs_by_suite.values()), default=0)
         return jsonify({
             "summary": {
                 "flaky": 0, "always_failing": 0, "consistently_failing": 0,
@@ -1094,19 +1124,14 @@ def get_test_health(project_id):
             "error_pattern_summary": {},
             "code_smell_summary": {},
             "tests": [],
-            "runs_analyzed": len(all_runs),
+            "runs_analyzed": max_runs_any_suite,
             "min_runs_required": MIN_RUNS_FOR_ANALYSIS,
             "confidence": "insufficient",
             "window_days": window,
         }), 200
 
-    # Per-suite: keep only the last MAX_RUNS_PER_SUITE runs
-    runs_by_suite = defaultdict(list)
-    for r in all_runs:
-        runs_by_suite[r.suite_id].append(r)
-
     runs = []
-    for suite_runs in runs_by_suite.values():
+    for suite_runs in qualified_suites.values():
         runs.extend(suite_runs[-MAX_RUNS_PER_SUITE:])  # last N (already asc)
 
     run_ids = [r.id for r in runs]
@@ -1419,6 +1444,8 @@ def get_test_health(project_id):
         "error_pattern_summary": dict(error_pattern_summary),
         "tests": [t for t in output_tests if t["category"] != "healthy"],
         "runs_analyzed": num_runs,
+        "suites_analyzed": len(qualified_suites),
+        "suites_skipped": skipped_suite_count,
         "min_runs_required": MIN_RUNS_FOR_ANALYSIS,
         "confidence": overall_confidence,
         "window_days": window,
@@ -1834,11 +1861,12 @@ def deep_analyze_test(case_id):
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=window)
 
-    # Get completed runs in window
+    # Get completed runs in window (exclude manual runs — only imported/CI runs)
     runs = TestRun.query.filter(
         TestRun.project_id == project_id,
         TestRun.is_completed == True,
         TestRun.completed_at >= cutoff,
+        TestRun.circleci_workflow_id.isnot(None),
     ).order_by(TestRun.completed_at).all()
     run_ids = [r.id for r in runs]
     run_map = {r.id: r for r in runs}

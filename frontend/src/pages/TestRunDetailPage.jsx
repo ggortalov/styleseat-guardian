@@ -88,9 +88,12 @@ function StatusDropdown({ status, onChangeStatus, locked }) {
   );
 }
 
-function formatRunDate(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
+function formatRunDate(dateStr) {
+  if (!dateStr) return '';
+  // run_date is "YYYY-MM-DD" — append T12:00 to avoid UTC-midnight timezone shift
+  const d = dateStr.length === 10 && dateStr[4] === '-'
+    ? new Date(dateStr + 'T12:00:00')
+    : new Date(dateStr);
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -173,6 +176,7 @@ export default function TestRunDetailPage() {
     } catch { return new Set(); }
   });
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [bulkUpdated, setBulkUpdated] = useState(new Set());
   const [copiedRowId, setCopiedRowId] = useState(null);
   const [departing, setDeparting] = useState({}); // { resultId: newStatus } — rows animating out of filter
   const [showDeleteRun, setShowDeleteRun] = useState(false);
@@ -315,6 +319,7 @@ export default function TestRunDetailPage() {
           prev.map((r) => ids.includes(r.id) ? { ...r, status: newStatus, tested_by_name: user?.username || 'Unknown' } : r)
         );
       }
+      setBulkUpdated(prev => new Set([...prev, ...ids]));
       setSelected(new Set());
       sessionStorage.removeItem(`runSelection-${runId}`);
     } catch {
@@ -607,12 +612,12 @@ export default function TestRunDetailPage() {
                   </div>
                   {!collapsed[pg.name] && (
                     <div className="run-section-cases">
-                      {!run?.is_locked && pg.results.length > 1 && (
-                        <div className="run-select-all" onClick={() => toggleSelectAll(pg.results.map((r) => r.id))}>
-                          <input type="checkbox" checked={pg.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
+                      {!run?.is_locked && (() => { const selectable = pg.results.filter((r) => !bulkUpdated.has(r.id)); return selectable.length > 1 && (
+                        <div className="run-select-all" onClick={() => toggleSelectAll(selectable.map((r) => r.id))}>
+                          <input type="checkbox" checked={selectable.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
                           <span className="run-select-all-label">Select All</span>
                         </div>
-                      )}
+                      ); })()}
                       {pg.results.map((r) => (
                         <div
                           key={r.id}
@@ -623,7 +628,7 @@ export default function TestRunDetailPage() {
                             navigate(`/runs/${runId}/execute/${r.id}`);
                           }}
                         >
-                          {!run?.is_locked && (
+                          {!run?.is_locked && !bulkUpdated.has(r.id) && (
                             <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                           )}
                           <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
@@ -685,12 +690,12 @@ export default function TestRunDetailPage() {
                           </div>
                           {!collapsed[`${sg.name}/${sec.name}`] && (
                             <div className="run-section-cases">
-                              {!run?.is_locked && sec.results.length > 1 && (
-                                <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
-                                  <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
+                              {!run?.is_locked && (() => { const selectable = sec.results.filter((r) => !bulkUpdated.has(r.id)); return selectable.length > 1 && (
+                                <div className="run-select-all" onClick={() => toggleSelectAll(selectable.map((r) => r.id))}>
+                                  <input type="checkbox" checked={selectable.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
                                   <span className="run-select-all-label">Select All</span>
                                 </div>
-                              )}
+                              ); })()}
                               {sec.results.map((r) => (
                                 <div
                                   key={r.id}
@@ -701,7 +706,7 @@ export default function TestRunDetailPage() {
                                     navigate(`/runs/${runId}/execute/${r.id}`);
                                   }}
                                 >
-                                  {!run?.is_locked && <label className="run-checkbox-zone" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="run-checkbox" /></label>}
+                                  {!run?.is_locked && !bulkUpdated.has(r.id) && <label className="run-checkbox-zone" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="run-checkbox" /></label>}
                                   <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
                                   <span className="run-case-tested-by">
                                     <span className={`tested-by-tag ${r.tested_by_name === 'Automation' ? 'automation' : 'user'}`}>{r.tested_by_name || 'Automation'}</span>
@@ -754,12 +759,12 @@ export default function TestRunDetailPage() {
                   </div>
                   {!collapsed[sec.name] && (
                     <div className="run-section-cases">
-                      {!run?.is_locked && sec.results.length > 1 && (
-                        <div className="run-select-all" onClick={() => toggleSelectAll(sec.results.map((r) => r.id))}>
-                          <input type="checkbox" checked={sec.results.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
+                      {!run?.is_locked && (() => { const selectable = sec.results.filter((r) => !bulkUpdated.has(r.id)); return selectable.length > 1 && (
+                        <div className="run-select-all" onClick={() => toggleSelectAll(selectable.map((r) => r.id))}>
+                          <input type="checkbox" checked={selectable.every((r) => selected.has(r.id))} readOnly className="run-checkbox" />
                           <span className="run-select-all-label">Select All</span>
                         </div>
-                      )}
+                      ); })()}
                       {sec.results.map((r) => (
                         <div
                           key={r.id}
@@ -770,7 +775,7 @@ export default function TestRunDetailPage() {
                             navigate(`/runs/${runId}/execute/${r.id}`);
                           }}
                         >
-                          {!run?.is_locked && (
+                          {!run?.is_locked && !bulkUpdated.has(r.id) && (
                             <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} onClick={(e) => e.stopPropagation()} className="run-checkbox" />
                           )}
                           <span className="run-case-title">{stripTestRailId(r.case_title)}</span>
