@@ -143,12 +143,14 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByText('Test project')).toBeInTheDocument();
   });
 
-  it('renders three tabs with correct counts', async () => {
+  it('renders three tabs (Overview, Suites, Health — no Runs tab)', async () => {
     renderPage();
     await waitForPageLoad();
     expect(screen.getByText('Test Suites (2)')).toBeInTheDocument();
-    expect(screen.getByText('Test Runs (2)')).toBeInTheDocument();
     expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByText('Test Health')).toBeInTheDocument();
+    // Test Runs tab was removed
+    expect(screen.queryByText('Test Runs (2)')).not.toBeInTheDocument();
   });
 
   // ── Suites Tab ──
@@ -167,8 +169,10 @@ describe('ProjectDetailPage', () => {
       renderPage();
       await waitForPageLoad();
       await user.click(screen.getByText('Test Suites (2)'));
-      expect(screen.getByText(/10 sections with 40 test cases/)).toBeInTheDocument();
-      expect(screen.getByText(/15 sections with 60 test cases/)).toBeInTheDocument();
+      expect(screen.getByText(/40 cases/)).toBeInTheDocument();
+      expect(screen.getByText(/60 cases/)).toBeInTheDocument();
+      expect(screen.getByText(/10 sections/)).toBeInTheDocument();
+      expect(screen.getByText(/15 sections/)).toBeInTheDocument();
     });
 
     it('shows active run count for suites with active runs', async () => {
@@ -176,15 +180,7 @@ describe('ProjectDetailPage', () => {
       renderPage();
       await waitForPageLoad();
       await user.click(screen.getByText('Test Suites (2)'));
-      expect(screen.getByText(/1 active test run\./)).toBeInTheDocument();
-    });
-
-    it('shows "No active test runs" for completed runs', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await waitForPageLoad();
-      await user.click(screen.getByText('Test Suites (2)'));
-      expect(screen.getByText(/No active test runs\./)).toBeInTheDocument();
+      expect(screen.getByText(/1 active run/)).toBeInTheDocument();
     });
 
     it('shows empty message when no suites exist', async () => {
@@ -199,43 +195,6 @@ describe('ProjectDetailPage', () => {
     });
   });
 
-  // ── Runs Tab ──
-  describe('Runs tab', () => {
-    it('shows run table when clicking Runs tab', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await waitForPageLoad();
-      await user.click(screen.getByText('Test Runs (2)'));
-      expect(screen.getByText('Run 1')).toBeInTheDocument();
-      expect(screen.getByText('Run 2')).toBeInTheDocument();
-    });
-
-    it('shows Active badge for incomplete runs', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await waitForPageLoad();
-      await user.click(screen.getByText('Test Runs (2)'));
-      expect(document.querySelector('.badge-active')).toBeInTheDocument();
-    });
-
-    it('shows pass rate in mini-bar label', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await waitForPageLoad();
-      await user.click(screen.getByText('Test Runs (2)'));
-      expect(screen.getByText('75%')).toBeInTheDocument();
-      expect(screen.getByText('83%')).toBeInTheDocument();
-    });
-
-    it('shows empty message when no runs exist', async () => {
-      runService.getByProject.mockResolvedValue([]);
-      const user = userEvent.setup();
-      renderPage();
-      await waitFor(() => screen.getByText('Test Runs (0)'));
-      await user.click(screen.getByText('Test Runs (0)'));
-      expect(screen.getByText('No test runs yet.')).toBeInTheDocument();
-    });
-  });
 
   // ── Overview Tab (default) ──
   describe('Overview tab', () => {
@@ -372,11 +331,6 @@ describe('ProjectDetailPage', () => {
       // Switch to suites
       await user.click(screen.getByText('Test Suites (2)'));
       expect(screen.getByText('P1 Common')).toBeInTheDocument();
-      expect(screen.queryByText('Suite Health')).not.toBeInTheDocument();
-
-      // Switch to runs
-      await user.click(screen.getByText('Test Runs (2)'));
-      expect(screen.getByText('Run 1')).toBeInTheDocument();
       expect(screen.queryByText('Suite Health')).not.toBeInTheDocument();
 
       // Switch back to overview

@@ -91,4 +91,4 @@ playwright-report/
 e2e/test-results/
 frontend/test-results/
 e2e/auth-state/
-.last-run.json
+.last-run.json.jwt_secret

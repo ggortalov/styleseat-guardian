@@ -12,8 +12,6 @@ Usage:
 import json
 import os
 import sys
-import random
-from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -22,7 +20,7 @@ DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testrail_d
 
 def main():
     from app import create_app, db
-    from app.models import User, Project, Suite, Section, TestCase, TestRun, TestResult, ResultHistory
+    from app.models import User, Project, Suite, Section, TestCase
 
     if not os.path.exists(DATA_FILE):
         print(f"ERROR: {DATA_FILE} not found.")
@@ -135,72 +133,11 @@ def main():
 
         print(f"Created {case_count} test cases")
 
-        # --- Test Runs with realistic status distributions ---
-        testers = list(user_map.values())
-        statuses = ["Passed", "Failed", "Blocked", "Retest", "Untested"]
-
-        # Find P0 Devices and P1 Pro suites by name
-        p0_suite = None
-        p1_suite = None
-        for old_id, suite in suite_map.items():
-            if suite.name == "P0 Devices":
-                p0_suite = suite
-            elif suite.name == "P1 Pro":
-                p1_suite = suite
-
-        runs_created = 0
-
-        if p0_suite:
-            run1 = TestRun(project_id=project.id, suite_id=p0_suite.id,
-                           name="P0 Devices - Release 4.2", created_by=creator.id)
-            db.session.add(run1)
-            db.session.flush()
-            p0_cases = TestCase.query.filter_by(suite_id=p0_suite.id).all()
-            for tc in p0_cases:
-                s = random.choices(statuses, weights=[80, 8, 4, 4, 4])[0]
-                tester = random.choice(testers) if s != "Untested" else None
-                r = TestResult(
-                    run_id=run1.id, case_id=tc.id, status=s,
-                    tested_by=tester.id if tester else None,
-                    tested_at=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 48)) if s != "Untested" else None,
-                    comment="Verified on device" if s == "Passed" else ("Device issue" if s == "Failed" else None),
-                    defect_id=f"DEV-{random.randint(100, 999)}" if s == "Failed" else None,
-                )
-                db.session.add(r)
-                db.session.flush()
-                if s != "Untested":
-                    h = ResultHistory(result_id=r.id, status=s, comment=r.comment,
-                                     defect_id=r.defect_id, changed_by=tester.id)
-                    db.session.add(h)
-            runs_created += 1
-            print(f"Created run: {run1.name} ({len(p0_cases)} cases)")
-
-        if p1_suite:
-            run2 = TestRun(project_id=project.id, suite_id=p1_suite.id,
-                           name="P1 Pro - Sprint 28 Regression", created_by=creator.id)
-            db.session.add(run2)
-            db.session.flush()
-            p1_cases = TestCase.query.filter_by(suite_id=p1_suite.id).all()
-            for tc in p1_cases:
-                s = random.choices(statuses, weights=[70, 8, 5, 5, 12])[0]
-                tester = random.choice(testers) if s != "Untested" else None
-                r = TestResult(
-                    run_id=run2.id, case_id=tc.id, status=s,
-                    tested_by=tester.id if tester else None,
-                    tested_at=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 72)) if s != "Untested" else None,
-                    comment="Passed successfully" if s == "Passed" else ("Bug detected" if s == "Failed" else ("Env issue" if s == "Blocked" else None)),
-                    defect_id=f"PRO-{random.randint(1000, 9999)}" if s == "Failed" else None,
-                )
-                db.session.add(r)
-                db.session.flush()
-                if s != "Untested":
-                    h = ResultHistory(result_id=r.id, status=s, comment=r.comment,
-                                     defect_id=r.defect_id, changed_by=tester.id)
-                    db.session.add(h)
-            runs_created += 1
-            print(f"Created run: {run2.name} ({len(p1_cases)} cases)")
-
         db.session.commit()
+
+        # --- Test Runs via shared generator ---
+        from seed_test_runs import generate_runs
+        runs_created = generate_runs(project.id)
 
         print("\n" + "=" * 50)
         print("Local seed complete!")

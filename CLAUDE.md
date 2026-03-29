@@ -276,6 +276,70 @@ All endpoints return JSON. All except `/api/auth/register` and `/api/auth/login`
 - **Charts**: `react-chartjs-2` Doughnut charts
 - **Tests** — `cd frontend && npm test` (Vitest + @testing-library/react)
 
+### Test Run: `is_locked` vs `is_completed` — PROTECTED RULE (DO NOT CHANGE WITHOUT USER APPROVAL)
+
+> **HARD STOP**: Any code change that modifies how `is_locked`, `is_completed`, or `isRunDone` are used
+> REQUIRES explicit user confirmation BEFORE making the change. You MUST:
+> 1. Explain exactly WHAT you want to change and in which file(s)
+> 2. Explain WHY the current rule needs to change
+> 3. Wait for the user to approve before writing any code
+>
+> This rule exists because these flags were repeatedly misused, causing cascading UI bugs.
+> Do NOT silently change the logic, even if it "seems like the right fix." Ask first.
+
+These two flags serve **different purposes** and must NEVER be conflated:
+
+| Flag | Source | Purpose |
+|------|--------|---------|
+| `is_locked` | Computed per-request by `_is_run_date_locked()` | **The ONLY flag that drives ALL UI behavior**: section grouping (Open vs Completed), card style (full vs compact), edit guards (dropdowns, checkboxes), sidebar active runs |
+| `is_completed` | DB column, set by import script | **Internal metadata ONLY** — indicates the import finished. Has NO effect on UI grouping, rendering, or permissions |
+
+**A run imported today is `is_completed=true` AND `is_locked=false`.** This is the normal state for same-day imports. ALL CircleCI imports set `is_completed=true`.
+
+**Binding rules — do NOT deviate:**
+1. **Grouping** (Open Runs vs Completed section): `is_locked` ONLY — helper `isRunDone(r)` in TestRunsPage.jsx. Today's runs = Open, yesterday's = Completed.
+2. **Card style** (full interactive vs compact archived): `is_locked` ONLY
+3. **Edit guards** (status dropdowns, checkboxes, result editing): `is_locked` ONLY — in TestRunDetailPage.jsx and TestExecutionPage.jsx
+4. **Sidebar active runs**: `is_locked` ONLY — shows all today's runs regardless of completion
+5. **`is_completed`**: NEVER use for UI grouping, card rendering, or permissions. Using it for grouping would immediately hide all same-day imports into Completed.
+
+### `run_date` storage format — PROTECTED RULE (DO NOT CHANGE WITHOUT USER APPROVAL)
+
+> **HARD STOP**: Any change to how `run_date` is stored, parsed, or compared
+> REQUIRES explicit user confirmation BEFORE making the change.
+
+`run_date` is stored as a **plain `"YYYY-MM-DD"` string** — a local calendar date with NO time or timezone component. This eliminates timezone ambiguity entirely.
+
+| Layer | How to handle `run_date` |
+|-------|------------------------|
+| **Backend storage** | `db.String(10)` — e.g. `"2026-03-28"` |
+| **Import script** | `wf_date_local.strftime('%Y-%m-%d')` — convert UTC workflow timestamp to server-local date |
+| **Seed script** | `run_ts.strftime('%Y-%m-%d')` |
+| **Lock function** | Direct string comparison: `run.run_date < today_str` — no datetime parsing needed |
+| **Frontend parsing** | **Always** append `T12:00:00` before creating a Date: `new Date(run_date + 'T12:00:00')`. Without this, `new Date("2026-03-28")` parses as UTC midnight which shifts back a day in US timezones |
+| **API response** | Plain string `"2026-03-28"` (not ISO datetime) |
+| **Dashboard** | Use helper `_run_date_str(r)` to normalise `run_date` (string) and `created_at` (datetime) into uniform `"YYYY-MM-DD"` strings |
+
+**NEVER** store a full datetime in `run_date`. **NEVER** parse a `YYYY-MM-DD` run_date with bare `new Date()` on the frontend — always append `T12:00:00`.
+
+### Bulk-updated checkboxes — PROTECTED RULE (DO NOT CHANGE WITHOUT USER APPROVAL)
+
+> **HARD STOP**: Any change to how bulk-updated result checkboxes are hidden or re-enabled
+> REQUIRES explicit user confirmation BEFORE making the change.
+
+After a bulk status update on `TestRunDetailPage`, checkboxes for the affected results are **hidden for the remainder of the session**. This prevents accidental double bulk-updates. Further status changes for those results are only possible via the individual row `StatusDropdown` or the detail/execution view.
+
+| Aspect | Rule |
+|--------|------|
+| **State** | `bulkUpdated` — a `Set<resultId>` in `TestRunDetailPage.jsx`, populated after `handleBulkStatus` succeeds |
+| **Ephemeral** | Resets on page reload or navigation — no persistence in sessionStorage |
+| **Checkbox visibility** | All three rendering branches (parentGroups, suiteGroups, sections) check `!bulkUpdated.has(r.id)` alongside `!run?.is_locked` |
+| **Select All** | Filters out bulk-updated IDs: only counts/toggles selectable results. Hides entirely when fewer than 2 selectable results remain |
+| **StatusDropdown** | NOT affected — individual dropdown remains fully functional for all results regardless of bulk-update state |
+| **Individual status changes** | Do NOT add to `bulkUpdated` — only `handleBulkStatus` populates the set |
+
+**NEVER** re-enable checkboxes for bulk-updated results within the same session. **NEVER** hide the StatusDropdown based on `bulkUpdated`. **NEVER** persist `bulkUpdated` to sessionStorage or localStorage.
+
 ### Design System
 - **Color scheme**: Green-themed — buttons, focus rings, tabs all use `--sidebar-bg` (#1a3a2a). Outlined button style (white bg + border) fills on hover
 - **Unified accent rule**: Decorative accents on structural UI (stat tiles, KPI cards, section icons, card borders) use the **same primary green** (`--sidebar-bg` / `--primary-light`). No per-element color theming. Status colors reserved strictly for data meaning (pass/fail results).

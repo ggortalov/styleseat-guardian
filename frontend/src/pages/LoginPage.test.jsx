@@ -30,6 +30,7 @@ function renderLogin() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<div>Guardian</div>} />
+        <Route path="/projects/:projectId" element={<div>Project Page</div>} />
         <Route path="/register" element={<div>Register Page</div>} />
       </Routes>
     </MemoryRouter>
@@ -153,7 +154,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: 'Logging in...' })).toBeDisabled();
   });
 
-  it('navigates to dashboard on successful login', async () => {
+  it('navigates to project page on successful login', async () => {
     mockLogin.mockResolvedValue({});
     const user = userEvent.setup();
     renderLogin();
@@ -163,7 +164,7 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Log In' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Guardian')).toBeInTheDocument();
+      expect(screen.getByText('Project Page')).toBeInTheDocument();
     });
   });
 

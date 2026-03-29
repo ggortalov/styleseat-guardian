@@ -19,7 +19,7 @@ def _parse_dt(value):
     return datetime.fromisoformat(value)
 
 
-def restore_database(input_file="db_backup.json"):
+def restore_database(input_file="seed_data.json"):
     app = create_app()
 
     with app.app_context():
@@ -121,7 +121,10 @@ def restore_database(input_file="db_backup.json"):
                 run_date=_parse_dt(r_data.get("run_date")),
                 created_at=_parse_dt(r_data.get("created_at")),
                 completed_at=_parse_dt(r_data.get("completed_at")),
-                is_completed=r_data.get("is_completed", False)
+                is_completed=r_data.get("is_completed", False),
+                circleci_workflow_id=r_data.get("circleci_workflow_id"),
+                commit_sha=r_data.get("commit_sha"),
+                triggered_by=r_data.get("triggered_by"),
             )
             db.session.add(run)
         db.session.commit()
@@ -209,5 +212,5 @@ def restore_database(input_file="db_backup.json"):
 
 
 if __name__ == "__main__":
-    input_file = sys.argv[1] if len(sys.argv) > 1 else "db_backup.json"
+    input_file = sys.argv[1] if len(sys.argv) > 1 else "seed_data.json"
     restore_database(input_file)
