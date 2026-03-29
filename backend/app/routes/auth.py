@@ -92,7 +92,7 @@ def validate_username(username):
     return None
 
 
-ALLOWED_EMAIL_DOMAIN = "styleseat.com"
+ALLOWED_EMAIL_DOMAIN = os.environ.get("ALLOWED_EMAIL_DOMAIN", "styleseat.com")
 
 
 def validate_email(email):
@@ -103,7 +103,9 @@ def validate_email(email):
 
 
 def is_allowed_email_domain(email):
-    """Check if email belongs to the allowed domain."""
+    """Check if email belongs to the allowed domain. Returns True for all if ALLOWED_EMAIL_DOMAIN is '*'."""
+    if ALLOWED_EMAIL_DOMAIN == "*":
+        return True
     domain = email.rsplit("@", 1)[-1].lower()
     return domain == ALLOWED_EMAIL_DOMAIN
 
@@ -166,8 +168,7 @@ def login():
         logger.warning("Login failed for username=%s ip=%s", username, request.remote_addr)
         return jsonify({"error": "Invalid username or password"}), 401
 
-    domain = (user.email or "").rsplit("@", 1)[-1].lower()
-    if domain != ALLOWED_EMAIL_DOMAIN:
+    if not is_allowed_email_domain(user.email or ""):
         logger.warning("Login rejected (domain) for username=%s ip=%s", username, request.remote_addr)
         return jsonify({"error": "Invalid username or password"}), 401
 
