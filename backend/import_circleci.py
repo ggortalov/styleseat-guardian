@@ -378,7 +378,9 @@ def import_workflow(workflow_id):
         wf_date = datetime.fromisoformat(wf_created.replace('Z', '+00:00'))
     else:
         wf_date = datetime.now(timezone.utc)
-    run_date_str = wf_date.strftime('%a, %b %d, %Y')
+    # Convert to local time for display name and run_date grouping
+    wf_date_local = wf_date.astimezone()
+    run_date_str = wf_date_local.strftime('%a, %b %d, %Y')
 
     # Derive display name from the CircleCI workflow name
     wf_name_raw = wf_data.get('name', '')
@@ -466,6 +468,16 @@ def import_workflow(workflow_id):
                 for r in existing_runs:
                     print(f"Found empty run '{r.name}' (ID: {r.id}) "
                           f"from a previous failed import. Removing it.")
+                    db.session.delete(r)
+                db.session.commit()
+            elif len(existing_runs) < len(suite_jobs):
+                # Some runs were deleted — partial import remains.
+                # Remove leftover runs and re-import the full workflow.
+                run_names = ', '.join(f"'{r.name}' (ID: {r.id})" for r in existing_runs)
+                print(f"Partial import detected: {len(existing_runs)} of "
+                      f"{len(suite_jobs)} suite(s) remain ({run_names}). "
+                      f"Removing leftovers and re-importing.")
+                for r in existing_runs:
                     db.session.delete(r)
                 db.session.commit()
             else:
@@ -625,6 +637,7 @@ def import_workflow(workflow_id):
             run = TestRun(
                 project_id=project.id, suite_id=suite.id, name=run_name,
                 description=run_desc, created_at=wf_date,
+                run_date=wf_date_local.strftime('%Y-%m-%d'),
                 circleci_workflow_id=workflow_id,
                 commit_sha=pipeline_commit_sha,
                 triggered_by=pipeline_triggered_by,

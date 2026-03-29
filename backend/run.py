@@ -138,6 +138,39 @@ with app.app_context():
     if updated:
         conn.commit()
         print(f"Reformatted {updated} manual run name(s) to long date format.")
+    # Migrate run_date from datetime to YYYY-MM-DD local calendar date string.
+    # Extract the date from the run name (e.g. "P1 Client · Sat, Mar 28, 2026")
+    # because the name was always formatted using local time.
+    from datetime import datetime as _dt2
+    _name_date_pat = re.compile(r'(\w{3}, \w{3} \d{1,2}, \d{4})')
+    run_rows = conn.execute("SELECT id, name, run_date, created_at FROM test_runs").fetchall()
+    migrated = 0
+    for rid, rname, rdate, rcreated in run_rows:
+        # Skip if already a YYYY-MM-DD string (10 chars, starts with digit)
+        if rdate and len(str(rdate)) == 10 and str(rdate)[4] == '-':
+            continue
+        # Try to extract date from the run name first (most reliable)
+        m = _name_date_pat.search(rname or '')
+        if m:
+            try:
+                parsed = _dt2.strptime(m.group(1), '%a, %b %d, %Y')
+                new_date = parsed.strftime('%Y-%m-%d')
+                conn.execute("UPDATE test_runs SET run_date = ? WHERE id = ?", (new_date, rid))
+                migrated += 1
+                continue
+            except ValueError:
+                pass
+        # Fallback: use created_at date portion
+        if rcreated:
+            try:
+                new_date = _dt2.fromisoformat(str(rcreated).replace('+00:00', '')).strftime('%Y-%m-%d')
+                conn.execute("UPDATE test_runs SET run_date = ? WHERE id = ?", (new_date, rid))
+                migrated += 1
+            except (ValueError, TypeError):
+                pass
+    if migrated:
+        conn.commit()
+        print(f"Migrated run_date to YYYY-MM-DD on {migrated} test run(s).")
     # Rename project "Cypress Automation" → "Automation Overview"
     renamed = conn.execute(
         "UPDATE projects SET name = 'Automation Overview', description = 'Test cases synced from the StyleSeat E2E test repository' WHERE name = 'Cypress Automation'"

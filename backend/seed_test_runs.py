@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Constants
 # ---------------------------------------------------------------------------
 TARGET_COMPLETED_RUNS = 7  # headroom above the 5-run minimum
-SPREAD_DAYS = 14           # runs spread over the last N days
+_SPREAD_DAYS = 14          # runs spread over the last N days
 
 # Cypress paths that are excluded from health analysis — skip seeding runs
 EXCLUDED_CYPRESS_PATHS = frozenset([
@@ -71,7 +71,7 @@ def _fake_sha(index, suite_id):
     return hashlib.sha1(raw.encode()).hexdigest()
 
 
-def generate_runs(project_id, target=TARGET_COMPLETED_RUNS):
+def generate_runs(project_id, target=TARGET_COMPLETED_RUNS, spread_days=_SPREAD_DAYS):
     """Top-up completed runs for every suite so each has at least *target*.
 
     Must be called inside a Flask app context with an active DB session.
@@ -133,12 +133,8 @@ def generate_runs(project_id, target=TARGET_COMPLETED_RUNS):
             db, existing_runs, flaky_ids, always_fail_ids, user_id,
         )
 
-        # Build a slug for run naming — collapse multi-underscores
-        suite_slug = suite.name.lower().replace(" ", "_").replace("-", "_")
-        suite_slug = re.sub(r'_+', '_', suite_slug).strip('_')
-
-        # Space runs evenly across the last SPREAD_DAYS days
-        interval = SPREAD_DAYS / max(needed, 1)
+        # Space runs evenly across the last spread_days days
+        interval = spread_days / max(needed, 1)
         # Per-suite hour offset so runs from different suites don't share
         # the exact same timestamp on a given day
         suite_hour_offset = (suite.id * 37) % 12  # 0-11h deterministic jitter
@@ -147,16 +143,20 @@ def generate_runs(project_id, target=TARGET_COMPLETED_RUNS):
             # run_index counts across ALL runs (existing + new) so flaky
             # alternation is continuous
             run_index = existing + i
-            days_ago = SPREAD_DAYS - (i * interval)
+            days_ago = spread_days - (i * interval)
             run_ts = now - timedelta(days=days_ago, hours=-suite_hour_offset)
+
+            # Match CircleCI import naming: "Suite Name · Wed, Mar 26, 2026"
+            run_date_str = run_ts.strftime("%a, %b %d, %Y").replace(" 0", " ")
+            run_name = f"{suite.name} \u00b7 {run_date_str}"
 
             run = TestRun(
                 project_id=project_id,
                 suite_id=suite.id,
-                name=f"cronschedule_{suite_slug}",
+                name=run_name,
                 created_by=user_id,
                 created_at=run_ts,
-                run_date=run_ts,
+                run_date=run_ts.strftime("%Y-%m-%d"),
                 completed_at=run_ts + timedelta(minutes=random.randint(8, 45)),
                 is_completed=True,
                 commit_sha=_fake_sha(run_index, suite.id),
@@ -258,6 +258,15 @@ def _pick_status(case_id, run_index, flaky_ids, always_fail_ids):
 # Standalone entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Seed synthetic test runs for Test Health analysis.")
+    parser.add_argument("target", nargs="?", type=int, default=TARGET_COMPLETED_RUNS,
+                        help=f"Target number of completed runs per suite (default: {TARGET_COMPLETED_RUNS})")
+    parser.add_argument("--days", type=int, default=_SPREAD_DAYS,
+                        help=f"Spread runs over the last N days (default: {_SPREAD_DAYS})")
+    args = parser.parse_args()
+
     from app import create_app, db
     from app.models import Project
 
@@ -267,7 +276,9 @@ if __name__ == "__main__":
         if not projects:
             print("No projects found. Run seed.py first.")
             sys.exit(1)
+
+        print(f"Target: {args.target} completed runs per suite, spread over {args.days} days")
         for proj in projects:
             print(f"\nGenerating runs for project: {proj.name} (id={proj.id})")
-            n = generate_runs(proj.id)
+            n = generate_runs(proj.id, target=args.target, spread_days=args.days)
             print(f"  Total new runs created: {n}")

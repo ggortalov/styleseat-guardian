@@ -177,13 +177,23 @@ def project_dashboard(project_id):
     # Per-suite stats — filter runs to selected date (or latest by date)
     suite_stats = {}
     if run_ids:
-        run_date_map = {r.id: (r.run_date or r.created_at) for r in runs}
+        # run_date is a "YYYY-MM-DD" string; created_at is a datetime.
+        # Normalise both to date strings for uniform comparison.
+        def _run_date_str(r):
+            if r.run_date:
+                return r.run_date  # already "YYYY-MM-DD"
+            if r.created_at:
+                return r.created_at.date().isoformat()
+            return None
+
+        run_date_map = {r.id: _run_date_str(r) for r in runs}
 
         # If date filter, only consider runs from that date
         if filter_date:
+            filter_date_str = filter_date.isoformat()
             date_run_ids = [
-                rid for rid, dt in run_date_map.items()
-                if dt and dt.date() == filter_date
+                rid for rid, ds in run_date_map.items()
+                if ds == filter_date_str
             ]
         else:
             date_run_ids = run_ids
@@ -224,14 +234,13 @@ def project_dashboard(project_id):
                             stats["total"] += cnt
                     if stats["total"] > 0:
                         stats["run_id"] = rid
-                        run_dt = run_date_map.get(rid)
-                        stats["run_date"] = run_dt.isoformat() if run_dt else None
+                        stats["run_date"] = run_date_map.get(rid)
                         suite_stats[sid] = stats
 
     # Collect dates that have runs (for date navigation)
     run_dates = sorted(set(
-        (r.run_date or r.created_at).date().isoformat()
-        for r in runs if (r.run_date or r.created_at)
+        _run_date_str(r)
+        for r in runs if _run_date_str(r)
     ), reverse=True)
 
     return jsonify({

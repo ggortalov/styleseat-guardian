@@ -26,7 +26,7 @@ export default function ConfirmDialog({ isOpen, onClose, onConfirm, title, messa
 
   // Guard: block confirm if dialog opened less than 400ms ago
   const canConfirm = () => {
-    if (requireSafeguard && confirmText.trim().toUpperCase() !== 'DELETE') return false;
+    if (requireSafeguard && confirmText.trim() !== 'DELETE') return false;
     return Date.now() - openedAtRef.current > 400;
   };
 
@@ -86,7 +86,13 @@ export default function ConfirmDialog({ isOpen, onClose, onConfirm, title, messa
               type="text"
               className="confirm-safeguard-input"
               value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Only accept uppercase letters — reject lowercase input
+                if (val === '' || /^[A-Z]+$/.test(val)) {
+                  setConfirmText(val);
+                }
+              }}
               onKeyDown={handleKeyDown}
               placeholder="DELETE"
               autoComplete="off"
@@ -98,7 +104,7 @@ export default function ConfirmDialog({ isOpen, onClose, onConfirm, title, messa
         {/* Actions */}
         <div className="confirm-actions">
           <button ref={cancelRef} className="confirm-btn-cancel" onClick={onClose}>Cancel</button>
-          <button className="confirm-btn-delete" onClick={handleConfirm} disabled={loading || (requireSafeguard && confirmText.trim().toUpperCase() !== 'DELETE')}>
+          <button className="confirm-btn-delete" onClick={handleConfirm} disabled={loading || (requireSafeguard && confirmText.trim() !== 'DELETE')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18" />
               <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
