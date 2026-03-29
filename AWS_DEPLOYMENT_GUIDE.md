@@ -4,8 +4,6 @@ any different soundswhere i can i want this settings ok if i start import and na
 
 **Goal**: Deploy StyleSeat Guardian (test management web app) to AWS for 10-50 internal users
 
-**Timeline**: 2-4 weeks
-
 **Approach**: Manual deployment with DevOps team support
 
 **Estimated Cost**: ~$50/month
@@ -33,40 +31,51 @@ any different soundswhere i can i want this settings ok if i start import and na
 
 ### What Works Now (Development)
 - **Backend**: Flask REST API on `localhost:5001`
-  - Uses SQLite database (`app.db`)
-  - JWT authentication
-  - Rate limiting on auth endpoints
-  - File uploads stored locally in `uploads/avatars/`
+  - Uses SQLite database (`app.db`) with WAL mode and foreign key enforcement
+  - JWT authentication with file-backed secret persistence (`_stable_jwt_secret()`)
+  - Rate limiting on auth endpoints (login: 5/min, register: 3/min, avatar: 10/min)
+  - File uploads stored locally in `uploads/avatars/` (UUID filenames, magic-byte validation)
+  - Security headers on all responses (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy)
+  - Global error handlers (400, 404, 405, 413, 429, 500) — prevents stack trace leaks
+  - Audit logging module (`app/audit.py`)
+  - Scheduled jobs via APScheduler: data retention cleanup (daily 2 AM), Cypress sync (daily midnight)
+  - CircleCI integration: import workflow results, attribution fields on test runs
+  - Suite-path derivation engine (`suite_utils.py`) for Cypress ↔ suite mapping
+  - DB backup/restore utilities (`backup_db.py`, `restore_db.py`)
+  - Email domain restriction (`@styleseat.com` only)
 
-- **Frontend**: React SPA on `localhost:5173`
+- **Frontend**: React 19 SPA on `localhost:5173`
   - Vite dev server
   - API calls to hardcoded `http://localhost:5001/api`
+  - Auth state via `AuthContext` with `localStorage` + `sessionStorage` support
+  - Sends `X-Timezone` header on every API request
+  - Vitest + @testing-library/react test suite
+  - Playwright E2E tests in `e2e/` directory
 
 ### What Needs to Change for Production
 
 **Critical Issues**:
-1. ❌ Using Flask development server (not production-ready)
-2. ❌ SQLite database (can't handle concurrent users)
-3. ❌ Hardcoded `localhost` URLs in code
-4. ❌ No environment-based configuration
-5. ❌ Local file storage (won't work with multiple servers)
-6. ❌ No health check endpoints
-7. ❌ No production logging
+1. ❌ Using Flask development server (not production-ready) — need Gunicorn
+2. ❌ SQLite database (can't handle concurrent users) — need PostgreSQL
+3. ❌ Hardcoded `localhost` URLs in frontend (`services/api.js`) and backend CORS (`__init__.py`)
+4. ❌ No environment-based config switching (single `Config` class, no prod/dev split)
+5. ❌ Local file storage for avatars (won't work with multiple servers) — need S3
+6. ❌ No health check endpoint (required for ALB target group)
+7. ✅ ~~No production logging~~ — audit logging and error handlers already in place; need to add Gunicorn-level structured logging
 
 **Files That Need Updates**:
-- `backend/run.py` - Switch to Gunicorn
-- `backend/config.py` - Add environment-based config
-- `backend/requirements.txt` - Add production dependencies
-- `backend/app/__init__.py` - Dynamic CORS configuration
-- `frontend/src/services/api.js` - Use environment variable for API URL
-- `frontend/vite.config.js` - Ensure production build is optimized
+- `backend/config.py` - Add `ProductionConfig` class with PostgreSQL, S3, dynamic CORS
+- `backend/requirements.txt` - Add `gunicorn`, `psycopg2-binary`, `boto3`
+- `backend/app/__init__.py` - Dynamic CORS from config; add `/health` endpoint
+- `backend/app/routes/auth.py` - Add S3 avatar upload path alongside local storage
+- `backend/.env.example` - Add `DATABASE_URL`, `CORS_ORIGINS`, `S3_BUCKET`, `FLASK_ENV`
+- `frontend/src/services/api.js` - Use `import.meta.env.VITE_API_URL` for API base URL
 
 **New Files Needed**:
 - `backend/Dockerfile` - Container image for backend
 - `backend/wsgi.py` - Gunicorn entry point
-- `backend/.env.example` - Document environment variables
+- `frontend/.env.example` - Document `VITE_API_URL`
 - `docker-compose.yml` - Local testing with PostgreSQL
-- `DEPLOYMENT.md` - Deployment instructions
 
 ---
 
@@ -189,87 +198,129 @@ any different soundswhere i can i want this settings ok if i start import and na
 
 **File**: `backend/requirements.txt`
 
-**Add these lines**:
+Current dependencies already include `python-dotenv` and `APScheduler`. **Add these lines**:
 ```
-gunicorn==21.2.0          # Production WSGI server
-psycopg2-binary==2.9.9    # PostgreSQL adapter
-boto3==1.34.0             # AWS SDK (for S3)
-python-dotenv==1.0.0      # Load .env files
+gunicorn==23.0.0          # Production WSGI server
+psycopg2-binary==2.9.10   # PostgreSQL adapter
+boto3==1.35.0             # AWS SDK (for S3)
 ```
+
+> **Note**: `python-dotenv==1.2.2` is already installed. `APScheduler==3.10.4` is already installed for scheduled jobs.
 
 ### 1.2 Backend: Create Environment-Based Configuration
 
 **File**: `backend/config.py` (update existing)
 
-**Changes needed**:
+The current `config.py` has a single `Config` class with SQLite, file-backed JWT secret (`_stable_jwt_secret()`), and CircleCI settings. It needs to be extended with production support.
+
+**Changes needed** — add these settings to the existing `Config` class and add a `ProductionConfig` subclass:
+
 ```python
 import os
+import secrets
 from datetime import timedelta
+from dotenv import load_dotenv
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, ".env"))
+
+
+def _stable_jwt_secret():
+    """Return a JWT secret that persists across restarts.
+    Priority: env var → .jwt_secret file → generate + write to file.
+    """
+    key = os.environ.get("JWT_SECRET_KEY")
+    if key:
+        return key
+    secret_path = os.path.join(basedir, ".jwt_secret")
+    if os.path.exists(secret_path):
+        with open(secret_path) as f:
+            return f.read().strip()
+    key = secrets.token_hex(32)
+    with open(secret_path, "w") as f:
+        f.write(key)
+    return key
+
 
 class Config:
-    """Base configuration"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key'
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'dev-jwt-secret'
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
-    MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2MB
-
-    # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///app.db'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f"sqlite:///{os.path.join(basedir, 'app.db')}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "connect_args": {"timeout": 60},
+        "pool_pre_ping": True,
+    }
+    JWT_SECRET_KEY = _stable_jwt_secret()
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_BLACKLIST_ENABLED = True
+    JWT_BLACKLIST_TOKEN_CHECKS = ["access"]
+    UPLOAD_FOLDER = os.path.join(basedir, "uploads", "avatars")
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB
 
-    # CORS
-    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173').split(',')
+    # Rate limiting
+    RATELIMIT_STORAGE_URI = "memory://"
 
-    # S3 Storage
+    # CORS — comma-separated origins, defaults to localhost for dev
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(',')
+
+    # Data retention
+    RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", 30))
+
+    # CircleCI Integration
+    CIRCLECI_API_TOKEN = os.environ.get("CIRCLECI_API_TOKEN")
+    CIRCLECI_PROJECT_SLUG = os.environ.get("CIRCLECI_PROJECT_SLUG")
+
+    # S3 Storage (production)
     USE_S3_STORAGE = os.environ.get('USE_S3_STORAGE', 'false').lower() == 'true'
     S3_BUCKET = os.environ.get('S3_BUCKET', 'guardian-avatars-prod')
     S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
-    # Data retention
-    RETENTION_DAYS = int(os.environ.get('RETENTION_DAYS', '30'))
-
-class DevelopmentConfig(Config):
-    """Development configuration"""
-    DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///app.db'
 
 class ProductionConfig(Config):
-    """Production configuration"""
+    """Production configuration — requires DATABASE_URL and JWT_SECRET_KEY env vars."""
     DEBUG = False
-    # Ensure these are set in production
-    SECRET_KEY = os.environ.get('SECRET_KEY')
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
-
-    # PostgreSQL in production
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
-
-    # S3 storage in production
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')  # must be PostgreSQL
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}       # no SQLite timeout
     USE_S3_STORAGE = True
 
+
 config = {
-    'development': DevelopmentConfig,
+    'development': Config,
     'production': ProductionConfig,
-    'default': DevelopmentConfig
+    'default': Config
 }
 ```
+
+> **Important**: The `_stable_jwt_secret()` function already handles JWT key persistence via file or env var. In production, always set `JWT_SECRET_KEY` as an environment variable (from AWS Secrets Manager). The `CORS_ORIGINS` config must also be updated in `__init__.py` to read from config instead of the current hardcoded list.
 
 ### 1.3 Backend: Add Health Check Endpoint
 
 **File**: `backend/app/__init__.py`
 
-**Add after existing routes**:
+The app factory already has security headers, global error handlers, rate limiting, and scheduled jobs. **Add this health check route** inside `create_app()`, after the blueprint registrations (around line 102):
+
 ```python
 from sqlalchemy import text
 
 @app.route('/health')
 def health():
-    """Health check endpoint for load balancer"""
+    """Health check endpoint for ALB target group — no auth required."""
     try:
-        # Check database connection
         db.session.execute(text('SELECT 1'))
         return {'status': 'healthy', 'database': 'connected'}, 200
     except Exception as e:
         return {'status': 'unhealthy', 'error': str(e)}, 503
+```
+
+Also update the CORS configuration in `create_app()` to use config-driven origins instead of the current hardcoded list:
+
+```python
+# Replace this:
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+     supports_credentials=True)
+
+# With this:
+CORS(app, resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", ["http://localhost:5173"])}},
+     supports_credentials=True)
 ```
 
 ### 1.4 Backend: Create WSGI Entry Point
@@ -293,16 +344,15 @@ if __name__ == '__main__':
 
 **File**: `backend/app/routes/auth.py`
 
-**Add S3 helper functions**:
+The current `upload_avatar()` route already handles local storage with UUID filenames, magic-byte validation, and old-avatar cleanup. For production, add an S3 upload path that's selected based on the `USE_S3_STORAGE` config flag.
+
+**Add S3 helper function** (at module level, after the existing imports):
 ```python
 import boto3
 from flask import current_app
 
-def upload_avatar_to_s3(file_data, filename):
-    """Upload avatar to S3"""
-    if not current_app.config['USE_S3_STORAGE']:
-        return None
-
+def upload_avatar_to_s3(file_data, filename, content_type='image/jpeg'):
+    """Upload avatar to S3 when USE_S3_STORAGE is enabled."""
     s3 = boto3.client('s3', region_name=current_app.config['S3_REGION'])
     key = f'avatars/{filename}'
 
@@ -310,71 +360,84 @@ def upload_avatar_to_s3(file_data, filename):
         Bucket=current_app.config['S3_BUCKET'],
         Key=key,
         Body=file_data,
-        ContentType='image/jpeg'
+        ContentType=content_type,
     )
 
-    # Return S3 URL
     return f"https://{current_app.config['S3_BUCKET']}.s3.{current_app.config['S3_REGION']}.amazonaws.com/{key}"
-
-# Update avatar upload route to use S3 in production
 ```
+
+**Then update `upload_avatar()`** to branch on config — after the existing validation and `saved_name` generation:
+```python
+    if current_app.config.get('USE_S3_STORAGE'):
+        file_data = file.read()
+        ext = saved_name.rsplit('.', 1)[1].lower()
+        content_type = f'image/{ext}' if ext != 'jpg' else 'image/jpeg'
+        s3_url = upload_avatar_to_s3(file_data, saved_name, content_type)
+        user.avatar = saved_name  # still store filename for reference
+        # Optionally store full S3 URL: user.avatar = s3_url
+    else:
+        file.save(os.path.join(upload_folder, saved_name))
+        user.avatar = saved_name
+```
+
+> **Note**: The `serve_avatar()` endpoint will also need an S3 redirect for production. Consider returning a presigned S3 URL or proxying through CloudFront.
 
 ### 1.6 Backend: Add Structured Logging
 
-**File**: `backend/app/__init__.py`
+**Status**: Partially done. The app already has:
+- An audit logger (`app/audit.py`) imported by `dashboard.py`
+- A `guardian.audit` logger configured in `__init__.py` with `StreamHandler`
+- A `guardian.sync` logger for Cypress sync jobs
+- Auth route logging (`routes/auth.py`) for failed login/registration attempts
 
-**Add logging configuration**:
+**Remaining for production** — add Gunicorn-level access logging. This is handled by Gunicorn config, not Flask. Add to the Docker CMD or a `gunicorn.conf.py`:
+
 ```python
-import logging
-from logging.handlers import RotatingFileHandler
-
-def setup_logging(app):
-    """Configure application logging"""
-    if not app.debug:
-        # Production logging
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        console_handler.setLevel(logging.INFO)
-
-        app.logger.addHandler(console_handler)
-        app.logger.setLevel(logging.INFO)
-        app.logger.info('StyleSeat Guardian starting up')
-
-# Call in create_app():
-setup_logging(app)
+# backend/gunicorn.conf.py (NEW FILE)
+bind = "0.0.0.0:5001"
+workers = 2
+timeout = 120
+accesslog = "-"        # stdout — picked up by CloudWatch
+errorlog = "-"         # stderr
+loglevel = "info"
+access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 ```
 
-### 1.7 Backend: Create Environment File Template
+Then run with: `gunicorn -c gunicorn.conf.py wsgi:app`
 
-**File**: `backend/.env.example` (NEW FILE)
+### 1.7 Backend: Update Environment File Template
+
+**File**: `backend/.env.example` (already exists — update it)
+
+The current `.env.example` only has CircleCI, JWT, TestRail, and retention settings. **Add production variables**:
 
 ```bash
-# Flask Configuration
-FLASK_ENV=production
-SECRET_KEY=your-secret-key-here
-JWT_SECRET_KEY=your-jwt-secret-key-here
+# CircleCI Integration
+CIRCLECI_API_TOKEN=your_circleci_personal_api_token
+CIRCLECI_PROJECT_SLUG=gh/styleseat/cypress
 
-# Database
-DATABASE_URL=postgresql://username:password@rds-endpoint:5432/guardian
+# JWT Secret (optional — auto-generated and persisted to .jwt_secret file if not set)
+JWT_SECRET_KEY=
 
-# CORS (comma-separated list)
-CORS_ORIGINS=https://guardian.yourdomain.com
+# Database (default: SQLite; set to PostgreSQL for production)
+# DATABASE_URL=postgresql://username:password@rds-endpoint:5432/guardian
 
-# AWS Configuration
-USE_S3_STORAGE=true
-S3_BUCKET=guardian-avatars-prod
-AWS_REGION=us-east-1
+# CORS (comma-separated list; default: http://localhost:5173)
+# CORS_ORIGINS=https://guardian.yourdomain.com
 
-# Data Retention
+# AWS S3 Configuration (for production avatar storage)
+# USE_S3_STORAGE=true
+# S3_BUCKET=guardian-avatars-prod
+# AWS_REGION=us-east-1
+
+# Data Retention (days, default 30)
 RETENTION_DAYS=30
 
-# Server
-PORT=5001
+# TestRail Integration (only needed for seed_testrail.py / seed_demo.py)
+TESTRAIL_BASE_URL=https://styleseat.testrail.io/index.php?/api/v2
+TESTRAIL_EMAIL=your_email@styleseat.com
+TESTRAIL_PASSWORD=your_testrail_password
+TESTRAIL_PROJECT_ID=23
 ```
 
 ### 1.8 Frontend: Add Environment Variable Support
@@ -382,25 +445,21 @@ PORT=5001
 **File**: `frontend/.env.example` (NEW FILE)
 
 ```bash
-# API Configuration
+# API Configuration (default: http://localhost:5001/api for local dev)
 VITE_API_URL=https://api.guardian.yourdomain.com/api
 ```
 
 **File**: `frontend/src/services/api.js`
 
-**Update to use environment variable**:
-```javascript
-import axios from 'axios';
+The current file has a hardcoded `baseURL`, JWT interceptor reading from both `localStorage` and `sessionStorage`, and an `X-Timezone` header. **Only the first line of `axios.create` needs to change**:
 
+```javascript
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
-
-// ... rest of file
 ```
+
+> **Note**: Do NOT remove the existing `getToken()`, `clearAuth()`, request interceptor (JWT + X-Timezone header), or response interceptor (401 handling). Only change the `baseURL` line.
 
 ### 1.9 Create Backend Dockerfile
 
@@ -433,8 +492,8 @@ RUN mkdir -p uploads/avatars
 # Expose port
 EXPOSE 5001
 
-# Run with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "--timeout", "120", "wsgi:app"]
+# Run with Gunicorn (uses gunicorn.conf.py from Phase 1.6)
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "wsgi:app"]
 ```
 
 ### 1.10 Create Frontend Dockerfile (Optional - for containerized deployment)
@@ -505,11 +564,12 @@ services:
     ports:
       - "5001:5001"
     environment:
-      FLASK_ENV: development
       DATABASE_URL: postgresql://guardian:guardianpass@postgres:5432/guardian
       JWT_SECRET_KEY: dev-jwt-secret
       CORS_ORIGINS: http://localhost:5173
-      USE_S3_STORAGE: false
+      USE_S3_STORAGE: "false"
+      RETENTION_DAYS: "30"
+      CIRCLECI_API_TOKEN: ${CIRCLECI_API_TOKEN:-}
     depends_on:
       - postgres
     volumes:
@@ -520,25 +580,25 @@ volumes:
   postgres_data:
 ```
 
+> **Note**: The `CIRCLECI_API_TOKEN` is passed through from the host environment if set. The backend's `seed.py` should be run once to bootstrap the demo user after first start: `docker-compose exec backend python seed.py`.
+
 ### 1.12 Update .gitignore
 
-**File**: `.gitignore` (add these lines)
+**Status**: Already up to date. The current `.gitignore` already includes:
+- `.env`, `.env.local`, `.env.*.local`
+- `*.db`, `*.db-shm`, `*.db-wal`
+- `backend/uploads/avatars/`
+- `backend/db_backup.json`, `**/secrets.*`, `**/credentials.*`
+- `frontend/dist/`, `frontend/build/`
+- `.jwt_secret` (via `.last-run.json.jwt_secret` pattern)
 
+**Add these lines** for Docker support:
 ```
-# Environment files
-.env
-.env.local
-.env.production
-
 # Docker
 docker-compose.override.yml
-
-# Uploads (don't commit user data)
-backend/uploads/
-
-# Database
-backend/app.db
 ```
+
+> **Note**: The `.jwt_secret` file (used by `_stable_jwt_secret()`) should also be explicitly gitignored if not already matched. Add `backend/.jwt_secret` to be safe.
 
 ---
 
@@ -848,10 +908,13 @@ sqlalchemy.url =
 
 **File**: `backend/migrations/env.py`
 
-Update to use your models:
+Update to use your models (all 11 models):
 ```python
 from app import create_app, db
-from app.models import User, Project, Suite, Section, TestCase, TestRun, TestResult, ResultHistory
+from app.models import (
+    TokenBlocklist, User, Project, Suite, Section, TestCase,
+    TestRun, TestResult, ResultHistory, SyncBaseline, SyncLog
+)
 import os
 
 # Get database URL from environment
@@ -862,6 +925,18 @@ config.set_main_option(
 
 target_metadata = db.metadata
 ```
+
+> **Important**: The current schema has evolved beyond the original design. Notable differences Alembic will detect:
+> - `test_cases.suite_id` (FK to suites, with ON DELETE CASCADE)
+> - `test_cases.updated_by` (FK to users)
+> - `test_runs.run_date` is `String(10)` not `DateTime` — stores `"YYYY-MM-DD"` strings
+> - `test_runs.circleci_workflow_id`, `commit_sha`, `triggered_by` columns
+> - `test_results.case_id` is nullable with ON DELETE SET NULL
+> - `test_results.error_message`, `artifacts` (JSON), `circleci_job_id`
+> - `result_history.error_message`, `artifacts` (JSON)
+> - `sync_logs.suites_processed`, `status`, `error_message`
+>
+> The lightweight migrations in `run.py` handle SQLite ALTER TABLE for development. For PostgreSQL, Alembic handles everything cleanly.
 
 ### 3.2 Create Initial Migration
 
@@ -939,32 +1014,34 @@ alembic upgrade head
 ```bash
 psql "$DATABASE_URL" -c "\dt"
 
-# Should see:
-# users, projects, suites, sections, test_cases, test_runs, test_results, result_history, token_blocklist
+# Should see 11 tables:
+# token_blocklist, users, projects, suites, sections, test_cases,
+# test_runs, test_results, result_history, sync_baselines, sync_logs
 ```
 
 ### 3.5 Seed Initial Data (Optional)
 
-**Create admin user**:
+The existing `backend/seed.py` creates a demo user (`demo` / `Demo1234`) and the "Automation Overview" project. For production, either run the seed script or create users manually.
+
+**Option A: Run existing seed script** (after setting `DATABASE_URL`):
 ```bash
-psql "$DATABASE_URL" << EOF
-INSERT INTO users (username, email, password_hash, created_at)
-VALUES ('admin', 'admin@company.com', 'hash', NOW());
-EOF
+cd backend && DATABASE_URL="postgresql://..." python seed.py
 ```
 
-Or use Python:
+**Option B: Create admin user manually**:
 ```python
 from app import create_app, db
 from app.models import User
 
 app = create_app()
 with app.app_context():
-    admin = User(username='admin', email='admin@company.com')
+    admin = User(username='admin', email='admin@styleseat.com')
     admin.set_password('ChangeMe123!')
     db.session.add(admin)
     db.session.commit()
 ```
+
+> **Note**: Email must be `@styleseat.com` to pass the domain restriction in `routes/auth.py`. Change `ALLOWED_EMAIL_DOMAIN` if your team uses a different domain.
 
 ---
 
@@ -1288,11 +1365,15 @@ ab -n 1000 -c 50 \
 - [ ] Security groups follow least privilege
 - [ ] JWT secrets stored in Secrets Manager
 - [ ] Database password rotated from default
-- [ ] Rate limiting enabled on auth endpoints
+- [x] Rate limiting enabled on auth endpoints (login: 5/min, register: 3/min, avatar: 10/min)
 - [ ] CORS only allows production domain
-- [ ] Security headers enabled (X-Frame-Options, etc.)
-- [ ] File upload size limits enforced
-- [ ] SQL injection protected (using SQLAlchemy ORM)
+- [x] Security headers enabled (X-Frame-Options DENY, X-Content-Type-Options nosniff, X-XSS-Protection, Referrer-Policy)
+- [x] File upload size limits enforced (5MB, magic-byte validation)
+- [x] SQL injection protected (using SQLAlchemy ORM)
+- [x] Global error handlers prevent stack trace leaks (400, 404, 405, 413, 429, 500)
+- [x] Email domain restriction on registration/login (`@styleseat.com`)
+- [x] Avatar filenames use UUID (non-predictable, non-enumerable)
+- [x] Audit logging on sensitive operations
 
 ### 5.5 Backup & Recovery
 
@@ -1335,17 +1416,19 @@ Use this as your master checklist during deployment:
 - [ ] Domain name approved and available
 
 ### Week 1: Code Changes
-- [ ] Added production dependencies to requirements.txt
-- [ ] Updated config.py with environment-based configuration
-- [ ] Added health check endpoint
-- [ ] Created wsgi.py entry point
-- [ ] Added S3 storage support for avatars
-- [ ] Added structured logging
-- [ ] Created .env.example files
-- [ ] Updated frontend to use VITE_API_URL
-- [ ] Created backend Dockerfile
-- [ ] Created docker-compose.yml for local testing
-- [ ] Updated .gitignore
+- [ ] Added `gunicorn`, `psycopg2-binary`, `boto3` to `requirements.txt`
+- [ ] Updated `config.py` with `ProductionConfig` class, `CORS_ORIGINS`, S3 settings
+- [ ] Updated `__init__.py` CORS to read from config instead of hardcoded origins
+- [ ] Added `/health` endpoint in `__init__.py`
+- [ ] Created `wsgi.py` entry point
+- [ ] Created `gunicorn.conf.py` with access logging
+- [ ] Added S3 upload path in `routes/auth.py`
+- [ ] Updated `backend/.env.example` with production variables
+- [ ] Updated `frontend/src/services/api.js` to use `VITE_API_URL`
+- [ ] Created `frontend/.env.example`
+- [ ] Created `backend/Dockerfile`
+- [ ] Created `docker-compose.yml` for local testing
+- [ ] Added `docker-compose.override.yml` and `backend/.jwt_secret` to `.gitignore`
 - [ ] Tested locally with Docker and PostgreSQL
 
 ### Week 2: AWS Infrastructure
@@ -1844,16 +1927,16 @@ aws secretsmanager get-secret-value --secret-id /prod/guardian/jwt-secret --quer
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `FLASK_ENV` | Yes | development | Flask environment (development/production) |
-| `SECRET_KEY` | Yes | (random) | Flask secret key for sessions |
-| `JWT_SECRET_KEY` | Yes | (random) | JWT signing key |
-| `DATABASE_URL` | Yes | sqlite:///app.db | PostgreSQL connection string |
-| `CORS_ORIGINS` | Yes | localhost:5173 | Comma-separated allowed origins |
-| `USE_S3_STORAGE` | No | false | Enable S3 for avatar storage |
-| `S3_BUCKET` | If S3 enabled | - | S3 bucket name for avatars |
-| `AWS_REGION` | If S3 enabled | us-east-1 | AWS region |
-| `RETENTION_DAYS` | No | 30 | Days to retain completed test runs |
-| `PORT` | No | 5001 | Server port |
+| `JWT_SECRET_KEY` | Prod: Yes | Auto-generated to `.jwt_secret` file | JWT signing key. In production, set via AWS Secrets Manager |
+| `DATABASE_URL` | Prod: Yes | `sqlite:///app.db` | PostgreSQL connection string for production |
+| `CORS_ORIGINS` | Prod: Yes | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed origins |
+| `USE_S3_STORAGE` | No | `false` | Enable S3 for avatar storage |
+| `S3_BUCKET` | If S3 enabled | `guardian-avatars-prod` | S3 bucket name for avatars |
+| `AWS_REGION` | If S3 enabled | `us-east-1` | AWS region |
+| `RETENTION_DAYS` | No | `30` | Days to retain completed test runs |
+| `CIRCLECI_API_TOKEN` | For imports | - | CircleCI personal API token |
+| `CIRCLECI_PROJECT_SLUG` | For imports | - | CircleCI project slug (e.g. `gh/styleseat/cypress`) |
+| `VITE_API_URL` | Prod: Yes | `http://localhost:5001/api` | Frontend API base URL (Vite build-time) |
 
 ### Appendix C: Port Reference
 
@@ -1898,8 +1981,8 @@ Outbound:
 
 ---
 
-**Document Version**: 1.0.0
-**Last Updated**: March 2024
+**Document Version**: 1.1.0
+**Last Updated**: March 2026
 **Maintained By**: [Your Team Name]
 **Contact**: [Your Email]
 
