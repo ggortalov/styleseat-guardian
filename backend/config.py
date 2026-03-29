@@ -1,8 +1,31 @@
 import os
 import secrets
 from datetime import timedelta
+from dotenv import load_dotenv
 
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+# Load .env from the backend directory so JWT_SECRET_KEY (and other vars) survive restarts
+load_dotenv(os.path.join(basedir, ".env"))
+
+
+def _stable_jwt_secret():
+    """Return a JWT secret that persists across restarts.
+
+    Priority: env var → .jwt_secret file → generate + write to file.
+    Never falls back to an ephemeral random key.
+    """
+    key = os.environ.get("JWT_SECRET_KEY")
+    if key:
+        return key
+    secret_path = os.path.join(basedir, ".jwt_secret")
+    if os.path.exists(secret_path):
+        with open(secret_path) as f:
+            return f.read().strip()
+    key = secrets.token_hex(32)
+    with open(secret_path, "w") as f:
+        f.write(key)
+    return key
 
 
 class Config:
@@ -12,7 +35,7 @@ class Config:
         "connect_args": {"timeout": 60},  # Wait up to 60s for DB lock to clear
         "pool_pre_ping": True,            # Verify connections before checkout
     }
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)
+    JWT_SECRET_KEY = _stable_jwt_secret()
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ["access"]

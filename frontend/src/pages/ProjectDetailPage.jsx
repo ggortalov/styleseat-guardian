@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
-import StatusBadge from '../components/StatusBadge';
-import ConfirmDialog from '../components/ConfirmDialog';
 import projectService from '../services/projectService';
 import suiteService from '../services/suiteService';
 import runService from '../services/runService';
 import dashboardService from '../services/dashboardService';
 import { STATUS_ORDER } from '../constants/statusColors';
+import SuiteDropdown from '../components/SuiteDropdown';
 import './ProjectDetailPage.css';
 
 function SyncLogCard({ log }) {
@@ -81,290 +80,6 @@ function formatTimeAgo(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function SuiteDropdown({ value, options, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(-1);
-  const ref = useRef(null);
-  const listRef = useRef(null);
-
-  const allOptions = ['', ...options];
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  useEffect(() => {
-    if (open && listRef.current) {
-      const active = listRef.current.querySelector('[aria-selected="true"]');
-      if (active) active.scrollIntoView({ block: 'nearest' });
-      const idx = allOptions.indexOf(value || '');
-      setFocusIdx(idx >= 0 ? idx : 0);
-    }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (open && listRef.current && focusIdx >= 0) {
-      const items = listRef.current.querySelectorAll('[role="option"]');
-      if (items[focusIdx]) items[focusIdx].scrollIntoView({ block: 'nearest' });
-    }
-  }, [focusIdx, open]);
-
-  const handleKeyDown = (e) => {
-    if (!open) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setOpen(true);
-      }
-      return;
-    }
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setFocusIdx(i => Math.min(i + 1, allOptions.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setFocusIdx(i => Math.max(i - 1, 0));
-        break;
-      case 'Enter':
-      case ' ':
-        e.preventDefault();
-        if (focusIdx >= 0) { onChange(allOptions[focusIdx]); setOpen(false); }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setOpen(false);
-        break;
-      case 'Home':
-        e.preventDefault();
-        setFocusIdx(0);
-        break;
-      case 'End':
-        e.preventDefault();
-        setFocusIdx(allOptions.length - 1);
-        break;
-      default: break;
-    }
-  };
-
-  const label = value || 'All Suites';
-  const activeDescendant = open && focusIdx >= 0 ? `suite-opt-${focusIdx}` : undefined;
-
-  return (
-    <div className="runs-suite-dropdown" ref={ref}>
-      <button
-        className="runs-suite-dropdown-btn"
-        onClick={() => setOpen(o => !o)}
-        onKeyDown={handleKeyDown}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Filter by suite"
-        aria-activedescendant={activeDescendant}
-        type="button"
-      >
-        <span className="runs-suite-dropdown-label">{label}</span>
-        <svg className={`runs-suite-dropdown-chevron${open ? ' open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {open && (
-        <ul className="runs-suite-dropdown-menu" role="listbox" ref={listRef} aria-label="Suite filter options">
-          <li
-            id="suite-opt-0"
-            className={`runs-suite-dropdown-item${!value ? ' runs-suite-dropdown-item--active' : ''}${focusIdx === 0 ? ' runs-suite-dropdown-item--focus' : ''}`}
-            role="option"
-            aria-selected={!value}
-            onClick={() => { onChange(''); setOpen(false); }}
-          >
-            All Suites
-          </li>
-          {options.map((name, i) => (
-            <li
-              key={name}
-              id={`suite-opt-${i + 1}`}
-              className={`runs-suite-dropdown-item${value === name ? ' runs-suite-dropdown-item--active' : ''}${focusIdx === i + 1 ? ' runs-suite-dropdown-item--focus' : ''}`}
-              role="option"
-              aria-selected={value === name}
-              onClick={() => { onChange(name); setOpen(false); }}
-            >
-              {name}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DAY_LABELS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
-
-function DateRangePicker({ startDate, endDate, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [viewMonth, setViewMonth] = useState(() => {
-    const d = startDate || new Date();
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
-  const [picking, setPicking] = useState(null); // null | Date (first click stored)
-  const wrapRef = useRef(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open]);
-
-  // Build calendar grid for current viewMonth
-  const calendarDays = useMemo(() => {
-    const { year, month } = viewMonth;
-    const firstDay = new Date(year, month, 1);
-    // Monday=0 offset
-    let startOffset = (firstDay.getDay() + 6) % 7;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const prevMonthDays = new Date(year, month, 0).getDate();
-
-    const days = [];
-    // Previous month trailing days
-    for (let i = startOffset - 1; i >= 0; i--) {
-      days.push({ date: new Date(year, month - 1, prevMonthDays - i), outside: true });
-    }
-    // Current month days
-    for (let d = 1; d <= daysInMonth; d++) {
-      days.push({ date: new Date(year, month, d), outside: false });
-    }
-    // Next month leading days to fill 6 rows
-    const remaining = 42 - days.length;
-    for (let d = 1; d <= remaining; d++) {
-      days.push({ date: new Date(year, month + 1, d), outside: true });
-    }
-    return days;
-  }, [viewMonth]);
-
-  const today = useMemo(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  }, []);
-
-  const isSameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-  const isInRange = (date) => {
-    if (!startDate || !endDate) return false;
-    return date >= startDate && date <= endDate;
-  };
-
-  const handleDayClick = (date) => {
-    if (!picking) {
-      // First click: set start
-      setPicking(date);
-    } else {
-      // Second click: determine range order and apply
-      let s = picking, e = date;
-      if (s > e) { [s, e] = [e, s]; }
-      setPicking(null);
-      onChange(s, e);
-      setOpen(false);
-    }
-  };
-
-  const handleClear = () => {
-    setPicking(null);
-    onChange(null, null);
-    setOpen(false);
-  };
-
-  const prevMonth = () => setViewMonth(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 });
-  const nextMonth = () => setViewMonth(v => v.month === 11 ? { year: v.year + 1, month: 0 } : { year: v.year, month: v.month + 1 });
-
-  const formatLabel = () => {
-    if (!startDate && !endDate) return 'All dates';
-    if (startDate && endDate) {
-      const s = `${SHORT_MONTHS[startDate.getMonth()]} ${startDate.getDate()}`;
-      const e = `${SHORT_MONTHS[endDate.getMonth()]} ${endDate.getDate()}`;
-      if (startDate.getFullYear() !== endDate.getFullYear()) {
-        return `${s}, ${startDate.getFullYear()} – ${e}, ${endDate.getFullYear()}`;
-      }
-      return `${s} – ${e}`;
-    }
-    if (startDate) return `From ${SHORT_MONTHS[startDate.getMonth()]} ${startDate.getDate()}`;
-    return `Until ${SHORT_MONTHS[endDate.getMonth()]} ${endDate.getDate()}`;
-  };
-
-  return (
-    <div className="drp-wrap" ref={wrapRef}>
-      <button
-        className="drp-btn"
-        onClick={() => { setOpen(o => !o); if (!open) setPicking(null); }}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-        <span className="drp-label">{formatLabel()}</span>
-        <svg className={`drp-chevron${open ? ' open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {open && (
-        <div className="drp-panel" role="dialog" aria-label="Date range picker">
-          <div className="drp-month-nav">
-            <button className="drp-nav-arrow" onClick={prevMonth} aria-label="Previous month">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <span className="drp-month-label">{MONTH_NAMES[viewMonth.month]} {viewMonth.year}</span>
-            <button className="drp-nav-arrow" onClick={nextMonth} aria-label="Next month">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
-          </div>
-          <div className="drp-weekdays">
-            {DAY_LABELS.map(d => <span key={d} className="drp-weekday">{d}</span>)}
-          </div>
-          <div className="drp-grid">
-            {calendarDays.map(({ date, outside }, i) => {
-              const isToday = isSameDay(date, today);
-              const isSelected = isSameDay(date, startDate) || isSameDay(date, endDate);
-              const isPicking = isSameDay(date, picking);
-              const inRange = isInRange(date);
-              return (
-                <button
-                  key={i}
-                  className={[
-                    'drp-day',
-                    outside && 'drp-day--outside',
-                    isToday && 'drp-day--today',
-                    (isSelected || isPicking) && 'drp-day--selected',
-                    inRange && !isSelected && 'drp-day--in-range',
-                  ].filter(Boolean).join(' ')}
-                  onClick={() => handleDayClick(date)}
-                  aria-label={`${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`}
-                >
-                  {date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          <div className="drp-footer">
-            <button className="drp-clear" onClick={handleClear}>Clear</button>
-            {picking && <span className="drp-hint">Select end date</span>}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
@@ -376,22 +91,14 @@ export default function ProjectDetailPage() {
   const [syncLogs, setSyncLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'overview';
+  const rawTab = searchParams.get('tab') || 'overview';
+  const tab = rawTab === 'runs' ? 'overview' : rawTab; // runs tab removed — fall back to overview
   const setTab = (t) => setSearchParams(t === 'overview' ? {} : { tab: t }, { replace: true });
 
   // Suites tab: search, sort
   const [suiteSearch, setSuiteSearch] = useState('');
   const [suiteSort, setSuiteSort] = useState('name');
 
-  // Runs tab: filter, search, selection state
-  const [runStatusFilter, setRunStatusFilter] = useState('All');
-  const [runSearchQuery, setRunSearchQuery] = useState('');
-  const [runSuiteFilter, setRunSuiteFilter] = useState('');
-  const [runDateStart, setRunDateStart] = useState(null);  // Date | null
-  const [runDateEnd, setRunDateEnd] = useState(null);      // Date | null
-  const [runSort, setRunSort] = useState({ key: 'created_at', dir: 'desc' });
-  const [selectedRuns, setSelectedRuns] = useState(new Set());
-  const [showBulkDeleteRuns, setShowBulkDeleteRuns] = useState(false);
   const [apiError, setApiError] = useState(null);
 
   // Test Health tab state
@@ -452,103 +159,6 @@ export default function ProjectDetailPage() {
       return next;
     });
   }, []);
-
-  const filteredRuns = useMemo(() => {
-    let result = runs;
-    // Status filter — Active = not locked (today), Completed = locked (older)
-    if (runStatusFilter === 'Active') result = result.filter(r => !r.is_locked);
-    else if (runStatusFilter === 'Completed') result = result.filter(r => r.is_locked);
-    // Suite filter
-    if (runSuiteFilter) {
-      result = result.filter(r => (r.suite_name || '') === runSuiteFilter);
-    }
-    // Date range filter
-    if (runDateStart) {
-      result = result.filter(r => new Date(r.created_at) >= runDateStart);
-    }
-    if (runDateEnd) {
-      const endOfDay = new Date(runDateEnd);
-      endOfDay.setHours(23, 59, 59, 999);
-      result = result.filter(r => new Date(r.created_at) <= endOfDay);
-    }
-    // Search filter
-    if (runSearchQuery.trim()) {
-      const q = runSearchQuery.toLowerCase();
-      result = result.filter(r =>
-        r.name.toLowerCase().includes(q) ||
-        (r.suite_name || '').toLowerCase().includes(q)
-      );
-    }
-    // Sort
-    result = [...result].sort((a, b) => {
-      let av, bv;
-      switch (runSort.key) {
-        case 'name':
-          av = a.name.toLowerCase(); bv = b.name.toLowerCase();
-          return runSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-        case 'suite_name':
-          av = (a.suite_name || '').toLowerCase(); bv = (b.suite_name || '').toLowerCase();
-          return runSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-        case 'pass_rate':
-          av = a.stats?.pass_rate ?? -1; bv = b.stats?.pass_rate ?? -1;
-          return runSort.dir === 'asc' ? av - bv : bv - av;
-        default: // created_at
-          av = new Date(a.created_at); bv = new Date(b.created_at);
-          return runSort.dir === 'asc' ? av - bv : bv - av;
-      }
-    });
-    return result;
-  }, [runs, runStatusFilter, runSearchQuery, runSuiteFilter, runDateStart, runDateEnd, runSort]);
-
-  const runFilterStats = useMemo(() => ({
-    All: runs.length,
-    Active: runs.filter(r => !r.is_locked).length,
-    Completed: runs.filter(r => r.is_locked).length,
-  }), [runs]);
-
-  const runSuiteNames = useMemo(() => {
-    const names = new Set(runs.map(r => r.suite_name).filter(n => n && n !== 'All Suites'));
-    return [...names].sort((a, b) => a.localeCompare(b));
-  }, [runs]);
-
-  const handleRunSort = (key) => {
-    setRunSort(prev => prev.key === key
-      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-      : { key, dir: key === 'name' || key === 'suite_name' ? 'asc' : 'desc' }
-    );
-  };
-
-  const runSortChevron = (key) => runSort.key === key ? (runSort.dir === 'asc' ? '\u25B2' : '\u25BC') : '';
-  const runAriaSort = (key) => runSort.key === key ? (runSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
-  const handleRunSortKeyDown = (key, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRunSort(key); } };
-  const runHasActiveFilters = runStatusFilter !== 'All' || runSearchQuery || runSuiteFilter || runDateStart || runDateEnd;
-
-  const toggleRunSelect = (id) => {
-    setSelectedRuns(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleRunSelectAll = () => {
-    const visibleIds = filteredRuns.map(r => r.id);
-    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedRuns.has(id));
-    if (allSelected) {
-      setSelectedRuns(new Set());
-    } else {
-      setSelectedRuns(new Set(visibleIds));
-    }
-  };
-
-  const handleBulkDeleteRuns = async () => {
-    try {
-      await runService.bulkDelete([...selectedRuns]);
-      setSelectedRuns(new Set());
-      setShowBulkDeleteRuns(false);
-      fetchAll();
-    } catch { setApiError('Failed to delete runs. Please try again.'); }
-  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -668,9 +278,6 @@ export default function ProjectDetailPage() {
           <button className={`tab ${tab === 'suites' ? 'active' : ''}`} role="tab" id="tab-suites" aria-selected={tab === 'suites'} aria-controls={tab === 'suites' ? 'panel-suites' : undefined} onClick={() => setTab('suites')}>
             Test Suites ({suites.length})
           </button>
-          <button className={`tab ${tab === 'runs' ? 'active' : ''}`} role="tab" id="tab-runs" aria-selected={tab === 'runs'} aria-controls={tab === 'runs' ? 'panel-runs' : undefined} onClick={() => setTab('runs')}>
-            Test Runs ({runs.length})
-          </button>
           <button className={`tab ${tab === 'health' ? 'active' : ''}`} role="tab" id="tab-health" aria-selected={tab === 'health'} aria-controls={tab === 'health' ? 'panel-health' : undefined} onClick={() => setTab('health')}>
             Test Health
           </button>
@@ -776,7 +383,7 @@ export default function ProjectDetailPage() {
                     const total = latestRun?.stats?.total || 0;
                     const passRateColor = passRate >= 80 ? 'var(--status-passed)' : passRate >= 50 ? 'var(--status-blocked)' : 'var(--status-failed)';
                     return (
-                      <div key={s.id} className="suite-card">
+                      <Link key={s.id} className="suite-card" to={`/projects/${projectId}/suites/${s.id}`}>
                         <div className="suite-card-icon">
                           {passRate != null ? (
                             <span className="suite-card-rate" style={{ color: passRateColor }}>{passRate}%</span>
@@ -787,7 +394,7 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
                         <div className="suite-card-body">
-                          <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-name">{s.name}</Link>
+                          <span className="suite-card-name">{s.name}</span>
                           <div className="suite-card-summary">
                             {s.case_count || 0} cases &middot; {s.section_count || 0} sections
                             {activeCount > 0
@@ -828,7 +435,8 @@ export default function ProjectDetailPage() {
                                 {STATUS_ORDER.map((st) =>
                                   latestRun.stats[st] > 0 ? (
                                     <span key={st} className="suite-card-stat-badge" style={{ '--badge-bg': `var(--status-${st.toLowerCase()}-bg)`, '--badge-color': `var(--status-${st.toLowerCase()})` }}>
-                                      {latestRun.stats[st]}
+                                      <span className="suite-card-stat-badge-dot" style={{ backgroundColor: `var(--status-${st.toLowerCase()})` }} />
+                                      {latestRun.stats[st]} {st}
                                     </span>
                                   ) : null
                                 )}
@@ -836,12 +444,12 @@ export default function ProjectDetailPage() {
                             </div>
                           )}
                         </div>
-                        <Link to={`/projects/${projectId}/suites/${s.id}`} className="suite-card-chevron" title="Open suite">
+                        <span className="suite-card-chevron" title="Open suite">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="9 18 15 12 9 6" />
                           </svg>
-                        </Link>
-                      </div>
+                        </span>
+                      </Link>
                     );
                   })}
                 </div>
@@ -851,138 +459,6 @@ export default function ProjectDetailPage() {
             </div>
           );
         })()}</div>)}
-
-        {tab === 'runs' && (
-          <div id="panel-runs" role="tabpanel" aria-labelledby="tab-runs">
-            {/* Filter toolbar */}
-            <div className="runs-filter-toolbar">
-              <div className="runs-filter-pills">
-                {['All', 'Active', 'Completed'].map(f => (
-                  <button
-                    key={f}
-                    className={`runs-filter-pill${runStatusFilter === f ? ' runs-filter-pill--active' : ''}`}
-                    onClick={() => { setRunStatusFilter(f); setSelectedRuns(new Set()); }}
-                  >
-                    {f} <span className="runs-filter-pill-count">{runFilterStats[f]}</span>
-                  </button>
-                ))}
-              </div>
-              <SuiteDropdown
-                value={runSuiteFilter}
-                options={runSuiteNames}
-                onChange={val => { setRunSuiteFilter(val); setSelectedRuns(new Set()); }}
-              />
-              <DateRangePicker
-                startDate={runDateStart}
-                endDate={runDateEnd}
-                onChange={(s, e) => { setRunDateStart(s); setRunDateEnd(e); setSelectedRuns(new Set()); }}
-              />
-              <div className="runs-search-wrapper">
-                <svg className="runs-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  className="runs-search-input"
-                  type="text"
-                  placeholder="Search runs..."
-                  aria-label="Search runs"
-                  value={runSearchQuery}
-                  onChange={e => { setRunSearchQuery(e.target.value); setSelectedRuns(new Set()); }}
-                />
-                {runSearchQuery && (
-                  <button className="runs-search-clear" aria-label="Clear run search" onClick={() => { setRunSearchQuery(''); setSelectedRuns(new Set()); }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Active filter indicator */}
-            {runHasActiveFilters && (
-              <div className="runs-active-filter">
-                Showing {filteredRuns.length} of {runs.length} runs
-                <button className="runs-clear-filters" onClick={() => { setRunStatusFilter('All'); setRunSearchQuery(''); setRunSuiteFilter(''); setRunDateStart(null); setRunDateEnd(null); setSelectedRuns(new Set()); }}>
-                  Clear filters
-                </button>
-              </div>
-            )}
-
-            <div className="card">
-              {filteredRuns.length > 0 ? (
-                <table className="data-table">
-                  <caption className="sr-only">Test runs for {project?.name}</caption>
-                  <thead>
-                    <tr>
-                      <th className="runs-checkbox-col">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all runs"
-                          checked={filteredRuns.length > 0 && filteredRuns.every(r => selectedRuns.has(r.id))}
-                          onChange={toggleRunSelectAll}
-                        />
-                      </th>
-                      <th scope="col" className="runs-col-sortable" role="columnheader" aria-sort={runAriaSort('name')} tabIndex={0} onClick={() => handleRunSort('name')} onKeyDown={e => handleRunSortKeyDown('name', e)}>Name {runSortChevron('name') && <span className="runs-sort-chevron">{runSortChevron('name')}</span>}</th>
-                      <th scope="col" className="runs-col-sortable" role="columnheader" aria-sort={runAriaSort('suite_name')} tabIndex={0} onClick={() => handleRunSort('suite_name')} onKeyDown={e => handleRunSortKeyDown('suite_name', e)}>Suite {runSortChevron('suite_name') && <span className="runs-sort-chevron">{runSortChevron('suite_name')}</span>}</th>
-                      <th scope="col">Status</th>
-                      <th scope="col" className="runs-col-sortable" role="columnheader" aria-sort={runAriaSort('pass_rate')} tabIndex={0} onClick={() => handleRunSort('pass_rate')} onKeyDown={e => handleRunSortKeyDown('pass_rate', e)}>Pass Rate {runSortChevron('pass_rate') && <span className="runs-sort-chevron">{runSortChevron('pass_rate')}</span>}</th>
-                      <th scope="col" className="runs-col-sortable runs-created-col" role="columnheader" aria-sort={runAriaSort('created_at')} tabIndex={0} onClick={() => handleRunSort('created_at')} onKeyDown={e => handleRunSortKeyDown('created_at', e)}>Created {runSortChevron('created_at') && <span className="runs-sort-chevron">{runSortChevron('created_at')}</span>}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRuns.map((r) => (
-                      <tr key={r.id} className={`clickable-row${selectedRuns.has(r.id) ? ' runs-row--selected' : ''}`} onClick={() => navigate(`/runs/${r.id}`)} tabIndex={0} role="row" onKeyDown={e => { if (e.key === 'Enter') navigate(`/runs/${r.id}`); }}>
-                        <td className="runs-checkbox-col" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            aria-label={`Select run ${r.name}`}
-                            checked={selectedRuns.has(r.id)}
-                            onChange={() => toggleRunSelect(r.id)}
-                          />
-                        </td>
-                        <td className="text-primary-bold">{r.name}</td>
-                        <td>{r.suite_name}</td>
-                        <td>{r.is_locked ? <span className="badge-completed">Completed</span> : <span className="badge-active">Active</span>}</td>
-                        <td>
-                          <div className="mini-bar">
-                            {['Passed', 'Failed', 'Blocked', 'Retest', 'Untested'].map((s) => (
-                              r.stats[s] > 0 && (
-                                <div key={s} style={{ width: `${(r.stats[s] / r.stats.total) * 100}%`, backgroundColor: `var(--status-${s.toLowerCase()})` }} title={`${s}: ${r.stats[s]}`} />
-                              )
-                            ))}
-                          </div>
-                          <span className="mini-bar-label">{r.stats.pass_rate}%</span>
-                        </td>
-                        <td className="text-muted runs-created-col">{new Date(r.created_at).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="empty-message">{runs.length > 0 ? 'No runs match the current filters.' : 'No test runs yet.'}</p>
-              )}
-            </div>
-
-            {/* Floating bulk action bar */}
-            {selectedRuns.size > 0 && (
-              <div className="bulk-action-bar">
-                <span className="bulk-action-count">{selectedRuns.size} run{selectedRuns.size !== 1 ? 's' : ''} selected</span>
-                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedRuns(new Set())}>Clear</button>
-                <button className="btn btn-danger btn-sm" onClick={() => setShowBulkDeleteRuns(true)}>DELETE</button>
-              </div>
-            )}
-
-            <ConfirmDialog
-              isOpen={showBulkDeleteRuns}
-              onClose={() => setShowBulkDeleteRuns(false)}
-              onConfirm={handleBulkDeleteRuns}
-              title="Delete Test Runs"
-              message={`${selectedRuns.size} test run${selectedRuns.size !== 1 ? 's' : ''} will be permanently deleted. This cannot be undone.`}
-              requireSafeguard
-            />
-          </div>
-        )}
 
         {tab === 'health' && (<div id="panel-health" role="tabpanel" aria-labelledby="tab-health">{(() => {
           const CATEGORY_COLORS = {
@@ -1039,20 +515,17 @@ export default function ProjectDetailPage() {
               {/* Controls toolbar */}
               <div className="th-toolbar">
                 <div className="th-toolbar-left">
-                  <select
-                    className="th-suite-select"
-                    aria-label="Filter by suite"
-                    value={healthSuiteFilter || ''}
-                    onChange={e => {
-                      const val = e.target.value ? parseInt(e.target.value) : null;
+                  <SuiteDropdown
+                    value={healthSuiteFilter ? (suites.find(s => s.id === healthSuiteFilter)?.name || '') : ''}
+                    options={suites.filter(s => !['AB Test', 'P0 Devices'].includes(s.name)).map(s => s.name)}
+                    onChange={name => {
+                      const suite = suites.find(s => s.name === name);
+                      const val = suite ? suite.id : null;
                       setHealthSuiteFilter(val);
                       setHealthData(null);
                       fetchTestHealth(val, healthWindow);
                     }}
-                  >
-                    <option value="">All Suites</option>
-                    {suites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  />
                   <div className="th-window-pills">
                     {[7, 14, 30].map(d => (
                       <button
@@ -1098,8 +571,8 @@ export default function ProjectDetailPage() {
                   </div>
                   <h3 className="th-insufficient-title">Not Enough Data Yet</h3>
                   <p className="th-insufficient-text">
-                    Test health analysis requires at least <strong>{hd.min_runs_required} completed runs</strong> to reliably
-                    detect flaky and failing patterns.
+                    Test health analysis requires at least <strong>{hd.min_runs_required} completed runs per suite</strong> to
+                    reliably detect flaky and failing patterns.
                   </p>
                   <div className="th-insufficient-progress">
                     <div className="th-insufficient-bar">
@@ -1145,7 +618,6 @@ export default function ProjectDetailPage() {
                           <button
                             key={key}
                             className={`th-tile${healthCategoryFilter === key ? ' th-tile--active' : ''}${count === 0 ? ' th-tile--zero' : ''}`}
-                            style={{ '--tile-accent': CATEGORY_COLORS[key] }}
                             onClick={() => setHealthCategoryFilter(f => f === key ? 'all' : key)}
                           >
                             <div className="th-tile-icon-wrap">{iconEl}</div>
@@ -1153,27 +625,8 @@ export default function ProjectDetailPage() {
                               <span className="th-tile-count">{count}</span>
                               <span className="th-tile-label">{CATEGORY_LABELS[key]}</span>
                             </div>
-                            {count > 0 && <div className="th-tile-bar"><div className="th-tile-bar-fill" style={{ width: `${pct}%` }} /></div>}
-                            {count > 0 && <span className="th-tile-pct">{pct}% of issues</span>}
+                            <span className="th-tile-pct">{count > 0 && pct > 0 ? `${pct}% of issues` : '\u00A0'}</span>
                           </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Category filter pills */}
-                      <div className="th-filter-pills">
-                        {['all', 'flaky', 'always_failing', 'consistently_failing', 'regression'].map(f => {
-                          const count = f === 'all' ? tests.length : tests.filter(t => t.category === f).length;
-                          if (f !== 'all' && count === 0) return null;
-                          return (
-                            <button
-                              key={f}
-                              className={`th-filter-pill${healthCategoryFilter === f ? ' th-filter-pill--active' : ''}`}
-                              onClick={() => setHealthCategoryFilter(f)}
-                            >
-                              {f === 'all' ? `All Issues` : CATEGORY_LABELS[f]}
-                              <span className="th-filter-pill-count">{count}</span>
-                            </button>
                           );
                         })}
                       </div>
@@ -1220,7 +673,7 @@ export default function ProjectDetailPage() {
                                       </td>
                                       <td className="th-col-ewma">
                                         <div className="th-ewma-bar-wrap">
-                                          <div className="th-ewma-bar" style={{ width: `${Math.min(t.ewma_flip_rate * 100, 100)}%` }} />
+                                          <div className="th-ewma-bar" style={{ width: `${Math.min(t.ewma_flip_rate * 100, 100)}%`, background: t.ewma_flip_rate >= 0.6 ? 'var(--status-failed)' : t.ewma_flip_rate >= 0.3 ? '#FF9800' : 'var(--status-passed)' }} />
                                         </div>
                                         <span className="th-ewma-val">{Math.round(t.ewma_flip_rate * 100)}%</span>
                                       </td>

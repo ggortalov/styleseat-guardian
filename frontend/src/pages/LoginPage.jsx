@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(username, password, rememberMe);
-      navigate('/');
+      navigate('/projects/1');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {

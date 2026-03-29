@@ -26,13 +26,15 @@ def purge_expired_runs(retention_days: int) -> dict:
     Returns a summary dict with counts of deleted records.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    cutoff_date_str = cutoff.strftime("%Y-%m-%d")
 
-    effective_date = case(
-        (TestRun.run_date.isnot(None), TestRun.run_date),
-        else_=TestRun.created_at,
-    )
+    # run_date is a "YYYY-MM-DD" string; created_at is a datetime.
+    # Compare each against the appropriate cutoff format.
     expired_runs = TestRun.query.filter(
-        effective_date < cutoff,
+        db.or_(
+            db.and_(TestRun.run_date.isnot(None), TestRun.run_date < cutoff_date_str),
+            db.and_(TestRun.run_date.is_(None), TestRun.created_at < cutoff),
+        )
     ).all()
 
     run_count = len(expired_runs)
