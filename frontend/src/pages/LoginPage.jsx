@@ -89,11 +89,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="auth-demo-hint">
-          <span className="auth-demo-hint-label">Demo credentials</span>
-          <span className="auth-demo-hint-creds">demo / Demo1234</span>
-        </div>
-
         <p className="auth-switch">
           Don't have an account? <Link to="/register">Sign up</Link>
         </p>
