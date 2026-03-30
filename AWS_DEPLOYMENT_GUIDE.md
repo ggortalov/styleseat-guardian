@@ -580,7 +580,7 @@ volumes:
   postgres_data:
 ```
 
-> **Note**: The `CIRCLECI_API_TOKEN` is passed through from the host environment if set. The backend's `seed.py` should be run once to bootstrap the demo user after first start: `docker-compose exec backend python seed.py`.
+> **Note**: The `CIRCLECI_API_TOKEN` is passed through from the host environment if set. The backend's `seed.py` should be run once to bootstrap team accounts after first start: `docker-compose exec backend python seed.py`.
 
 ### 1.12 Update .gitignore
 
@@ -1021,7 +1021,7 @@ psql "$DATABASE_URL" -c "\dt"
 
 ### 3.5 Seed Initial Data (Optional)
 
-The existing `backend/seed.py` creates a demo user (`demo` / `Demo1234`) and the "Automation Overview" project. For production, either run the seed script or create users manually.
+The existing `backend/seed.py` creates team accounts and the "Automation Overview" project. For production, either run the seed script or create users manually.
 
 **Option A: Run existing seed script** (after setting `DATABASE_URL`):
 ```bash
