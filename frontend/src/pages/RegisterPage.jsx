@@ -37,7 +37,7 @@ export default function RegisterPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <img src="/favicon.jpg" alt="StyleSeat Regression Guard" className="auth-brand-icon" />
+          <img src={`${import.meta.env.BASE_URL}favicon.jpg`} alt="StyleSeat Regression Guard" className="auth-brand-icon" />
         </div>
 
         <h2 className="auth-welcome">Create your account</h2>
