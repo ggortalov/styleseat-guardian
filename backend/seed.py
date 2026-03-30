@@ -49,23 +49,46 @@ if fresh:
             print()
             print("Next: run 'python sync_cypress.py' to populate test cases.")
 else:
-    # Database already exists — ensure demo user is present but preserve everything else
+    # Database already exists — ensure team accounts are present but preserve everything else
     with app.app_context():
         db.create_all()  # creates any NEW tables without touching existing ones
-        demo = User.query.filter_by(username="demo").first()
-        if not demo:
-            demo = User(username="demo", email="demo@styleseat.com")
-            demo.set_password("Demo1234")
-            db.session.add(demo)
+
+        # Team accounts that should always exist after any reset
+        TEAM_ACCOUNTS = [
+            {"username": "demo",      "email": "demo@styleseat.com",      "password": "Demo1234"},
+            {"username": "ivolkov",   "email": "ivolkov@styleseat.com",   "password": "SSpassword123"},
+            {"username": "jenni",     "email": "jnemeth@styleseat.com",   "password": "yfm-afr2pdc3bxj@PXC"},
+            {"username": "vchau",     "email": "vchau@styleseat.com",     "password": "SSpassword123"},
+            {"username": "Gennady",   "email": "ggortalov@styleseat.com", "password": "SSpassword123"},
+            {"username": "pcruz",     "email": "pcruz@styleseat.com",    "password": "Peterjay1"},
+        ]
+
+        created = []
+        for acct in TEAM_ACCOUNTS:
+            existing = User.query.filter_by(username=acct["username"]).first()
+            if not existing:
+                user = User(username=acct["username"], email=acct["email"])
+                user.set_password(acct["password"])
+                db.session.add(user)
+                created.append(acct["username"])
+
+        # Ensure default project exists
+        if not User.query.filter_by(username="demo").first():
+            # demo was just created above, flush to get ID
             db.session.flush()
 
+        if not Project.query.filter_by(name="Automation Overview").first():
             project = Project(
                 name="Automation Overview",
                 description="Test cases synced from the StyleSeat E2E test repository",
                 created_by=None,
             )
             db.session.add(project)
-            db.session.commit()
-            print("Demo user was missing — re-created.")
+            created.append("project:Automation Overview")
+
+        db.session.commit()
+
+        if created:
+            print(f"Re-created missing accounts/resources: {', '.join(created)}")
         else:
-            print("Database already exists — skipping seed (all accounts preserved).")
+            print("Database already exists — all team accounts present.")
