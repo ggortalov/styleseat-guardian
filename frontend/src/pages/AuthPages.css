@@ -558,6 +558,35 @@
   }
 }
 
+/* Demo credentials hint */
+.auth-demo-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px 16px;
+  background: rgba(205, 245, 69, 0.08);
+  border: 1px solid rgba(205, 245, 69, 0.15);
+  border-radius: var(--radius-md);
+}
+
+.auth-demo-hint-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auth-demo-hint-creds {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(205, 245, 69, 0.85);
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+}
+
 /* Respect reduced-motion preference — skip heavy glow/bloom, keep simple fade */
 @media (prefers-reduced-motion: reduce) {
   .auth-card {

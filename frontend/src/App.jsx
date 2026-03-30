@@ -157,13 +157,19 @@ function ProjectRedirect() {
   return <TestSuitesPage />;
 }
 
+function AuthRedirect({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) return <Navigate to="/" replace />;
+  return children;
+}
+
 function AppRoutes() {
   return (
     <AppLayout>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<AuthRedirect><LoginPage /></AuthRedirect>} />
+          <Route path="/register" element={<AuthRedirect><RegisterPage /></AuthRedirect>} />
           <Route path="/" element={<ProtectedRoute><ProjectRedirect /></ProtectedRoute>} />
           <Route path="/suites" element={<ProtectedRoute><TestSuitesPage /></ProtectedRoute>} />
           <Route path="/runs" element={<ProtectedRoute><TestRunsPage /></ProtectedRoute>} />

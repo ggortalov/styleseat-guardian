@@ -32,8 +32,12 @@ def create_app():
 
     db.init_app(app)
     jwt.init_app(app)
-    CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
-         supports_credentials=True)
+    CORS(app, resources={r"/api/.*": {"origins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://styleseat.github.io",
+        "https://ggortalov.github.io",
+    ]}}, supports_credentials=True)
 
     # --- Rate limiter ---
     limiter = Limiter(
@@ -73,6 +77,7 @@ def create_app():
 
     @app.errorhandler(500)
     def internal_error(e):
+        app.logger.exception("Internal server error: %s", e)
         return jsonify({"error": "Internal server error"}), 500
 
     # --- Security headers ---

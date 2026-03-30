@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001/api',
 });
 
 // Helper: read token from whichever storage it lives in
@@ -34,7 +34,7 @@ api.interceptors.response.use(
       const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
       if (!isAuthEndpoint) {
         clearAuth();
-        window.location.href = '/login';
+        window.location.href = import.meta.env.BASE_URL + 'login';
       }
     }
     return Promise.reject(error);
