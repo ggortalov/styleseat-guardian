@@ -16,34 +16,56 @@ SEED_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed_da
 
 app = create_app()
 
-# Drop and recreate all tables
-with app.app_context():
-    db.drop_all()
-    db.create_all()
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.db")
+fresh = not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0
 
-if os.path.exists(SEED_FIXTURE):
-    # Full restore from fixture (restore_db creates its own app context)
-    from restore_db import restore_database
-    restore_database(SEED_FIXTURE)
-    print("\nSeed completed (restored from seed_data.json).")
-else:
-    # Minimal seed: demo user + project
+if fresh:
+    # First time: create all tables from scratch
     with app.app_context():
-        user = User(username="demo", email="demo@styleseat.com")
-        user.set_password("Demo1234")
-        db.session.add(user)
-        db.session.flush()
+        db.create_all()
 
-        project = Project(
-            name="Automation Overview",
-            description="Test cases synced from the StyleSeat E2E test repository",
-            created_by=user.id,
-        )
-        db.session.add(project)
-        db.session.commit()
+    if os.path.exists(SEED_FIXTURE):
+        from restore_db import restore_database
+        restore_database(SEED_FIXTURE)
+        print("\nSeed completed (restored from seed_data.json).")
+    else:
+        with app.app_context():
+            user = User(username="demo", email="demo@styleseat.com")
+            user.set_password("Demo1234")
+            db.session.add(user)
+            db.session.flush()
 
-        print("Seed data created (minimal).")
-        print(f"  User:    demo / Demo1234")
-        print(f"  Project: {project.name}")
-        print()
-        print("Next: run 'python sync_cypress.py' to populate test cases.")
+            project = Project(
+                name="Automation Overview",
+                description="Test cases synced from the StyleSeat E2E test repository",
+                created_by=None,
+            )
+            db.session.add(project)
+            db.session.commit()
+
+            print("Seed data created (minimal).")
+            print(f"  User:    demo / Demo1234")
+            print(f"  Project: {project.name}")
+            print()
+            print("Next: run 'python sync_cypress.py' to populate test cases.")
+else:
+    # Database already exists — ensure demo user is present but preserve everything else
+    with app.app_context():
+        db.create_all()  # creates any NEW tables without touching existing ones
+        demo = User.query.filter_by(username="demo").first()
+        if not demo:
+            demo = User(username="demo", email="demo@styleseat.com")
+            demo.set_password("Demo1234")
+            db.session.add(demo)
+            db.session.flush()
+
+            project = Project(
+                name="Automation Overview",
+                description="Test cases synced from the StyleSeat E2E test repository",
+                created_by=None,
+            )
+            db.session.add(project)
+            db.session.commit()
+            print("Demo user was missing — re-created.")
+        else:
+            print("Database already exists — skipping seed (all accounts preserved).")
