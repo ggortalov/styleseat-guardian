@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import './SuiteDropdown.css';
 
 export default function SuiteDropdown({ value, options, onChange }) {
   const [open, setOpen] = useState(false);
