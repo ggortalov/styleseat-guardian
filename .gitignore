@@ -62,6 +62,7 @@ desktop.ini
 .env.*.local
 
 # Sensitive data backups
+backend/backups/
 backend/db_backup.json
 backend/testrail_data.json
 **/secrets.*

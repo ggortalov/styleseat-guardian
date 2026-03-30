@@ -11,9 +11,21 @@ echo "Stopping existing servers..."
 lsof -ti:5001 -ti:5173 -ti:5174 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# 2. Ensure database exists (preserves existing accounts)
+# 2. Backup database if it exists
 cd "$ROOT_DIR/backend"
 source venv/bin/activate
+
+if [ -f app.db ]; then
+  BACKUP_DIR="$ROOT_DIR/backend/backups"
+  mkdir -p "$BACKUP_DIR"
+  BACKUP_FILE="$BACKUP_DIR/app_$(date +%Y%m%d_%H%M%S).db"
+  cp app.db "$BACKUP_FILE"
+  echo "Database backed up to $BACKUP_FILE"
+  # Keep only last 5 backups
+  ls -t "$BACKUP_DIR"/app_*.db 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+fi
+
+# 3. Ensure database exists (preserves existing accounts)
 
 if [ -f app.db ]; then
   echo "Existing database found — preserving all accounts."
