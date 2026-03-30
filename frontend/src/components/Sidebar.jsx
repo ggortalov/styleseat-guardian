@@ -164,7 +164,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       )}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} />
+          <img src={`${import.meta.env.BASE_URL}favicon.jpg`} alt="StyleSeat Guardian" className="sidebar-logo-img" onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} />
           {!collapsed && (
             <div className="sidebar-logo-wordmark">
               <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Guardian</span></span>
