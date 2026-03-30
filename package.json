@@ -13,7 +13,8 @@
     "e2e:ui": "cd e2e && npx playwright test --ui",
     "e2e:headed": "cd e2e && npx playwright test --headed",
     "e2e:headed:report": "cd e2e && npx playwright test --headed; npx playwright show-report",
-    "e2e:report": "cd e2e && npx playwright show-report"
+    "e2e:report": "cd e2e && npx playwright show-report",
+    "deploy": "bash scripts/deploy.sh"
   },
   "keywords": [],
   "author": "",
