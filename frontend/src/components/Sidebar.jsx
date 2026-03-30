@@ -40,7 +40,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   const fileInputRef = useRef(null);
   const errorTimerRef = useRef(null);
 
-  const API_BASE = 'http://localhost:5001';
+  const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace(/\/api$/, '');
 
   const allSuites = projects.flatMap((p) =>
     (p.suites || []).map((s) => ({ ...s, project_id: p.id }))
@@ -164,7 +164,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
       )}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img src="/favicon.jpg" alt="StyleSeat Guardian" className="sidebar-logo-img" onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} />
+          <img src={`${import.meta.env.BASE_URL}favicon.jpg`} alt="StyleSeat Guardian" className="sidebar-logo-img" onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} />
           {!collapsed && (
             <div className="sidebar-logo-wordmark">
               <span className="sidebar-logo-name">StyleSeat <span className="sidebar-logo-accent">Guardian</span></span>

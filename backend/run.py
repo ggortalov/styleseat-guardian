@@ -171,6 +171,13 @@ with app.app_context():
     if migrated:
         conn.commit()
         print(f"Migrated run_date to YYYY-MM-DD on {migrated} test run(s).")
+    # Clear ownership on "Automation Overview" so all users can edit its test cases
+    cleared = conn.execute(
+        "UPDATE projects SET created_by = NULL WHERE name = 'Automation Overview' AND created_by IS NOT NULL"
+    ).rowcount
+    if cleared:
+        conn.commit()
+        print("Cleared ownership on 'Automation Overview' project (now editable by all users).")
     # Rename project "Cypress Automation" → "Automation Overview"
     renamed = conn.execute(
         "UPDATE projects SET name = 'Automation Overview', description = 'Test cases synced from the StyleSeat E2E test repository' WHERE name = 'Cypress Automation'"
@@ -181,4 +188,4 @@ with app.app_context():
     conn.close()
 
 if __name__ == "__main__":
-    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true', port=5001)
+    app.run(host='0.0.0.0', debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true', port=5001)

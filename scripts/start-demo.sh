@@ -11,19 +11,23 @@ echo "Stopping existing servers..."
 lsof -ti:5001 -ti:5173 -ti:5174 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# 2. Fresh database from seed snapshot
+# 2. Ensure database exists (preserves existing accounts)
 cd "$ROOT_DIR/backend"
 source venv/bin/activate
-rm -f app.db app.db-shm app.db-wal
 
-if [ -f "$SEED_DATA" ]; then
-  echo "Restoring database from seed snapshot..."
-  python restore_db.py "$SEED_DATA"
-else
-  echo "No seed_data.json found — seeding fresh database..."
+if [ -f app.db ]; then
+  echo "Existing database found — preserving all accounts."
   python seed.py
-  echo ""
-  echo "  NOTE: Run 'npm run sync' to populate test cases from Cypress repo."
+else
+  echo "No database found — creating fresh database..."
+  if [ -f "$SEED_DATA" ]; then
+    echo "Restoring database from seed snapshot..."
+    python restore_db.py "$SEED_DATA"
+  else
+    python seed.py
+    echo ""
+    echo "  NOTE: Run 'npm run sync' to populate test cases from Cypress repo."
+  fi
 fi
 
 # 3. Start backend
