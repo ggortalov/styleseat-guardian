@@ -2037,6 +2037,8 @@ def _validate_workflow_ref(value):
 @jwt_required()
 def import_circleci():
     """Spawn import_circleci.py as a background subprocess."""
+    import logging
+    logger = logging.getLogger("guardian.import")
     global _import_process, _import_output_lines
 
     # Reject if an import is already running
@@ -2060,18 +2062,23 @@ def import_circleci():
     python_exe = venv_python if os.path.isfile(venv_python) else sys.executable
 
     if not os.path.isfile(script_path):
+        logger.error("import_circleci.py not found at %s", script_path)
         return jsonify({"error": "import_circleci.py not found"}), 500
 
     # Reset output buffer
     _import_output_lines = []
 
-    _import_process = subprocess.Popen(
-        [python_exe, script_path, ref],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        cwd=backend_dir,
-    )
+    try:
+        _import_process = subprocess.Popen(
+            [python_exe, script_path, ref],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=backend_dir,
+        )
+    except Exception as exc:
+        logger.exception("Failed to spawn import subprocess: %s", exc)
+        return jsonify({"error": f"Failed to start import: {exc}"}), 500
 
     return jsonify({"status": "started", "workflow_ref": ref}), 202
 
