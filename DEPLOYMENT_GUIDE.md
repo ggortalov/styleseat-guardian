@@ -1,3 +1,4 @@
+
 # StyleSeat Guardian — Deployment Guide (Mac)
 
 This guide walks you through deploying Guardian so that anyone on the internet can access it. The frontend (what users see) is hosted free on GitHub Pages. The backend (the server) runs on your Mac and is exposed to the internet through a secure Cloudflare Tunnel.
