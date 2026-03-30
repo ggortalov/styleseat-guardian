@@ -77,6 +77,7 @@ def create_app():
 
     @app.errorhandler(500)
     def internal_error(e):
+        app.logger.exception("Internal server error: %s", e)
         return jsonify({"error": "Internal server error"}), 500
 
     # --- Security headers ---
