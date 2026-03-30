@@ -63,19 +63,22 @@ class TestRegister:
 
     def test_register_disallowed_domain(self, client):
         """Registering with a non-styleseat.com email returns 403 with same generic message."""
-        resp = client.post(
-            "/api/auth/register",
-            json={
-                "username": "outsider",
-                "email": "outsider@example.com",
-                "password": "ValidPass1",
-            },
-        )
-        assert resp.status_code == 403
-        assert "Unable to create account" in resp.get_json()["error"]
+        from unittest.mock import patch
+        with patch("app.routes.auth.ALLOWED_EMAIL_DOMAIN", "styleseat.com"):
+            resp = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "outsider",
+                    "email": "outsider@example.com",
+                    "password": "ValidPass1",
+                },
+            )
+            assert resp.status_code == 403
+            assert "Unable to create account" in resp.get_json()["error"]
 
     def test_register_disallowed_domain_same_as_duplicate(self, client):
         """Domain rejection and duplicate rejection are indistinguishable (OWASP)."""
+        from unittest.mock import patch
         # First, create a user
         client.post(
             "/api/auth/register",
@@ -85,27 +88,28 @@ class TestRegister:
                 "password": "ValidPass1",
             },
         )
-        # Attempt with bad domain
-        bad_domain = client.post(
-            "/api/auth/register",
-            json={
-                "username": "newname",
-                "email": "newname@gmail.com",
-                "password": "ValidPass1",
-            },
-        )
-        # Attempt with duplicate username
-        dupe_user = client.post(
-            "/api/auth/register",
-            json={
-                "username": "existing",
-                "email": "other@styleseat.com",
-                "password": "ValidPass1",
-            },
-        )
-        # Both must return identical status and message
-        assert bad_domain.status_code == dupe_user.status_code == 403
-        assert bad_domain.get_json()["error"] == dupe_user.get_json()["error"]
+        with patch("app.routes.auth.ALLOWED_EMAIL_DOMAIN", "styleseat.com"):
+            # Attempt with bad domain
+            bad_domain = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "newname",
+                    "email": "newname@gmail.com",
+                    "password": "ValidPass1",
+                },
+            )
+            # Attempt with duplicate username
+            dupe_user = client.post(
+                "/api/auth/register",
+                json={
+                    "username": "existing",
+                    "email": "other@styleseat.com",
+                    "password": "ValidPass1",
+                },
+            )
+            # Both must return identical status and message
+            assert bad_domain.status_code == dupe_user.status_code == 403
+            assert bad_domain.get_json()["error"] == dupe_user.get_json()["error"]
 
     def test_register_missing_fields(self, client):
         """Missing required fields returns 400."""

@@ -243,7 +243,7 @@ Save the file (**Cmd + S**) and close TextEdit.
 
 ### 5.6 Seed the database
 
-"Seeding" creates the initial database with a demo user account:
+"Seeding" creates the initial database with team accounts and the default project:
 
 ```bash
 python seed.py
@@ -251,9 +251,10 @@ python seed.py
 
 You should see output like:
 ```
-Demo user created: demo / Demo1234
-Project 'Automation Overview' created.
+Seed data created.
 ```
+
+Team accounts are automatically created on any DB reset. Both `deploy.sh` and `start-demo.sh` auto-backup `app.db` before running.
 
 ---
 

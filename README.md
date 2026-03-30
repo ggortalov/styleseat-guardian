@@ -79,8 +79,8 @@ gh auth status   # Verify: needs 'repo' scope for styleseat/cypress
 # Launch the full demo (resets DB, syncs Cypress tests, starts both servers)
 npm run demo
 
-# Login: demo / Demo1234
 # URL:   http://localhost:5173
+# Login with your team account (see "Team Accounts" below)
 ```
 
 ### Manual Start
@@ -89,7 +89,7 @@ npm run demo
 # Backend (Terminal 1)
 cd backend
 source venv/bin/activate
-python seed.py          # First time only: populate demo data
+python seed.py          # First time only: creates team accounts + demo data
 python run.py           # Starts on http://localhost:5001
 
 # Frontend (Terminal 2)
@@ -237,10 +237,11 @@ guardian/
 │   │   └── routes/             # 7 Blueprints (auth, projects, suites, sections, test_cases, test_runs, dashboard)
 │   ├── sync_cypress.py         # CLI: sync test cases from Cypress repo
 │   ├── import_circleci.py      # CLI: import results from CircleCI workflows
-│   ├── seed.py                 # Generate demo data from scratch
+│   ├── seed.py                 # Bootstrap team accounts + Automation Overview project
 │   ├── run.py                  # Entry point (port 5001)
 │   ├── backup_db.py            # Export all tables to JSON
 │   ├── restore_db.py           # Restore database from JSON backup
+│   ├── backups/                # Auto-created DB backups before deploy/demo (gitignored)
 │   ├── strip_testrail_ids.py   # One-time cleanup of TestRail ID prefixes
 │   ├── tests/                  # Pytest suite (8 test modules)
 │   └── app.db                  # SQLite database (auto-created, gitignored)
@@ -254,7 +255,8 @@ guardian/
 │       └── styles/             # CSS variables and design tokens
 │
 ├── scripts/
-│   └── start-demo.sh           # Demo launcher (reset DB + sync + start servers)
+│   ├── deploy.sh               # Deploy: backup DB, start backend + tunnel, build & deploy frontend
+│   └── start-demo.sh           # Demo launcher (backs up DB, seeds, starts servers)
 │
 ├── AWS_DEPLOYMENT_GUIDE.md     # Full AWS deployment guide (EC2, RDS, S3, CloudFront)
 ├── package.json                # NPM scripts: demo, sync, import
@@ -296,11 +298,9 @@ guardian/
   </tr>
 </table>
 
-## Demo Credentials
+## Team Accounts
 
-| User | Password | Email |
-|------|----------|-------|
-| `demo` | `Demo1234` | demo@styleseat.com |
+Team accounts are auto-created by `seed.py` on any DB reset, so they survive database resets. Both `deploy.sh` and `start-demo.sh` auto-backup `app.db` to `backend/backups/` before running (keeps last 5). Contact your team lead for credentials.
 
 ## Ports
 
@@ -383,7 +383,7 @@ cd frontend && npm run dev
 cd backend
 rm -f app.db
 source venv/bin/activate
-python seed.py           # Recreates demo user + project
+python seed.py           # Recreates team accounts + project
 python sync_cypress.py   # Re-syncs test cases (optional)
 ```
 
@@ -392,7 +392,7 @@ python sync_cypress.py   # Re-syncs test cases (optional)
 ### JWT / authentication errors
 
 - **Token expired:** Tokens last 24 hours. Log out and log in again.
-- **"Invalid username or password":** Verify credentials (`demo` / `Demo1234`). This message also appears if the account's email domain is not `@styleseat.com`.
+- **"Invalid username or password":** Verify credentials with your team lead. This message also appears if the account's email domain is not `@styleseat.com`.
 - **401 on every API call after restart:** If `JWT_SECRET_KEY` is not set in `.env`, a new key is generated on each restart, invalidating existing tokens. Either set a fixed key in `backend/.env` or log in again after restarting the backend.
 
 ---

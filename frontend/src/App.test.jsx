@@ -107,13 +107,13 @@ describe('App routing', () => {
       expect(signUpLink).toHaveAttribute('href', '/register');
     });
 
-    it('/login renders LoginPage even when authenticated', async () => {
+    it('/login redirects authenticated users to home', async () => {
       Object.assign(mockAuth, { isAuthenticated: true, user: { id: 1, username: 'demo' } });
+      mockGetAll.mockResolvedValue([]);
       renderApp('/login');
       await waitFor(() => {
-        expect(screen.getByText('Sign in')).toBeInTheDocument();
+        expect(screen.getByText('Test Suites')).toBeInTheDocument();
       });
-      expect(screen.getByLabelText('Username')).toBeInTheDocument();
     });
   });
 

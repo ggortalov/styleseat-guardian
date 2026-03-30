@@ -11,10 +11,21 @@ lsof -ti:5001 2>/dev/null | xargs kill -9 2>/dev/null || true
 pkill -f "cloudflared tunnel" 2>/dev/null || true
 sleep 1
 
-# 2. Start backend
-echo "Starting backend..."
+# 2. Backup database before anything else
 cd "$ROOT_DIR/backend"
 source venv/bin/activate
+if [ -f app.db ]; then
+  BACKUP_DIR="$ROOT_DIR/backend/backups"
+  mkdir -p "$BACKUP_DIR"
+  BACKUP_FILE="$BACKUP_DIR/app_$(date +%Y%m%d_%H%M%S).db"
+  cp app.db "$BACKUP_FILE"
+  echo "Database backed up to $BACKUP_FILE"
+  # Keep only last 5 backups
+  ls -t "$BACKUP_DIR"/app_*.db 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+fi
+
+# 3. Start backend
+echo "Starting backend..."
 python seed.py
 python run.py &
 BACKEND_PID=$!
