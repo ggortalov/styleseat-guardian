@@ -40,7 +40,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, isMob
   const fileInputRef = useRef(null);
   const errorTimerRef = useRef(null);
 
-  const API_BASE = 'http://localhost:5001';
+  const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace(/\/api$/, '');
 
   const allSuites = projects.flatMap((p) =>
     (p.suites || []).map((s) => ({ ...s, project_id: p.id }))
