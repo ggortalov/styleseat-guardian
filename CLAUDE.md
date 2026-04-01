@@ -71,9 +71,10 @@ guardian/
 │   ├── run.py                  # Entry point (port 5001, creates tables, lightweight migrations)
 │   ├── sync_cypress.py         # CLI: sync test cases from Cypress repo (blob API, baseline diffing)
 │   ├── import_circleci.py      # CLI: import CircleCI workflow results into a test run
-│   ├── seed.py                 # Bootstrap: creates demo user + Automation Overview project
+│   ├── seed.py                 # Bootstrap: creates team accounts + Automation Overview project
 │   ├── backup_db.py            # Export app.db to JSON
 │   ├── restore_db.py           # Restore database from JSON backup
+│   ├── backups/                # Auto-created DB backups before deploy/demo (gitignored)
 │   ├── requirements.txt
 │   ├── .env.example            # Template for environment variables (copy to .env)
 │   ├── uploads/avatars/        # User avatar storage (auto-created)
@@ -133,7 +134,8 @@ guardian/
 │           └── TestExecutionPage.jsx # Execute test: status selector + comment + nav
 │
 ├── scripts/
-│   ├── start-demo.sh           # Demo launcher
+│   ├── deploy.sh               # Deploy: backup DB, start backend + tunnel, build & deploy frontend
+│   ├── start-demo.sh           # Demo launcher (backs up DB before start)
 │   └── start.sh                # Alternative startup
 ├── AWS_DEPLOYMENT_GUIDE.md
 ├── CLAUDE.md                   # This file
@@ -403,8 +405,9 @@ After a bulk status update on `TestRunDetailPage`, checkboxes for the affected r
 
 **Reset the database:**
 ```bash
-cd backend && rm -f app.db && source venv/bin/activate && python seed.py
+cd backend && cp app.db backups/app_$(date +%Y%m%d_%H%M%S).db && rm -f app.db && source venv/bin/activate && python seed.py
 ```
+Note: `seed.py` auto-creates team accounts on fresh or existing databases. Both `deploy.sh` and `start-demo.sh` auto-backup `app.db` to `backend/backups/` before running (keeps last 5).
 
 **Run tests:**
 ```bash
