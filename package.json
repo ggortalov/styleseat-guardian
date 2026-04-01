@@ -9,6 +9,8 @@
     "import": "cd backend && source venv/bin/activate && python import_circleci.py",
     "seed-runs": "cd backend && source venv/bin/activate && python seed_test_runs.py",
     "save": "cd backend && source venv/bin/activate && python backup_db.py seed_data.json && echo 'Saved to seed_data.json'",
+    "backup": "cd backend && source venv/bin/activate && python backup_db.py seed_data.json && echo 'Saved to seed_data.json'",
+    "restore": "cd backend && source venv/bin/activate && python restore_db.py seed_data.json",
     "e2e": "cd e2e && npx playwright test",
     "e2e:ui": "cd e2e && npx playwright test --ui",
     "e2e:headed": "cd e2e && npx playwright test --headed",

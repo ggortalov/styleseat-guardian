@@ -22,6 +22,10 @@ if [ -f app.db ]; then
   echo "Database backed up to $BACKUP_FILE"
   # Keep only last 5 backups
   ls -t "$BACKUP_DIR"/app_*.db 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+
+  # Also export to seed_data.json so data survives a full DB reset
+  echo "Exporting database to seed_data.json..."
+  python backup_db.py
 fi
 
 # 3. Start backend
